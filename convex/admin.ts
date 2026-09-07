@@ -203,7 +203,8 @@ export const updateParty = mutation({
     // `fields` cannot carry token or importKey — the validator has no such keys —
     // so a rename keeps both. The next CSV import still matches this row, and the
     // magic link already sent to the family keeps working.
-    await ctx.db.patch(partyId, fields);
+    // Marks this party as admin-owned so importParties stops overwriting it.
+    await ctx.db.patch(partyId, { ...fields, editedInAdminAt: Date.now() });
     return null;
   },
 });

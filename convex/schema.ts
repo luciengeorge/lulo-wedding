@@ -37,6 +37,12 @@ export default defineSchema({
     saveTheDateSent: v.boolean(),
     /** The sheet's RSVP column already says "No" — they declined before being asked. */
     earlyDecline: v.boolean(),
+    /**
+     * Set when the couple edit a party in /admin. The importer then leaves that
+     * party alone: a hand correction is deliberate and the sheet is the stale
+     * copy, so re-importing must not quietly revert it.
+     */
+    editedInAdminAt: v.optional(v.number()),
     note: v.optional(v.string()),
     contactEmail: v.optional(v.string()),
   })

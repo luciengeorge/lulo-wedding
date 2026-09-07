@@ -140,6 +140,7 @@ export const importParties = mutation({
     let created = 0;
     let updated = 0;
     let unchanged = 0;
+    const skippedAdminEdited: { importKey: string; displayName: string }[] = [];
 
     for (const row of rows) {
       const existing = byImportKey.get(row.importKey);
@@ -169,8 +170,25 @@ export const importParties = mutation({
         continue;
       }
 
+      // Admin edits win. A correction typed in /admin is deliberate and current;
+      // the sheet is the stale copy. Skipping loudly rather than silently, so a
+      // real divergence between the two is visible instead of being discovered
+      // months later when a name is wrong on a place card.
+      if (existing.editedInAdminAt !== undefined) {
+        skippedAdminEdited.push({ importKey: existing.importKey, displayName: existing.displayName });
+        continue;
+      }
+
       if (!dryRun) await ctx.db.patch(existing._id, patch);
       updated++;
+    }
+
+    if (skippedAdminEdited.length > 0) {
+      warnings.push(
+        `${skippedAdminEdited.length} party/parties differ from the sheet but were edited in /admin, so the ` +
+          `sheet was ignored for them: ${skippedAdminEdited.map((p) => p.displayName).join(", ")}. ` +
+          `Update the sheet to match, or the two will keep drifting apart.`,
+      );
     }
 
     const missingFromCsv = existingParties

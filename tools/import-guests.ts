@@ -90,8 +90,26 @@ async function main(): Promise<number> {
     return 0;
   }
 
+  // importParties requires an admin session (it can overwrite the whole guest
+  // list, so it is not a public endpoint). A CLI cannot hold one, and weakening
+  // the gate to keep this script convenient would be the wrong trade. Writing
+  // now happens in /admin -> Import CSV, which reuses this same parser.
   const client = new ConvexHttpClient(readConvexUrl());
-  const report = await client.mutation(api.parties.importParties, { rows });
+  let report;
+  try {
+    report = await client.mutation(api.parties.importParties, { rows });
+  } catch (cause) {
+    const message = cause instanceof Error ? cause.message : String(cause);
+    if (message.includes("Unauthenticated") || message.includes("Not authorised")) {
+      console.error(
+        "\nThis script can no longer write: importParties requires a signed-in admin.\n" +
+          "Use /admin -> Import CSV, which runs the same parser and shows the same report.\n" +
+          "--dry-run still works here and is the quickest way to validate a sheet before uploading it.",
+      );
+      process.exit(1);
+    }
+    throw cause;
+  }
 
   console.log("\nImported.");
   console.log(`  created:   ${report.created}`);
