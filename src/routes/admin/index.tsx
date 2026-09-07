@@ -106,11 +106,23 @@ function GuestListPage() {
   return (
     <div className="flex flex-1 flex-col">
       <section className="flex gap-10 border-b border-[#E4E4E7] px-6 py-4">
-        <Stat label="Parties" value={stats?.parties} />
-        <Stat label="Maximum guests" value={stats?.maximumGuests} />
-        <Stat label="Save-the-date sent" value={stats?.saveTheDateSent} />
-        <Stat label="Responded" value={stats?.responded} />
-        <Stat label="Declined early" value={stats?.declinedEarly} />
+        <Stat label="Parties" value={stats?.parties} hint="invited units" />
+        <Stat
+          label="Maximum guests"
+          value={stats?.maximumGuests}
+          hint={stats ? `seats across ${stats.parties} parties` : undefined}
+        />
+        <Stat
+          label="Save-the-date sent"
+          value={stats?.saveTheDateSent}
+          hint={stats ? `of ${stats.parties} parties · ${stats.saveTheDateSentGuests} guests` : undefined}
+        />
+        <Stat label="Responded" value={stats?.responded} hint={stats ? `of ${stats.parties} parties` : undefined} />
+        <Stat
+          label="Declined early"
+          value={stats?.declinedEarly}
+          hint={stats ? `parties · ${stats.declinedEarlyGuests} guests` : undefined}
+        />
       </section>
 
       <section className="flex flex-wrap items-center gap-2 px-6 py-3.5">
@@ -217,7 +229,15 @@ function GuestListPage() {
   );
 }
 
-function Stat({ label, value }: { label: string; value: number | undefined }) {
+/**
+ * Every stat states its unit.
+ *
+ * The row counts parties in four places and guests in one, and read straight
+ * across it silently switches unit at "Maximum guests" and back again — which
+ * is exactly what made "is 337 parties or guests?" the first question anyone
+ * asked of this screen.
+ */
+function Stat({ label, value, hint }: { label: string; value: number | undefined; hint?: string }) {
   return (
     <div className="flex flex-col gap-0.5">
       <span className="text-[12px] text-[#71717A]">{label}</span>
@@ -227,6 +247,7 @@ function Stat({ label, value }: { label: string; value: number | undefined }) {
       >
         {value ?? "—"}
       </span>
+      <span className="min-h-4 text-[11px] text-[#A1A1AA]">{value === undefined ? "" : (hint ?? "")}</span>
     </div>
   );
 }

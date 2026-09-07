@@ -125,8 +125,10 @@ export const listParties = query({
       parties: v.number(),
       maximumGuests: v.number(),
       saveTheDateSent: v.number(),
+      saveTheDateSentGuests: v.number(),
       responded: v.number(),
       declinedEarly: v.number(),
+      declinedEarlyGuests: v.number(),
     }),
   }),
   handler: async (ctx) => {
@@ -140,8 +142,16 @@ export const listParties = query({
         parties: rows.length,
         maximumGuests: rows.reduce((sum, party) => sum + party.headCount + (party.plusOneAllowed ? 1 : 0), 0),
         saveTheDateSent: rows.filter((party) => party.saveTheDateSent).length,
+        // Guest-equivalents, so the row can state its unit rather than leaving
+        // the reader to guess which stats count parties and which count people.
+        saveTheDateSentGuests: rows
+          .filter((party) => party.saveTheDateSent)
+          .reduce((sum, party) => sum + party.headCount + (party.plusOneAllowed ? 1 : 0), 0),
         responded: rows.filter((party) => party.rsvp.guestCount > 0).length,
         declinedEarly: rows.filter((party) => party.earlyDecline).length,
+        declinedEarlyGuests: rows
+          .filter((party) => party.earlyDecline)
+          .reduce((sum, party) => sum + party.headCount + (party.plusOneAllowed ? 1 : 0), 0),
       },
     };
   },
