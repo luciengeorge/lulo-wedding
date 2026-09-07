@@ -30,6 +30,7 @@ import type * as guests from "../guests.js";
 import type * as http from "../http.js";
 import type * as lib_plans from "../lib/plans.js";
 import type * as lib_webhook from "../lib/webhook.js";
+import type * as parties from "../parties.js";
 import type * as rag from "../rag.js";
 import type * as rateLimiter from "../rateLimiter.js";
 import type * as storage from "../storage.js";
@@ -69,6 +70,7 @@ declare const fullApi: ApiFromModules<{
   http: typeof http;
   "lib/plans": typeof lib_plans;
   "lib/webhook": typeof lib_webhook;
+  parties: typeof parties;
   rag: typeof rag;
   rateLimiter: typeof rateLimiter;
   storage: typeof storage;
