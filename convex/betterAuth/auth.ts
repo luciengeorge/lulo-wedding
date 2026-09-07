@@ -6,6 +6,36 @@ import { convex } from "@convex-dev/better-auth/plugins";
 import { betterAuth } from "better-auth";
 import { admin, magicLink } from "better-auth/plugins";
 
+/**
+ * This app has exactly two users: Laura and Lucien. Nobody else should ever be
+ * able to obtain an account, so the allowlist is enforced at account creation
+ * rather than only at /admin. That is deliberately stronger than disabling the
+ * signup form: it closes password signup, magic link, and any future provider
+ * in one rule.
+ *
+ * Guests never authenticate at all — they use the shared password gate.
+ */
+function allowedAccountEmails(): Set<string> {
+  const emails = (process.env.ADMIN_EMAILS ?? "")
+    .split(",")
+    .map((email) => email.trim().toLowerCase())
+    .filter(Boolean);
+
+  if (emails.length === 0) {
+    throw new Error(
+      "ADMIN_EMAILS is not set on the Convex deployment, so no account could be authorised. " +
+        "Set it with: npx convex env set ADMIN_EMAILS 'a@example.com,b@example.com'",
+    );
+  }
+
+  return new Set(emails);
+}
+
+export function isAllowedAccountEmail(email: string | null | undefined): boolean {
+  const normalised = email?.trim().toLowerCase();
+  return normalised ? allowedAccountEmails().has(normalised) : false;
+}
+
 function parseAdminUserIds(): string[] {
   const raw = process.env.ADMIN_USER_IDS;
   if (!raw) return [];
@@ -63,6 +93,12 @@ export const createAuthOptions = (ctx: GenericCtx<DataModel>) => {
       convex({ authConfig }),
       magicLink({
         async sendMagicLink({ email, url }) {
+          // Silently drop links for anyone not on the allowlist. Returning
+          // early rather than throwing keeps the response identical either
+          // way, so the form cannot be used to discover which addresses are
+          // the couple's.
+          if (!isAllowedAccountEmail(email)) return;
+
           await getScheduler(ctx).runAfter(0, internal.email.send.sendEmail, {
             to: email,
             subject: `Your sign-in link for ${APP_NAME}`,
@@ -95,6 +131,20 @@ export const createAuthOptions = (ctx: GenericCtx<DataModel>) => {
           template: "verify",
           props: { url, appName: APP_NAME },
         });
+      },
+    },
+    databaseHooks: {
+      user: {
+        create: {
+          // Last line of defence. Every route into account creation lands here,
+          // so an unlisted address cannot get an account even if a signup
+          // endpoint is reachable or a new provider is added later.
+          before: async (user: { email?: string }) => {
+            if (!isAllowedAccountEmail(user.email)) {
+              throw new Error("Account creation is not open on this site.");
+            }
+          },
+        },
       },
     },
     user: {

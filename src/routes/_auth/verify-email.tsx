@@ -44,7 +44,7 @@ function VerifyEmailPage() {
           </CardDescription>
         </CardHeader>
         <CardContent className="flex flex-col gap-2">
-          <Button render={<Link to="/signup" />}>Sign up</Button>
+          <Button render={<Link to="/login" />}>Back to sign in</Button>
           <Button variant="outline" render={<Link to="/login" />}>
             Sign in
           </Button>

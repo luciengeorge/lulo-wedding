@@ -134,7 +134,6 @@ function LoginPage() {
                     </Button>
                     {errorMap.onSubmit?.form ? <FieldError>{String(errorMap.onSubmit.form)}</FieldError> : null}
                     <FieldDescription className="text-center">
-                      Don't have an account? <Link to="/signup">Sign up</Link>
                     </FieldDescription>
                     <FieldDescription className="text-center">
                       <Link to="/magic-link">Sign in with a magic link instead</Link>
