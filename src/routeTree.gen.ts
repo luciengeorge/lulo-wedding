@@ -17,7 +17,6 @@ import { Route as EnterRouteImport } from './routes/enter'
 import { Route as legalLayoutRouteImport } from './routes/(legal)/_layout'
 import { Route as AuthForgotPasswordRouteImport } from './routes/_auth/forgot-password'
 import { Route as AuthLoginRouteImport } from './routes/_auth/login'
-import { Route as AuthMagicLinkRouteImport } from './routes/_auth/magic-link'
 import { Route as AuthResetPasswordRouteImport } from './routes/_auth/reset-password'
 import { Route as AuthVerifyEmailRouteImport } from './routes/_auth/verify-email'
 import { Route as AdminIndexRouteImport } from './routes/admin/index'
@@ -71,11 +70,6 @@ const AuthForgotPasswordRoute = AuthForgotPasswordRouteImport.update({
 const AuthLoginRoute = AuthLoginRouteImport.update({
   id: '/login',
   path: '/login',
-  getParentRoute: () => AuthRoute,
-} as any)
-const AuthMagicLinkRoute = AuthMagicLinkRouteImport.update({
-  id: '/magic-link',
-  path: '/magic-link',
   getParentRoute: () => AuthRoute,
 } as any)
 const AuthResetPasswordRoute = AuthResetPasswordRouteImport.update({
@@ -166,7 +160,6 @@ export interface FileRoutesByFullPath {
   '/enter': typeof EnterRoute
   '/forgot-password': typeof AuthForgotPasswordRoute
   '/login': typeof AuthLoginRoute
-  '/magic-link': typeof AuthMagicLinkRoute
   '/reset-password': typeof AuthResetPasswordRoute
   '/verify-email': typeof AuthVerifyEmailRoute
   '/app/admin': typeof AppAdminRoute
@@ -189,7 +182,6 @@ export interface FileRoutesByTo {
   '/enter': typeof EnterRoute
   '/forgot-password': typeof AuthForgotPasswordRoute
   '/login': typeof AuthLoginRoute
-  '/magic-link': typeof AuthMagicLinkRoute
   '/reset-password': typeof AuthResetPasswordRoute
   '/verify-email': typeof AuthVerifyEmailRoute
   '/app/admin': typeof AppAdminRoute
@@ -216,7 +208,6 @@ export interface FileRoutesById {
   '/(legal)/_layout': typeof legalLayoutRouteWithChildren
   '/_auth/forgot-password': typeof AuthForgotPasswordRoute
   '/_auth/login': typeof AuthLoginRoute
-  '/_auth/magic-link': typeof AuthMagicLinkRoute
   '/_auth/reset-password': typeof AuthResetPasswordRoute
   '/_auth/verify-email': typeof AuthVerifyEmailRoute
   '/app/admin': typeof AppAdminRoute
@@ -243,7 +234,6 @@ export interface FileRouteTypes {
     | '/enter'
     | '/forgot-password'
     | '/login'
-    | '/magic-link'
     | '/reset-password'
     | '/verify-email'
     | '/app/admin'
@@ -266,7 +256,6 @@ export interface FileRouteTypes {
     | '/enter'
     | '/forgot-password'
     | '/login'
-    | '/magic-link'
     | '/reset-password'
     | '/verify-email'
     | '/app/admin'
@@ -292,7 +281,6 @@ export interface FileRouteTypes {
     | '/(legal)/_layout'
     | '/_auth/forgot-password'
     | '/_auth/login'
-    | '/_auth/magic-link'
     | '/_auth/reset-password'
     | '/_auth/verify-email'
     | '/app/admin'
@@ -378,13 +366,6 @@ declare module '@tanstack/react-router' {
       path: '/login'
       fullPath: '/login'
       preLoaderRoute: typeof AuthLoginRouteImport
-      parentRoute: typeof AuthRoute
-    }
-    '/_auth/magic-link': {
-      id: '/_auth/magic-link'
-      path: '/magic-link'
-      fullPath: '/magic-link'
-      preLoaderRoute: typeof AuthMagicLinkRouteImport
       parentRoute: typeof AuthRoute
     }
     '/_auth/reset-password': {
@@ -505,7 +486,6 @@ declare module '@tanstack/react-router' {
 interface AuthRouteChildren {
   AuthForgotPasswordRoute: typeof AuthForgotPasswordRoute
   AuthLoginRoute: typeof AuthLoginRoute
-  AuthMagicLinkRoute: typeof AuthMagicLinkRoute
   AuthResetPasswordRoute: typeof AuthResetPasswordRoute
   AuthVerifyEmailRoute: typeof AuthVerifyEmailRoute
 }
@@ -513,7 +493,6 @@ interface AuthRouteChildren {
 const AuthRouteChildren: AuthRouteChildren = {
   AuthForgotPasswordRoute: AuthForgotPasswordRoute,
   AuthLoginRoute: AuthLoginRoute,
-  AuthMagicLinkRoute: AuthMagicLinkRoute,
   AuthResetPasswordRoute: AuthResetPasswordRoute,
   AuthVerifyEmailRoute: AuthVerifyEmailRoute,
 }

@@ -19,6 +19,14 @@ export function supportEmail(): string | undefined {
   return process.env.SUPPORT_EMAIL ?? process.env.RESEND_FROM_EMAIL;
 }
 
+/**
+ * Absolute base for images. Email clients do not resolve relative URLs, so a
+ * logo referenced as "/art/..." simply never renders.
+ */
+export function siteUrl(): string {
+  return (process.env.SITE_URL ?? "https://www.lauralucien.com").replace(/\/$/, "");
+}
+
 /** Primary CTA button, themed by BRAND_COLOR. Pass `destructive` for red. */
 export function BrandButton({
   href,

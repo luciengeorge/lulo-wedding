@@ -1,21 +1,27 @@
 import { useForm } from "@tanstack/react-form";
-import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
-import { toast } from "sonner";
+import { createFileRoute } from "@tanstack/react-router";
+import { useState } from "react";
 
-import { OAuthButtons } from "@/components/auth/oauth-buttons";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { Field, FieldDescription, FieldError, FieldGroup, FieldLabel } from "@/components/ui/field";
+import { Field, FieldError, FieldGroup, FieldLabel } from "@/components/ui/field";
 import { Input } from "@/components/ui/input";
-import { Separator } from "@/components/ui/separator";
 import { Spinner } from "@/components/ui/spinner";
 import { AnalyticsEvent, useAnalytics } from "@/lib/analytics";
 import { authClient } from "@/lib/auth-client";
-import { LoginFormSchema } from "@/lib/schemas/auth";
+import { MagicLinkFormSchema } from "@/lib/schemas/auth";
 import { seo } from "@/lib/seo";
 
-const HAS_OAUTH = Boolean(import.meta.env.VITE_GOOGLE_OAUTH_ENABLED || import.meta.env.VITE_APPLE_OAUTH_ENABLED);
-
+/**
+ * The only door.
+ *
+ * There are exactly two accounts and both are Gmail addresses, so a password
+ * is a credential to lose rather than a convenience. The password form and the
+ * separate /magic-link page are gone; this is the single sign-in surface.
+ *
+ * Password endpoints still exist server-side but are not reachable from the UI,
+ * which leaves a recovery path without putting a second door on the page.
+ */
 export const Route = createFileRoute("/_auth/login")({
   head: () => ({
     meta: seo({ title: "Sign in", description: "Sign in to the guest list.", path: "/login", noPreview: true }),
@@ -25,40 +31,29 @@ export const Route = createFileRoute("/_auth/login")({
 
 function LoginPage() {
   const { capture } = useAnalytics();
-  const navigate = useNavigate();
+  const [sentTo, setSentTo] = useState<string | null>(null);
 
   const form = useForm({
-    defaultValues: {
-      email: "",
-      password: "",
-    },
+    defaultValues: { email: "" },
     validators: {
-      onSubmit: LoginFormSchema,
-      onSubmitAsync: async ({ value: { email, password } }) => {
-        capture(AnalyticsEvent.userLoginSubmitted, { login_method: "email" });
-
+      onSubmit: MagicLinkFormSchema,
+      onSubmitAsync: async ({ value: { email } }) => {
+        capture(AnalyticsEvent.userLoginSubmitted, { login_method: "magic_link" });
         try {
-          const result = await authClient.signIn.email({ email, password });
+          const result = await authClient.signIn.magicLink({ email, callbackURL: "/admin" });
           if (result.error) {
             capture(AnalyticsEvent.userLoginFailed, {
               error_message: result.error.message,
-              login_method: "email",
+              login_method: "magic_link",
             });
             return { form: result.error.message };
           }
-
-          capture(AnalyticsEvent.userLoggedIn, { login_method: "email" });
         } catch (error) {
-          const message = error instanceof Error ? error.message : "Unknown login error";
-          capture(AnalyticsEvent.userLoginFailed, {
-            error_message: message,
-            login_method: "email",
-          });
+          const message = error instanceof Error ? error.message : "Unknown error";
+          capture(AnalyticsEvent.userLoginFailed, { error_message: message, login_method: "magic_link" });
           return { form: message };
         }
-
-        toast.success("Welcome back!", { description: "Login successful" });
-        navigate({ to: "/admin" });
+        setSentTo(email);
       },
     },
   });
@@ -69,95 +64,76 @@ function LoginPage() {
     form.handleSubmit();
   };
 
-  return (
-    <div className="flex flex-col gap-6">
+  if (sentTo) {
+    return (
       <Card>
         <CardHeader>
-          <CardTitle>Sign in</CardTitle>
-          <CardDescription>Only Laura and Lucien can sign in here. Guests do not need an account.</CardDescription>
+          <CardTitle>Check your inbox</CardTitle>
+          <CardDescription>
+            {/* The address is echoed back because a typo is the likeliest reason
+                nothing arrives, and the server answers identically either way. */}
+            We sent a sign-in link to {sentTo}. It expires in 5 minutes and can only be used once.
+          </CardDescription>
         </CardHeader>
-        <CardContent className="flex flex-col gap-4">
-          {/* The divider belongs to the OAuth buttons, so it has to disappear
-              with them — no provider is configured, and an "or" separating
-              nothing from the form is how this shipped. */}
-          {HAS_OAUTH ? (
-            <>
-              <OAuthButtons callbackURL="/admin" />
-              <div className="flex items-center gap-3">
-                <Separator className="flex-1" />
-                <span className="text-xs text-muted-foreground">or</span>
-                <Separator className="flex-1" />
-              </div>
-            </>
-          ) : null}
-          <form onSubmit={onSubmit}>
-            <FieldGroup>
-              <form.Field name="email">
-                {(field) => (
-                  <Field>
-                    <FieldLabel htmlFor={field.name}>Email</FieldLabel>
-                    <Input
-                      id={field.name}
-                      name={field.name}
-                      onBlur={field.handleBlur}
-                      onChange={(e) => field.handleChange(e.target.value)}
-                      type="email"
-                      placeholder="Enter your email"
-                      required
-                    />
-                    {field.state.meta.isValid ? null : <FieldError errors={field.state.meta.errors} />}
-                  </Field>
-                )}
-              </form.Field>
-              <form.Field name="password">
-                {(field) => (
-                  <Field>
-                    <div className="flex items-center">
-                      <FieldLabel htmlFor={field.name}>Password</FieldLabel>
-                      <Link
-                        to="/forgot-password"
-                        className="ml-auto inline-block text-sm underline-offset-4 hover:underline"
-                      >
-                        Forgot your password?
-                      </Link>
-                    </div>
-                    <Input
-                      id={field.name}
-                      name={field.name}
-                      onChange={(e) => field.handleChange(e.target.value)}
-                      onBlur={field.handleBlur}
-                      type="password"
-                      placeholder="Enter your password"
-                      required
-                    />
-                    {field.state.meta.isValid ? null : <FieldError errors={field.state.meta.errors} />}
-                  </Field>
-                )}
-              </form.Field>
-              <form.Subscribe
-                selector={(state) => ({
-                  canSubmit: state.canSubmit,
-                  isSubmitting: state.isSubmitting,
-                  errorMap: state.errorMap,
-                })}
-              >
-                {({ canSubmit, isSubmitting, errorMap }) => (
-                  <Field>
-                    <Button type="submit" disabled={!canSubmit || isSubmitting}>
-                      {isSubmitting ? <Spinner /> : null}
-                      {isSubmitting ? "Signing in" : "Sign in"}
-                    </Button>
-                    {errorMap.onSubmit?.form ? <FieldError>{String(errorMap.onSubmit.form)}</FieldError> : null}
-                    <FieldDescription className="text-center">
-                      <Link to="/magic-link">Sign in with a magic link instead</Link>
-                    </FieldDescription>
-                  </Field>
-                )}
-              </form.Subscribe>
-            </FieldGroup>
-          </form>
+        <CardContent>
+          <Button variant="outline" className="w-full" onClick={() => setSentTo(null)}>
+            Use a different address
+          </Button>
         </CardContent>
       </Card>
-    </div>
+    );
+  }
+
+  return (
+    <Card>
+      <CardHeader>
+        <CardTitle>Sign in</CardTitle>
+        <CardDescription>
+          Only Laura and Lucien can sign in. Guests do not need an account — they use the password from their
+          invitation.
+        </CardDescription>
+      </CardHeader>
+      <CardContent>
+        <form onSubmit={onSubmit}>
+          <FieldGroup>
+            <form.Field name="email">
+              {(field) => (
+                <Field>
+                  <FieldLabel htmlFor={field.name}>Email</FieldLabel>
+                  <Input
+                    id={field.name}
+                    type="email"
+                    autoComplete="email"
+                    placeholder="you@example.com"
+                    value={field.state.value}
+                    onChange={(e) => field.handleChange(e.target.value)}
+                    onBlur={field.handleBlur}
+                    required
+                  />
+                  {field.state.meta.isValid ? null : <FieldError errors={field.state.meta.errors} />}
+                </Field>
+              )}
+            </form.Field>
+            <form.Subscribe
+              selector={(state) => ({
+                canSubmit: state.canSubmit,
+                isSubmitting: state.isSubmitting,
+                errorMap: state.errorMap,
+              })}
+            >
+              {({ canSubmit, isSubmitting, errorMap }) => (
+                <Field>
+                  <Button type="submit" disabled={!canSubmit || isSubmitting}>
+                    {isSubmitting ? <Spinner /> : null}
+                    {isSubmitting ? "Sending" : "Email me a sign-in link"}
+                  </Button>
+                  {errorMap.onSubmit?.form ? <FieldError>{String(errorMap.onSubmit.form)}</FieldError> : null}
+                </Field>
+              )}
+            </form.Subscribe>
+          </FieldGroup>
+        </form>
+      </CardContent>
+    </Card>
   );
 }
