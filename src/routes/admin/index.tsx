@@ -8,8 +8,8 @@ import type { PartyRow } from "@/components/admin/party-row";
 import type { InvitedToFilter, LinkFilter, WaveFilter, WhoFilter } from "@/lib/party-filters";
 
 import { api } from "@/../convex/_generated/api";
-import { AdminSelect } from "@/components/admin/admin-select";
-import { GuestListTable, useGuestListTable } from "@/components/admin/guest-list-table";
+import { AdminMultiSelect } from "@/components/admin/admin-multi-select";
+import { GuestListTable, useGuestListTable, useRowWindow } from "@/components/admin/guest-list-table";
 import { ImportCsvDialog } from "@/components/admin/import-csv-dialog";
 import { PartyFormDialog } from "@/components/admin/party-form-dialog";
 import { Button } from "@/components/ui/button";
@@ -22,26 +22,19 @@ export const Route = createFileRoute("/admin/")({ component: GuestListPage });
 
 const SITE_URL = import.meta.env.VITE_SITE_URL ?? "";
 
-const WAVE_OPTIONS: readonly { value: WaveFilter; label: string }[] = [
-  { value: "all", label: "All waves" },
-  ...(Object.keys(WAVE_LABEL) as (keyof typeof WAVE_LABEL)[]).map((value) => ({ value, label: WAVE_LABEL[value] })),
-];
+const WAVE_OPTIONS: readonly { value: WaveFilter; label: string }[] = (Object.keys(WAVE_LABEL) as WaveFilter[]).map(
+  (value) => ({ value, label: WAVE_LABEL[value] }),
+);
 
-const WHO_OPTIONS: readonly { value: WhoFilter; label: string }[] = [
-  { value: "all", label: "Anyone's" },
-  ...(Object.keys(WHO_LONG_LABEL) as (keyof typeof WHO_LONG_LABEL)[]).map((value) => ({
-    value,
-    label: WHO_LONG_LABEL[value],
-  })),
-];
+const WHO_OPTIONS: readonly { value: WhoFilter; label: string }[] = (Object.keys(WHO_LONG_LABEL) as WhoFilter[]).map(
+  (value) => ({ value, label: WHO_LONG_LABEL[value] }),
+);
 
-const LINK_OPTIONS: readonly { value: LinkFilter; label: string }[] = [
-  { value: "all", label: "Any link" },
-  ...(Object.keys(LINK_LABEL) as (keyof typeof LINK_LABEL)[]).map((value) => ({ value, label: LINK_LABEL[value] })),
-];
+const LINK_OPTIONS: readonly { value: LinkFilter; label: string }[] = (Object.keys(LINK_LABEL) as LinkFilter[]).map(
+  (value) => ({ value, label: LINK_LABEL[value] }),
+);
 
 const INVITED_TO_OPTIONS: readonly { value: InvitedToFilter; label: string }[] = [
-  { value: "all", label: "Any invite" },
   { value: "preWedding", label: "Pre-wedding" },
   { value: "wedding", label: "Wedding" },
   { value: "brunch", label: "Brunch" },
@@ -52,14 +45,15 @@ const INVITED_TO_OPTIONS: readonly { value: InvitedToFilter; label: string }[] =
  * Reads a column's filter out of table state rather than mirroring it in React
  * state. One owner, so the dropdown can never disagree with the rows on screen.
  */
-function columnFilter<T extends string>(table: GuestListTableInstance, columnId: string): T | "all" {
+function columnFilterValues<T extends string>(table: GuestListTableInstance, columnId: string): T[] {
   const active = table.state.columnFilters.find((filter) => filter.id === columnId);
-  return typeof active?.value === "string" ? (active.value as T) : "all";
+  return Array.isArray(active?.value) ? (active.value as T[]) : [];
 }
 
-function setColumnFilter(table: GuestListTableInstance, columnId: string, value: string) {
-  // `undefined` clears the filter; the "all" sentinel never reaches a filter fn.
-  table.getColumn(columnId)?.setFilterValue(value === "all" ? undefined : value);
+function setColumnFilterValues(table: GuestListTableInstance, columnId: string, values: readonly string[]) {
+  // Cleared with `undefined`, never `[]`: an empty set left in filter state
+  // would be a filter that matches nothing.
+  table.getColumn(columnId)?.setFilterValue(values.length === 0 ? undefined : [...values]);
 }
 
 function GuestListPage() {
@@ -97,11 +91,11 @@ function GuestListPage() {
     }
   };
 
+  const rowWindow = useRowWindow(table);
+
   const stats = data?.stats;
   const total = data?.rows.length ?? 0;
   const matching = table.getFilteredRowModel().rows.length;
-  const { pageIndex, pageSize } = table.state.pagination;
-  const pageCount = table.getPageCount();
 
   return (
     <div className="flex flex-1 flex-col">
@@ -134,28 +128,38 @@ function GuestListPage() {
           aria-label="Search name or surname"
           className="h-8 w-[240px] text-[12.5px]"
         />
-        <AdminSelect
-          value={columnFilter<WaveFilter>(table, "wave")}
-          onChange={(value) => setColumnFilter(table, "wave", value)}
+        <AdminMultiSelect
+          value={columnFilterValues<WaveFilter>(table, "wave")}
+          onChange={(values) => setColumnFilterValues(table, "wave", values)}
           options={WAVE_OPTIONS}
+          emptyLabel="All waves"
+          unitLabel="waves"
           aria-label="Wave"
         />
-        <AdminSelect
-          value={columnFilter<WhoFilter>(table, "whose")}
-          onChange={(value) => setColumnFilter(table, "whose", value)}
+        <AdminMultiSelect
+          value={columnFilterValues<WhoFilter>(table, "whose")}
+          onChange={(values) => setColumnFilterValues(table, "whose", values)}
           options={WHO_OPTIONS}
+          emptyLabel="Anyone's"
+          // "selected" rather than a noun: the values are three people and two
+          // couples, so "2 people" would be a lie half the time.
+          unitLabel="selected"
           aria-label="Whose"
         />
-        <AdminSelect
-          value={columnFilter<LinkFilter>(table, "whereFrom")}
-          onChange={(value) => setColumnFilter(table, "whereFrom", value)}
+        <AdminMultiSelect
+          value={columnFilterValues<LinkFilter>(table, "whereFrom")}
+          onChange={(values) => setColumnFilterValues(table, "whereFrom", values)}
           options={LINK_OPTIONS}
+          emptyLabel="Any link"
+          unitLabel="links"
           aria-label="Link"
         />
-        <AdminSelect
-          value={columnFilter<InvitedToFilter>(table, "invitedTo")}
-          onChange={(value) => setColumnFilter(table, "invitedTo", value)}
+        <AdminMultiSelect
+          value={columnFilterValues<InvitedToFilter>(table, "invitedTo")}
+          onChange={(values) => setColumnFilterValues(table, "invitedTo", values)}
           options={INVITED_TO_OPTIONS}
+          emptyLabel="Any invite"
+          unitLabel="invites"
           aria-label="Invited to"
         />
 
@@ -186,39 +190,18 @@ function GuestListPage() {
           </p>
         ) : (
           <>
-            <GuestListTable table={table} />
+            <GuestListTable table={table} rowWindow={rowWindow} />
 
-            <div className="flex items-center justify-between text-[12px] text-[#71717A]">
-              <span style={{ fontVariantNumeric: "tabular-nums" }}>
-                {matching === 0
-                  ? "No parties"
-                  : `Showing ${pageIndex * pageSize + 1}–${Math.min((pageIndex + 1) * pageSize, matching)} of ${matching}`}
-                {matching === total ? "" : ` (filtered from ${total})`}
-              </span>
-              {pageCount > 1 ? (
-                <div className="flex items-center gap-2">
-                  <Button
-                    size="xs"
-                    variant="outline"
-                    disabled={!table.getCanPreviousPage()}
-                    onClick={() => table.previousPage()}
-                  >
-                    Previous
-                  </Button>
-                  <span style={{ fontVariantNumeric: "tabular-nums" }}>
-                    Page {pageIndex + 1} of {pageCount}
-                  </span>
-                  <Button
-                    size="xs"
-                    variant="outline"
-                    disabled={!table.getCanNextPage()}
-                    onClick={() => table.nextPage()}
-                  >
-                    Next
-                  </Button>
-                </div>
-              ) : null}
-            </div>
+            {/* The count has to say both numbers: the list keeps growing as you
+                scroll, so "showing 60" alone would read as "there are 60". */}
+            <p className="text-[12px] text-[#71717A]" style={{ fontVariantNumeric: "tabular-nums" }}>
+              {matching === 0
+                ? "No parties"
+                : rowWindow.hasMore
+                  ? `Showing ${rowWindow.visibleCount} of ${matching} — scroll for more`
+                  : `Showing all ${matching}`}
+              {matching === total ? "" : ` (filtered from ${total})`}
+            </p>
           </>
         )}
       </section>

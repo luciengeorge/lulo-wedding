@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 
 import type { FilterableParty, RsvpGuest, RsvpParty } from "./party-filters";
 
-import { deriveRsvp, foldForSearch, matchesInvitedTo, partySearchText } from "./party-filters";
+import { deriveRsvp, foldForSearch, matchesAny, matchesInvitedTo, partySearchText } from "./party-filters";
 
 const party: FilterableParty = {
   displayName: "Rae & Cherif",
@@ -35,20 +35,47 @@ describe("partySearchText", () => {
   });
 });
 
+describe("matchesAny", () => {
+  it("treats an empty selection as no filter, never as match-nothing", () => {
+    expect(matchesAny("tier1", [])).toBe(true);
+  });
+
+  it("is an OR across the selected values", () => {
+    expect(matchesAny("tier1", ["tier1"])).toBe(true);
+    expect(matchesAny("tier1", ["tier2"])).toBe(false);
+    expect(matchesAny("tier1", ["tier1", "tier2"])).toBe(true);
+    expect(matchesAny("tier3", ["tier1", "tier2"])).toBe(false);
+  });
+});
+
 describe("matchesInvitedTo", () => {
-  it("passes everything for the no-filter sentinel", () => {
-    expect(matchesInvitedTo(party, "all")).toBe(true);
+  it("passes everything when nothing is selected", () => {
+    expect(matchesInvitedTo(party, [])).toBe(true);
   });
 
   it("narrows on a single event", () => {
-    expect(matchesInvitedTo(party, "wedding")).toBe(true);
-    expect(matchesInvitedTo(party, "preWedding")).toBe(false);
-    expect(matchesInvitedTo(party, "brunch")).toBe(false);
+    expect(matchesInvitedTo(party, ["wedding"])).toBe(true);
+    expect(matchesInvitedTo(party, ["preWedding"])).toBe(false);
+    expect(matchesInvitedTo(party, ["brunch"])).toBe(false);
+  });
+
+  it("ORs several events together", () => {
+    expect(matchesInvitedTo(party, ["brunch", "wedding"])).toBe(true);
+    expect(matchesInvitedTo(party, ["brunch", "preWedding"])).toBe(false);
   });
 
   it("finds the parties invited to nothing yet", () => {
-    expect(matchesInvitedTo(party, "none")).toBe(false);
-    expect(matchesInvitedTo({ ...party, invitedToWedding: false }, "none")).toBe(true);
+    expect(matchesInvitedTo(party, ["none"])).toBe(false);
+    expect(matchesInvitedTo({ ...party, invitedToWedding: false }, ["none"])).toBe(true);
+  });
+
+  it("mixes 'none' with a real event as an either/or", () => {
+    const uninvited = { ...party, invitedToWedding: false };
+    expect(matchesInvitedTo(party, ["wedding", "none"])).toBe(true);
+    expect(matchesInvitedTo(uninvited, ["wedding", "none"])).toBe(true);
+    expect(matchesInvitedTo({ ...party, invitedToWedding: false, invitedToBrunch: true }, ["wedding", "none"])).toBe(
+      false,
+    );
   });
 });
 

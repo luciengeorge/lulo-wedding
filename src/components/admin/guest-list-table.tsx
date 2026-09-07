@@ -4,19 +4,18 @@ import {
   columnFilteringFeature,
   createColumnHelper,
   createFilteredRowModel,
-  createPaginatedRowModel,
   createSortedRowModel,
   globalFilteringFeature,
-  rowPaginationFeature,
   rowSortingFeature,
   tableFeatures,
   useTable,
 } from "@tanstack/react-table";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { toast } from "sonner";
 
 import type { InvitedToFilter, RsvpState } from "@/lib/party-filters";
 
-import { foldForSearch, matchesInvitedTo, partySearchText, RSVP_LABEL } from "@/lib/party-filters";
+import { foldForSearch, matchesAny, matchesInvitedTo, partySearchText, RSVP_LABEL } from "@/lib/party-filters";
 import { INVITE_EVENTS, LINK_LABEL, WAVE_LABEL, WHO_LABEL } from "@/lib/party-labels";
 
 import type { PartyRow } from "./party-row";
@@ -25,10 +24,13 @@ import type { PartyRow } from "./party-row";
  * The guest list itself, on TanStack Table.
  *
  * Every row is loaded once (see `admin.listParties`) and TanStack owns search,
- * filtering, sorting and paging from there, so the couple get instant results
- * with no round trip. The table state lives inside the table — the toolbar reads
- * and writes it through `table.state` and the column APIs rather than keeping a
+ * filtering and sorting from there, so the couple get instant results with no
+ * round trip. The table state lives inside the table — the toolbar reads and
+ * writes it through `table.state` and the column APIs rather than keeping a
  * second copy alongside.
+ *
+ * Rendering is windowed rather than paginated: all the rows are already here, so
+ * `useRowWindow` just grows how many of them reach the DOM as you scroll.
  *
  * Colours are written as literals rather than the app's semantic tokens on
  * purpose: this table is a deliberate departure from the wedding's cream-and-red
@@ -53,11 +55,26 @@ const RSVP_RANK: Record<RsvpState, number> = { attending: 0, awaiting: 1, declin
 const sortByRsvpState: SortFn<GuestListFeatures, PartyRow> = (rowA, rowB) =>
   RSVP_RANK[rowA.original.rsvp.state] - RSVP_RANK[rowB.original.rsvp.state];
 
-/** The toolbar clears a filter by setting `undefined`, so a value here is always real. */
-const filterByLink: FilterFn<GuestListFeatures, PartyRow> = (row, _columnId, value) => row.original.link === value;
+/**
+ * Column filter values are sets of strings — OR within the dropdown. The toolbar
+ * clears a filter with `undefined` rather than `[]`, but the guard is kept here
+ * too: an empty set that reached these would match nothing and blank the table.
+ */
+function selectedValues(value: unknown): string[] {
+  return Array.isArray(value) ? value.filter((entry): entry is string => typeof entry === "string") : [];
+}
+
+const filterByLink: FilterFn<GuestListFeatures, PartyRow> = (row, _columnId, value) =>
+  matchesAny<string>(row.original.link, selectedValues(value));
+
+const filterByWho: FilterFn<GuestListFeatures, PartyRow> = (row, _columnId, value) =>
+  matchesAny<string>(row.original.who, selectedValues(value));
+
+const filterByWave: FilterFn<GuestListFeatures, PartyRow> = (row, _columnId, value) =>
+  matchesAny<string>(row.original.wave, selectedValues(value));
 
 const filterByInvitedTo: FilterFn<GuestListFeatures, PartyRow> = (row, _columnId, value) =>
-  matchesInvitedTo(row.original, value as InvitedToFilter);
+  matchesInvitedTo(row.original, selectedValues(value) as InvitedToFilter[]);
 
 /** One string per row, matched as a substring. Accents are folded on both sides. */
 const filterBySearch: FilterFn<GuestListFeatures, PartyRow> = (row, _columnId, value) => {
@@ -71,8 +88,6 @@ const features = tableFeatures({
   columnFilteringFeature,
   filteredRowModel: createFilteredRowModel(),
   globalFilteringFeature,
-  rowPaginationFeature,
-  paginatedRowModel: createPaginatedRowModel(),
   columnMeta: {} as GuestListColumnMeta,
   tableMeta: {} as GuestListTableMeta,
 });
@@ -125,7 +140,7 @@ const columns = helper.columns([
     sortDescFirst: false,
     // Filtered on the stored code, not the label, so the dropdown stays honest
     // if a label is ever reworded.
-    filterFn: (row, _columnId, value) => row.original.who === value,
+    filterFn: filterByWho,
     enableGlobalFilter: false,
     cell: (info) => info.getValue(),
   }),
@@ -135,7 +150,7 @@ const columns = helper.columns([
     header: "Wave",
     meta: { width: 80 },
     sortDescFirst: false,
-    filterFn: (row, _columnId, value) => row.original.wave === value,
+    filterFn: filterByWave,
     enableGlobalFilter: false,
     cell: (info) => info.getValue(),
   }),
@@ -215,8 +230,6 @@ function rsvpText(party: PartyRow): string {
   return `${party.rsvp.attending} of ${seats} attending`;
 }
 
-export const GUEST_LIST_PAGE_SIZE = 50;
-
 /**
  * Builds the table. Called by the page rather than by `GuestListTable` so the
  * toolbar and the footer, which live up there, re-render on table state changes
@@ -232,10 +245,7 @@ export function useGuestListTable(rows: PartyRow[] | undefined, meta: GuestListT
     // Headers toggle asc <-> desc only. The third click would otherwise drop the
     // list back to insertion order, which for a guest list reads as "broken".
     enableSortingRemoval: false,
-    initialState: {
-      sorting: [{ id: "party", desc: false }],
-      pagination: { pageIndex: 0, pageSize: GUEST_LIST_PAGE_SIZE },
-    },
+    initialState: { sorting: [{ id: "party", desc: false }] },
   });
 }
 
@@ -277,10 +287,77 @@ function RowActions({ party, meta }: { party: PartyRow; meta: GuestListTableMeta
   );
 }
 
+/** Rows on screen before the first append, and the size of every append after. */
+const ROW_CHUNK = 60;
+
+export type RowWindow = {
+  visibleCount: number;
+  hasMore: boolean;
+  /** Called by the table when its sentinel scrolls into view. */
+  showMore: () => void;
+};
+
+/**
+ * Grows how many of the filtered rows are actually rendered as the reader
+ * scrolls.
+ *
+ * Every row is already in memory, so nothing is fetched and there is nothing to
+ * wait for — appending is a synchronous slice, and pretending otherwise with a
+ * spinner would be theatre. The point is only to keep 400 table rows out of the
+ * DOM until they are wanted.
+ *
+ * Called by the page rather than by `GuestListTable` so the footer can say how
+ * many of how many are showing. The sentinel and its observer stay in the table,
+ * which is the half that owns the DOM.
+ */
+export function useRowWindow(table: GuestListTableInstance): RowWindow {
+  const total = table.getFilteredRowModel().rows.length;
+
+  // Anything that changes which rows are shown, or their order, invalidates the
+  // window — otherwise you filter down to three rows and keep staring at a
+  // window sized for the previous set.
+  const resetKey = JSON.stringify([table.state.sorting, table.state.columnFilters, table.state.globalFilter ?? ""]);
+
+  const [visibleCount, setVisibleCount] = useState(ROW_CHUNK);
+  const [windowKey, setWindowKey] = useState(resetKey);
+
+  // Adjusting state during render, not in an effect: React re-runs this
+  // component immediately with the reset value, so the table never paints one
+  // frame of the stale window.
+  if (windowKey !== resetKey) {
+    setWindowKey(resetKey);
+    setVisibleCount(ROW_CHUNK);
+  }
+
+  const showMore = useCallback(() => setVisibleCount((count) => count + ROW_CHUNK), []);
+
+  return { visibleCount: Math.min(visibleCount, total), hasMore: visibleCount < total, showMore };
+}
+
 const SORT_GLYPH = { asc: "↑", desc: "↓" } as const;
 
-export function GuestListTable({ table }: { table: GuestListTableInstance }) {
-  const rows = table.getRowModel().rows;
+export function GuestListTable({ table, rowWindow }: { table: GuestListTableInstance; rowWindow: RowWindow }) {
+  const { visibleCount, hasMore, showMore } = rowWindow;
+  const rows = table.getRowModel().rows.slice(0, visibleCount);
+  const sentinelRef = useRef<HTMLTableRowElement>(null);
+
+  useEffect(() => {
+    const sentinel = sentinelRef.current;
+    if (!sentinel || !hasMore) return;
+
+    // Re-created on every append: the sentinel element does not move in or out
+    // of the tree, it just shifts down, so a long-lived observer would not fire
+    // a second time. A generous margin keeps the next chunk ahead of the reader.
+    const observer = new IntersectionObserver(
+      (entries) => {
+        if (entries.some((entry) => entry.isIntersecting)) showMore();
+      },
+      { rootMargin: "400px" },
+    );
+
+    observer.observe(sentinel);
+    return () => observer.disconnect();
+  }, [hasMore, showMore, visibleCount]);
 
   return (
     <div className="overflow-x-auto rounded-[9px] border border-[#E4E4E7]">
@@ -347,6 +424,14 @@ export function GuestListTable({ table }: { table: GuestListTableInstance }) {
               ))}
             </tr>
           ))}
+
+          {/* Sentinel, not a row: zero height and no border so it cannot disturb
+              the 52px rhythm or the fixed lanes above it. */}
+          {hasMore ? (
+            <tr ref={sentinelRef} aria-hidden>
+              <td colSpan={table.getAllLeafColumns().length} className="h-0 p-0" />
+            </tr>
+          ) : null}
         </tbody>
       </table>
     </div>

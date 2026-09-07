@@ -9,11 +9,14 @@
 
 import type { PartyLink, PartyWave, PartyWho } from "./guest-csv";
 
-/** Toolbar dropdown values. `"all"` is the no-filter sentinel the selects need. */
-export type WaveFilter = "all" | PartyWave;
-export type WhoFilter = "all" | PartyWho;
-export type LinkFilter = "all" | PartyLink;
-export type InvitedToFilter = "all" | "preWedding" | "wedding" | "brunch" | "none";
+/**
+ * Toolbar dropdown values. Each dropdown holds a *set*: an empty set is "no
+ * filter", so there is no `"all"` sentinel to keep in sync any more.
+ */
+export type WaveFilter = PartyWave;
+export type WhoFilter = PartyWho;
+export type LinkFilter = PartyLink;
+export type InvitedToFilter = "preWedding" | "wedding" | "brunch" | "none";
 
 /** The subset of a party row the filters read. */
 export type FilterableParty = {
@@ -46,11 +49,19 @@ export function partySearchText(party: Pick<FilterableParty, "displayName" | "su
   return foldForSearch(`${party.displayName} ${party.surname}`);
 }
 
-/** Backs the INVITED TO column's filter. `"none"` means invited to nothing yet. */
-export function matchesInvitedTo(party: FilterableParty, invitedTo: InvitedToFilter): boolean {
+/**
+ * OR within one dropdown. An empty selection means the dropdown is not
+ * filtering at all — it must never be read as "match nothing", or clearing a
+ * filter would empty the table.
+ *
+ * AND across dropdowns falls out of TanStack running each column filter in turn.
+ */
+export function matchesAny<T>(value: T, selected: readonly T[]): boolean {
+  return selected.length === 0 || selected.includes(value);
+}
+
+function isInvitedTo(party: FilterableParty, invitedTo: InvitedToFilter): boolean {
   switch (invitedTo) {
-    case "all":
-      return true;
     case "preWedding":
       return party.invitedToPreWedding;
     case "wedding":
@@ -60,6 +71,15 @@ export function matchesInvitedTo(party: FilterableParty, invitedTo: InvitedToFil
     case "none":
       return !party.invitedToPreWedding && !party.invitedToWedding && !party.invitedToBrunch;
   }
+}
+
+/**
+ * Backs the INVITED TO column's filter. `"none"` means invited to nothing yet,
+ * so picking it alongside "Wedding" reads as "either invited to the wedding, or
+ * not invited to anything".
+ */
+export function matchesInvitedTo(party: FilterableParty, selected: readonly InvitedToFilter[]): boolean {
+  return selected.length === 0 || selected.some((option) => isInvitedTo(party, option));
 }
 
 export type RsvpState = "attending" | "declined" | "awaiting" | "notInvited";
