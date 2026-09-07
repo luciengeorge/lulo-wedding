@@ -3,12 +3,22 @@ import { useState } from "react";
 
 import { Monogram } from "@/components/wedding/monogram";
 import { enterGate, isGuestUnlocked } from "@/lib/functions/guest-gate";
+import { canonical, seo } from "@/lib/seo";
 
 export const Route = createFileRoute("/enter")({
   beforeLoad: async () => {
     // Someone who already has the cookie should never see the gate again.
     if (await isGuestUnlocked()) throw redirect({ to: "/" });
   },
+  head: () => ({
+    // Same preview as the save-the-date: a guest who is sent the bare link
+    // lands here first, and the unfurl should still be the invitation.
+    meta: seo({
+      description: "Laura and Lucien are getting married on 17 July 2027 in Lebanon.",
+      path: "/enter",
+    }),
+    links: [canonical("/enter")],
+  }),
   component: GatePage,
 });
 

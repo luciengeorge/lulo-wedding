@@ -1,7 +1,7 @@
 import { type Infer, v } from "convex/values";
 
-import { requireAdmin } from "./lib/adminAuth";
 import { mutation } from "./_generated/server";
+import { requireAdmin } from "./lib/adminAuth";
 
 /**
  * The party fields the couple's sheet owns. Everything else on a party row — the

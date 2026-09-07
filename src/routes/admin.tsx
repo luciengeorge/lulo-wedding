@@ -4,6 +4,7 @@ import { toast } from "sonner";
 import { authClient } from "@/lib/auth-client";
 import { getAdminSession } from "@/lib/functions/admin-session";
 import { redirectWithToast } from "@/lib/functions/redirect-with-toast";
+import { seo } from "@/lib/seo";
 
 /**
  * The couple's guest-list tool.
@@ -14,6 +15,9 @@ import { redirectWithToast } from "@/lib/functions/redirect-with-toast";
  * appears exactly twice — the LL wordmark below and the primary button fill.
  */
 export const Route = createFileRoute("/admin")({
+  head: () => ({
+    meta: seo({ title: "Admin", description: "Guest list administration.", path: "/admin", noPreview: true }),
+  }),
   beforeLoad: async () => {
     const admin = await getAdminSession();
 

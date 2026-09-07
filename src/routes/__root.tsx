@@ -23,10 +23,9 @@ interface RouterContext {
   queryClient: QueryClient;
 }
 
-const APP_NAME = import.meta.env.VITE_APP_NAME ?? "Starter Template";
-const SITE_URL = import.meta.env.VITE_SITE_URL ?? "http://localhost:3000";
-const TITLE = APP_NAME;
-const DESCRIPTION = `${APP_NAME} — built on the tanstack-starter-template.`;
+import { seo } from "@/lib/seo";
+
+const DEFAULT_DESCRIPTION = "Laura and Lucien are getting married on 17 July 2027 in Lebanon.";
 
 export const Route = createRootRouteWithContext<RouterContext>()({
   beforeLoad: async () => {
@@ -38,24 +37,23 @@ export const Route = createRootRouteWithContext<RouterContext>()({
     meta: [
       { charSet: "utf-8" },
       { name: "viewport", content: "width=device-width, initial-scale=1" },
-      { title: TITLE },
-      { name: "description", content: DESCRIPTION },
       // Private event. Nothing here should ever be indexed.
       { name: "robots", content: "noindex, nofollow" },
-      { property: "og:title", content: TITLE },
-      { property: "og:description", content: DESCRIPTION },
-      { property: "og:type", content: "website" },
-      { property: "og:url", content: SITE_URL },
-      { property: "og:site_name", content: APP_NAME },
-      { name: "twitter:card", content: "summary_large_image" },
-      { name: "twitter:title", content: TITLE },
-      { name: "twitter:description", content: DESCRIPTION },
+      { name: "theme-color", content: "#F9F1E5" },
+      ...seo({ description: DEFAULT_DESCRIPTION }),
     ],
     links: [
       { rel: "stylesheet", href: appCss },
-      { rel: "canonical", href: SITE_URL },
-      { rel: "icon", type: "image/png", href: "/favicon.png" },
-      { rel: "apple-touch-icon", href: "/favicon.png" },
+      // No canonical here on purpose: TanStack merges `meta` by name/property
+      // but simply concatenates `links`, so a root canonical plus a page
+      // canonical renders BOTH and a page with two canonicals has none that
+      // counts. Each route declares its own.
+      // The mark is intricate, so the .ico carries a thickened 16px variant
+      // alongside the full artwork at 32 and 48 — see tools/monogram.
+      { rel: "icon", href: "/favicon.ico", sizes: "any" },
+      { rel: "icon", type: "image/png", sizes: "32x32", href: "/favicon-32x32.png" },
+      { rel: "icon", type: "image/png", sizes: "16x16", href: "/favicon-16x16.png" },
+      { rel: "apple-touch-icon", sizes: "180x180", href: "/apple-touch-icon.png" },
     ],
   }),
   notFoundComponent: () => (

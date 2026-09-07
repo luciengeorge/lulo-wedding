@@ -12,8 +12,16 @@ import { Spinner } from "@/components/ui/spinner";
 import { AnalyticsEvent, useAnalytics } from "@/lib/analytics";
 import { authClient } from "@/lib/auth-client";
 import { LoginFormSchema } from "@/lib/schemas/auth";
+import { seo } from "@/lib/seo";
 
-export const Route = createFileRoute("/_auth/login")({ component: LoginPage });
+const HAS_OAUTH = Boolean(import.meta.env.VITE_GOOGLE_OAUTH_ENABLED || import.meta.env.VITE_APPLE_OAUTH_ENABLED);
+
+export const Route = createFileRoute("/_auth/login")({
+  head: () => ({
+    meta: seo({ title: "Sign in", description: "Sign in to the guest list.", path: "/login", noPreview: true }),
+  }),
+  component: LoginPage,
+});
 
 function LoginPage() {
   const { capture } = useAnalytics();
@@ -50,7 +58,7 @@ function LoginPage() {
         }
 
         toast.success("Welcome back!", { description: "Login successful" });
-        navigate({ to: "/" });
+        navigate({ to: "/admin" });
       },
     },
   });
@@ -65,16 +73,23 @@ function LoginPage() {
     <div className="flex flex-col gap-6">
       <Card>
         <CardHeader>
-          <CardTitle>Login to your account</CardTitle>
-          <CardDescription>Enter your email below to login to your account</CardDescription>
+          <CardTitle>Sign in</CardTitle>
+          <CardDescription>Only Laura and Lucien can sign in here. Guests do not need an account.</CardDescription>
         </CardHeader>
         <CardContent className="flex flex-col gap-4">
-          <OAuthButtons callbackURL="/app" />
-          <div className="flex items-center gap-3">
-            <Separator className="flex-1" />
-            <span className="text-xs text-muted-foreground">or</span>
-            <Separator className="flex-1" />
-          </div>
+          {/* The divider belongs to the OAuth buttons, so it has to disappear
+              with them — no provider is configured, and an "or" separating
+              nothing from the form is how this shipped. */}
+          {HAS_OAUTH ? (
+            <>
+              <OAuthButtons callbackURL="/admin" />
+              <div className="flex items-center gap-3">
+                <Separator className="flex-1" />
+                <span className="text-xs text-muted-foreground">or</span>
+                <Separator className="flex-1" />
+              </div>
+            </>
+          ) : null}
           <form onSubmit={onSubmit}>
             <FieldGroup>
               <form.Field name="email">
@@ -130,11 +145,9 @@ function LoginPage() {
                   <Field>
                     <Button type="submit" disabled={!canSubmit || isSubmitting}>
                       {isSubmitting ? <Spinner /> : null}
-                      {isSubmitting ? "Logging in" : "Login"}
+                      {isSubmitting ? "Signing in" : "Sign in"}
                     </Button>
                     {errorMap.onSubmit?.form ? <FieldError>{String(errorMap.onSubmit.form)}</FieldError> : null}
-                    <FieldDescription className="text-center">
-                    </FieldDescription>
                     <FieldDescription className="text-center">
                       <Link to="/magic-link">Sign in with a magic link instead</Link>
                     </FieldDescription>
