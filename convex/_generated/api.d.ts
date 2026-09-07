@@ -8,6 +8,7 @@
  * @module
  */
 
+import type * as admin from "../admin.js";
 import type * as billing_gating from "../billing/gating.js";
 import type * as billing_index from "../billing/index.js";
 import type * as billing_polar from "../billing/polar.js";
@@ -28,6 +29,7 @@ import type * as email_templates_verify from "../email/templates/verify.js";
 import type * as email_templates_welcome from "../email/templates/welcome.js";
 import type * as guests from "../guests.js";
 import type * as http from "../http.js";
+import type * as lib_adminAuth from "../lib/adminAuth.js";
 import type * as lib_plans from "../lib/plans.js";
 import type * as lib_webhook from "../lib/webhook.js";
 import type * as parties from "../parties.js";
@@ -48,6 +50,7 @@ import type {
 } from "convex/server";
 
 declare const fullApi: ApiFromModules<{
+  admin: typeof admin;
   "billing/gating": typeof billing_gating;
   "billing/index": typeof billing_index;
   "billing/polar": typeof billing_polar;
@@ -68,6 +71,7 @@ declare const fullApi: ApiFromModules<{
   "email/templates/welcome": typeof email_templates_welcome;
   guests: typeof guests;
   http: typeof http;
+  "lib/adminAuth": typeof lib_adminAuth;
   "lib/plans": typeof lib_plans;
   "lib/webhook": typeof lib_webhook;
   parties: typeof parties;

@@ -11,6 +11,7 @@
 import { Route as rootRouteImport } from './routes/__root'
 import { Route as IndexRouteImport } from './routes/index'
 import { Route as AuthRouteImport } from './routes/_auth'
+import { Route as AdminRouteImport } from './routes/admin'
 import { Route as AppRouteImport } from './routes/app'
 import { Route as EnterRouteImport } from './routes/enter'
 import { Route as legalLayoutRouteImport } from './routes/(legal)/_layout'
@@ -20,6 +21,7 @@ import { Route as AuthMagicLinkRouteImport } from './routes/_auth/magic-link'
 import { Route as AuthResetPasswordRouteImport } from './routes/_auth/reset-password'
 import { Route as AuthSignupRouteImport } from './routes/_auth/signup'
 import { Route as AuthVerifyEmailRouteImport } from './routes/_auth/verify-email'
+import { Route as AdminIndexRouteImport } from './routes/admin/index'
 import { Route as AppIndexRouteImport } from './routes/app/index'
 import { Route as AppAdminRouteImport } from './routes/app/admin'
 import { Route as AppSettingsRouteImport } from './routes/app/settings'
@@ -41,6 +43,11 @@ const IndexRoute = IndexRouteImport.update({
 } as any)
 const AuthRoute = AuthRouteImport.update({
   id: '/_auth',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const AdminRoute = AdminRouteImport.update({
+  id: '/admin',
+  path: '/admin',
   getParentRoute: () => rootRouteImport,
 } as any)
 const AppRoute = AppRouteImport.update({
@@ -86,6 +93,11 @@ const AuthVerifyEmailRoute = AuthVerifyEmailRouteImport.update({
   id: '/verify-email',
   path: '/verify-email',
   getParentRoute: () => AuthRoute,
+} as any)
+const AdminIndexRoute = AdminIndexRouteImport.update({
+  id: '/',
+  path: '/',
+  getParentRoute: () => AdminRoute,
 } as any)
 const AppIndexRoute = AppIndexRouteImport.update({
   id: '/',
@@ -155,6 +167,7 @@ const AppSettingsSecurityRoute = AppSettingsSecurityRouteImport.update({
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
+  '/admin': typeof AdminRouteWithChildren
   '/app': typeof AppRouteWithChildren
   '/enter': typeof EnterRoute
   '/forgot-password': typeof AuthForgotPasswordRoute
@@ -165,6 +178,7 @@ export interface FileRoutesByFullPath {
   '/verify-email': typeof AuthVerifyEmailRoute
   '/app/admin': typeof AppAdminRoute
   '/app/settings': typeof AppSettingsRouteWithChildren
+  '/admin/': typeof AdminIndexRoute
   '/app/': typeof AppIndexRoute
   '/cookies': typeof legalLayoutCookiesRoute
   '/privacy': typeof legalLayoutPrivacyRoute
@@ -187,6 +201,7 @@ export interface FileRoutesByTo {
   '/signup': typeof AuthSignupRoute
   '/verify-email': typeof AuthVerifyEmailRoute
   '/app/admin': typeof AppAdminRoute
+  '/admin': typeof AdminIndexRoute
   '/app': typeof AppIndexRoute
   '/cookies': typeof legalLayoutCookiesRoute
   '/privacy': typeof legalLayoutPrivacyRoute
@@ -203,6 +218,7 @@ export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/': typeof IndexRoute
   '/_auth': typeof AuthRouteWithChildren
+  '/admin': typeof AdminRouteWithChildren
   '/app': typeof AppRouteWithChildren
   '/enter': typeof EnterRoute
   '/(legal)/_layout': typeof legalLayoutRouteWithChildren
@@ -214,6 +230,7 @@ export interface FileRoutesById {
   '/_auth/verify-email': typeof AuthVerifyEmailRoute
   '/app/admin': typeof AppAdminRoute
   '/app/settings': typeof AppSettingsRouteWithChildren
+  '/admin/': typeof AdminIndexRoute
   '/app/': typeof AppIndexRoute
   '/(legal)/_layout/cookies': typeof legalLayoutCookiesRoute
   '/(legal)/_layout/privacy': typeof legalLayoutPrivacyRoute
@@ -230,6 +247,7 @@ export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
   fullPaths:
     | '/'
+    | '/admin'
     | '/app'
     | '/enter'
     | '/forgot-password'
@@ -240,6 +258,7 @@ export interface FileRouteTypes {
     | '/verify-email'
     | '/app/admin'
     | '/app/settings'
+    | '/admin/'
     | '/app/'
     | '/cookies'
     | '/privacy'
@@ -262,6 +281,7 @@ export interface FileRouteTypes {
     | '/signup'
     | '/verify-email'
     | '/app/admin'
+    | '/admin'
     | '/app'
     | '/cookies'
     | '/privacy'
@@ -277,6 +297,7 @@ export interface FileRouteTypes {
     | '__root__'
     | '/'
     | '/_auth'
+    | '/admin'
     | '/app'
     | '/enter'
     | '/(legal)/_layout'
@@ -288,6 +309,7 @@ export interface FileRouteTypes {
     | '/_auth/verify-email'
     | '/app/admin'
     | '/app/settings'
+    | '/admin/'
     | '/app/'
     | '/(legal)/_layout/cookies'
     | '/(legal)/_layout/privacy'
@@ -304,6 +326,7 @@ export interface FileRouteTypes {
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
   AuthRoute: typeof AuthRouteWithChildren
+  AdminRoute: typeof AdminRouteWithChildren
   AppRoute: typeof AppRouteWithChildren
   EnterRoute: typeof EnterRoute
   legalLayoutRoute: typeof legalLayoutRouteWithChildren
@@ -325,6 +348,13 @@ declare module '@tanstack/react-router' {
       path: ''
       fullPath: '/'
       preLoaderRoute: typeof AuthRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/admin': {
+      id: '/admin'
+      path: '/admin'
+      fullPath: '/admin'
+      preLoaderRoute: typeof AdminRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/app': {
@@ -389,6 +419,13 @@ declare module '@tanstack/react-router' {
       fullPath: '/verify-email'
       preLoaderRoute: typeof AuthVerifyEmailRouteImport
       parentRoute: typeof AuthRoute
+    }
+    '/admin/': {
+      id: '/admin/'
+      path: '/'
+      fullPath: '/admin/'
+      preLoaderRoute: typeof AdminIndexRouteImport
+      parentRoute: typeof AdminRoute
     }
     '/app/': {
       id: '/app/'
@@ -504,6 +541,16 @@ const AuthRouteChildren: AuthRouteChildren = {
 
 const AuthRouteWithChildren = AuthRoute._addFileChildren(AuthRouteChildren)
 
+interface AdminRouteChildren {
+  AdminIndexRoute: typeof AdminIndexRoute
+}
+
+const AdminRouteChildren: AdminRouteChildren = {
+  AdminIndexRoute: AdminIndexRoute,
+}
+
+const AdminRouteWithChildren = AdminRoute._addFileChildren(AdminRouteChildren)
+
 interface AppSettingsRouteChildren {
   AppSettingsBillingRoute: typeof AppSettingsBillingRoute
   AppSettingsDangerRoute: typeof AppSettingsDangerRoute
@@ -557,6 +604,7 @@ const legalLayoutRouteWithChildren = legalLayoutRoute._addFileChildren(
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
   AuthRoute: AuthRouteWithChildren,
+  AdminRoute: AdminRouteWithChildren,
   AppRoute: AppRouteWithChildren,
   EnterRoute: EnterRoute,
   legalLayoutRoute: legalLayoutRouteWithChildren,

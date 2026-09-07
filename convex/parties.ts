@@ -1,5 +1,6 @@
 import { type Infer, v } from "convex/values";
 
+import { requireAdmin } from "./lib/adminAuth";
 import { mutation } from "./_generated/server";
 
 /**
@@ -95,9 +96,16 @@ export function diffSheetFields(existing: PartyCsvFields, desired: PartyCsvField
  * and their invite flags, and nothing is ever deleted. Parties that have vanished from
  * the sheet are reported rather than removed — they are usually renames, and dropping
  * one would take a family's RSVP with it.
+ *
+ * Admin-only. A public mutation here would let anyone who knows the deployment URL
+ * rewrite the entire guest list, and the /admin UI calls it straight from the browser.
+ *
+ * `dryRun` produces the identical report without touching the table, so the admin
+ * UI can show the couple exactly what an import would do before they commit to it.
+ * Running the real logic beats reimplementing a preview that could disagree with it.
  */
 export const importParties = mutation({
-  args: { rows: v.array(partyCsvFields) },
+  args: { rows: v.array(partyCsvFields), dryRun: v.optional(v.boolean()) },
   returns: v.object({
     created: v.number(),
     updated: v.number(),
@@ -105,7 +113,9 @@ export const importParties = mutation({
     missingFromCsv: v.array(v.object({ importKey: v.string(), displayName: v.string() })),
     warnings: v.array(v.string()),
   }),
-  handler: async (ctx, { rows }) => {
+  handler: async (ctx, { rows, dryRun = false }) => {
+    await requireAdmin(ctx);
+
     const warnings: string[] = [];
 
     const incomingKeys = new Set<string>();
@@ -139,14 +149,16 @@ export const importParties = mutation({
         while (usedTokens.has(token)) token = generateToken();
         usedTokens.add(token);
 
-        await ctx.db.insert("parties", {
-          ...row,
-          token,
-          // Set once, on insert. The couple owns these from the admin UI afterwards.
-          invitedToPreWedding: false,
-          invitedToWedding: true,
-          invitedToBrunch: false,
-        });
+        if (!dryRun) {
+          await ctx.db.insert("parties", {
+            ...row,
+            token,
+            // Set once, on insert. The couple owns these from the admin UI afterwards.
+            invitedToPreWedding: false,
+            invitedToWedding: true,
+            invitedToBrunch: false,
+          });
+        }
         created++;
         continue;
       }
@@ -157,7 +169,7 @@ export const importParties = mutation({
         continue;
       }
 
-      await ctx.db.patch(existing._id, patch);
+      if (!dryRun) await ctx.db.patch(existing._id, patch);
       updated++;
     }
 
