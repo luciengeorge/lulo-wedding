@@ -1,0 +1,13 @@
+CORRECTION: the line "Filtering is server-side with 50-row pages" is wrong.
+
+It describes the design in the original brief, not the code in this commit.
+As committed: admin.listParties takes no arguments and returns the whole
+set, admin.exportParties does not exist, and searching, filtering, sorting
+and pagination all happen client-side in TanStack Table (v9). Pagination at
+50 rows survives, also client-side.
+
+The change was deliberate — at 400 rows on a private admin tool, loading
+once and filtering in the browser is instant and avoids two filtering
+systems fighting each other. The commit body simply was not updated to
+match. Everything else in it, including the SECURITY paragraph and the
+stats-stay-global rationale, is accurate.
