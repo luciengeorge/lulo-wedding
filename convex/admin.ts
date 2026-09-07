@@ -20,7 +20,7 @@ const partyWho = v.union(
 const partyWave = v.union(v.literal("tier1"), v.literal("tier2"));
 
 /**
- * The fields /admin owns. `token`, `importKey`, `under50` and `earlyDecline` are
+ * The fields /admin owns. `token` and `importKey` are
  * absent: the first two must survive an edit, and the last two are the sheet's to
  * set — the importer would overwrite anything typed here on the next run.
  */
@@ -29,6 +29,8 @@ const partyEditableFields = {
   surname: v.string(),
   headCount: v.number(),
   plusOneAllowed: v.boolean(),
+  under50: v.optional(v.boolean()),
+  earlyDecline: v.boolean(),
   link: partyLink,
   whereFrom: v.optional(v.string()),
   who: partyWho,
@@ -184,8 +186,7 @@ export const createParty = mutation({
       ...fields,
       importKey,
       token: await mintToken(ctx),
-      // The sheet owns this column; a party added by hand has not declined.
-      earlyDecline: false,
+      earlyDecline: fields.earlyDecline,
     });
   },
 });

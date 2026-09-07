@@ -35,6 +35,14 @@ export const PartyFormSchema = z.object({
     .min(1, { error: "A party needs at least one seat" })
     .max(30, { error: "That is a lot of seats — check the number" }),
   plusOneAllowed: z.boolean(),
+  /** Under 50 on the sheet. A filter dimension the couple sort by, so editable. */
+  under50: z.boolean(),
+  /**
+   * The sheet already recorded five parties as "No". Editable because a
+   * declined party can change its mind, and with no control the row reads
+   * "Declined" forever with nothing in the UI able to undo it.
+   */
+  earlyDecline: z.boolean(),
   link: z.enum(["family", "friends"], { error: "Pick family or friends" }),
   whereFrom: z.string().trim().max(120, { error: "Where from is too long" }),
   who: z.enum(["lucien", "laura", "mutual", "zeina", "nayla"], { error: "Pick whose side this party is" }),
@@ -54,6 +62,8 @@ export const EMPTY_PARTY_FORM: PartyFormValues = {
   surname: "",
   headCount: 2,
   plusOneAllowed: false,
+  under50: false,
+  earlyDecline: false,
   link: "friends",
   whereFrom: "",
   who: "mutual",

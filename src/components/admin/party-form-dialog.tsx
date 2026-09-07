@@ -44,6 +44,8 @@ function toFormValues(party: PartyRow): PartyFormValues {
     surname: party.surname,
     headCount: party.headCount,
     plusOneAllowed: party.plusOneAllowed,
+    under50: party.under50 ?? false,
+    earlyDecline: party.earlyDecline,
     link: party.link,
     whereFrom: party.whereFrom ?? "",
     who: party.who,
@@ -292,6 +294,36 @@ function PartyFormBody({ party, onDone }: { party: PartyRow | null; onDone: () =
               />
               <FieldLabel htmlFor={field.name} className="font-normal">
                 Save-the-date sent
+              </FieldLabel>
+            </Field>
+          )}
+        </form.Field>
+
+        <form.Field name="under50">
+          {(field) => (
+            <Field orientation="horizontal">
+              <Checkbox
+                id={field.name}
+                checked={field.state.value}
+                onCheckedChange={(checked) => field.handleChange(checked === true)}
+              />
+              <FieldLabel htmlFor={field.name} className="font-normal">
+                Under 50
+              </FieldLabel>
+            </Field>
+          )}
+        </form.Field>
+
+        <form.Field name="earlyDecline">
+          {(field) => (
+            <Field orientation="horizontal">
+              <Checkbox
+                id={field.name}
+                checked={field.state.value}
+                onCheckedChange={(checked) => field.handleChange(checked === true)}
+              />
+              <FieldLabel htmlFor={field.name} className="font-normal">
+                Already told us they can&apos;t come
               </FieldLabel>
             </Field>
           )}

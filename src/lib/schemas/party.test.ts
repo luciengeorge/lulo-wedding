@@ -42,11 +42,20 @@ describe("PartyFormSchema", () => {
     expect(PartyFormSchema.safeParse({ ...form(), link: "colleagues" }).success).toBe(false);
   });
 
-  it("has no way to set token, importKey or earlyDecline", () => {
-    const parsed = PartyFormSchema.parse({ ...form(), token: "hijacked", importKey: "x|y", earlyDecline: true });
+  it("has no way to set token or importKey", () => {
+    // The token is a live magic link that must survive an edit, and importKey
+    // is the sheet's natural key — changing it would make the next import
+    // create a duplicate party rather than update this one.
+    const parsed = PartyFormSchema.parse({ ...form(), token: "hijacked", importKey: "x|y" });
     expect(parsed).not.toHaveProperty("token");
     expect(parsed).not.toHaveProperty("importKey");
-    expect(parsed).not.toHaveProperty("earlyDecline");
+  });
+
+  it("lets earlyDecline be cleared, so a party can change its mind", () => {
+    // The sheet recorded five parties as "No". Without a control here the row
+    // reads "Declined" forever with nothing in the UI able to undo it.
+    expect(PartyFormSchema.parse({ ...form(), earlyDecline: true }).earlyDecline).toBe(true);
+    expect(PartyFormSchema.parse({ ...form(), earlyDecline: false }).earlyDecline).toBe(false);
   });
 });
 
