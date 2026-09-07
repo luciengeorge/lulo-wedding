@@ -44,17 +44,15 @@ function GatePage() {
 
   return (
     <div className="relative flex min-h-svh w-full flex-col items-center justify-center overflow-hidden bg-paper [background-image:url('/art/paper-tile.webp')] bg-[length:560px_428px] bg-repeat px-6 text-ink">
-      <img
+      <div
         aria-hidden
-        alt=""
-        src="/art/olive-branch.webp"
         className="lulo-sway pointer-events-none absolute -top-9 -left-12 w-[168px] lg:-top-12 lg:-left-14 lg:w-[236px]"
         style={{ "--sway-duration": "13s" } as React.CSSProperties}
-      />
-      <img
+      >
+        <img alt="" src="/art/olive-branch.webp" className="lulo-grow block w-full" />
+      </div>
+      <div
         aria-hidden
-        alt=""
-        src="/art/olive-branch-flipped.webp"
         className="lulo-sway pointer-events-none absolute -right-12 -bottom-9 w-[168px] lg:-right-14 lg:-bottom-12 lg:w-[236px]"
         style={
           {
@@ -63,7 +61,15 @@ function GatePage() {
             "--sway-origin": "bottom right",
           } as React.CSSProperties
         }
-      />
+      >
+        {/* Mirrored asset, so it has to grow from the opposite corner. */}
+        <img
+          alt=""
+          src="/art/olive-branch-flipped.webp"
+          className="lulo-grow lulo-grow-rev block w-full"
+          style={{ "--grow-delay": "260ms" } as React.CSSProperties}
+        />
+      </div>
 
       {/* Sits slightly above true centre — optically centred rather than
           mathematically, since the eye reads a form as bottom-heavy. */}

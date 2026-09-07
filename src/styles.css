@@ -216,3 +216,63 @@
     animation: none;
   }
 }
+
+/* Branches grow in along the stem.
+ *
+ * Not leaf-by-leaf: the artwork is one flat raster with overlapping translucent
+ * washes, so cutting individual leaves out would destroy the overlaps and leave
+ * a hard edge on every one. A gradient mask swept along the stem's axis reveals
+ * the leaves in roughly the order they grow, and costs one CSS property.
+ *
+ * Sway lives on a wrapper and grow on the image, because the two would
+ * otherwise contend for the same `animation` slot. */
+@keyframes lulo-grow {
+  from {
+    mask-position: 108% 108%;
+  }
+  to {
+    mask-position: 0% 0%;
+  }
+}
+
+.lulo-grow {
+  /* Narrow feather: a wide one dissolves the whole branch in at once instead of
+     travelling along it. Near-linear easing for the same reason — a growing
+     thing does not decelerate. */
+  /* The opaque band must be wider than the element (50% of a 220% box = 110%),
+     or the end state leaves a corner still faded. Travel runs 118% -> 0%: the
+     first hides the band completely, the second lands its leading edge past the
+     far corner. Near-linear easing — a growing thing does not decelerate. */
+  mask-image: linear-gradient(to bottom right, #000 0%, #000 50%, transparent 66%);
+  mask-size: 220% 220%;
+  mask-repeat: no-repeat;
+  mask-position: 108% 108%;
+  animation: lulo-grow var(--grow-duration, 1700ms) cubic-bezier(0.45, 0.05, 0.55, 0.95) forwards;
+  animation-delay: var(--grow-delay, 0ms);
+}
+
+/* Mirrored branches grow from the opposite corner. Flipping the gradient is not
+   enough: with `to top left` the opaque band sits at the mask box's bottom-right,
+   so the position travel has to run the other way or the branch ends up masked
+   out entirely at rest. */
+@keyframes lulo-grow-rev {
+  from {
+    mask-position: -8% -8%;
+  }
+  to {
+    mask-position: 100% 100%;
+  }
+}
+
+.lulo-grow-rev {
+  mask-image: linear-gradient(to top left, #000 0%, #000 50%, transparent 66%);
+  mask-position: -8% -8%;
+  animation-name: lulo-grow-rev;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .lulo-grow {
+    mask-image: none;
+    animation: none;
+  }
+}

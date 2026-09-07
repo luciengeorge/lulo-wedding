@@ -113,12 +113,12 @@ function SceneArt() {
 
 function OliveBranch() {
   return (
-    <img
+    <div
       aria-hidden
-      alt=""
-      src="/art/olive-branch.webp"
       className="lulo-sway pointer-events-none absolute -top-9 -left-12 w-[168px] lg:-top-13 lg:-left-16 lg:w-[262px]"
       style={{ "--sway-duration": "13s" } as React.CSSProperties}
-    />
+    >
+      <img alt="" src="/art/olive-branch.webp" className="lulo-grow block w-full" />
+    </div>
   );
 }
