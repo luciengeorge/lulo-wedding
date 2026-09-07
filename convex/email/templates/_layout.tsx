@@ -42,14 +42,22 @@ export function EmailLayout({ preview, appName, children }: EmailLayoutProps) {
             className="mx-auto my-8 w-full max-w-[560px] px-8 py-10"
             style={{ backgroundColor: "#F9F1E5", borderRadius: 4, border: "1px solid #E7D9C4" }}
           >
+            {/* Most clients block remote images by default, so the header must
+                read correctly with the image missing. The monogram is decorative
+                with an empty alt — a broken-image icon plus wrapping alt text is
+                worse than no image — and the couple's name is real text
+                underneath, which always renders. */}
             <Section className="mb-7" style={{ textAlign: "center" }}>
               <Img
                 src={logoUrl ?? `${siteUrl()}/art/monogram-email.png`}
-                alt={name}
+                alt=""
                 width="44"
                 height="44"
-                style={{ display: "inline-block" }}
+                style={{ display: "inline-block", border: "none", outline: "none" }}
               />
+              <Text className="m-0" style={{ fontSize: 15, letterSpacing: "0.08em", color: "#9B0D17", paddingTop: 6 }}>
+                {name}
+              </Text>
             </Section>
 
             {children}
