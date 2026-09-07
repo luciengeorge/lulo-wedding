@@ -12,10 +12,8 @@ import { Route as rootRouteImport } from './routes/__root'
 import { Route as IndexRouteImport } from './routes/index'
 import { Route as AuthRouteImport } from './routes/_auth'
 import { Route as AppRouteImport } from './routes/app'
+import { Route as EnterRouteImport } from './routes/enter'
 import { Route as legalLayoutRouteImport } from './routes/(legal)/_layout'
-import { Route as legalCookiesRouteImport } from './routes/(legal)/cookies'
-import { Route as legalPrivacyRouteImport } from './routes/(legal)/privacy'
-import { Route as legalTermsRouteImport } from './routes/(legal)/terms'
 import { Route as AuthForgotPasswordRouteImport } from './routes/_auth/forgot-password'
 import { Route as AuthLoginRouteImport } from './routes/_auth/login'
 import { Route as AuthMagicLinkRouteImport } from './routes/_auth/magic-link'
@@ -25,6 +23,9 @@ import { Route as AuthVerifyEmailRouteImport } from './routes/_auth/verify-email
 import { Route as AppIndexRouteImport } from './routes/app/index'
 import { Route as AppAdminRouteImport } from './routes/app/admin'
 import { Route as AppSettingsRouteImport } from './routes/app/settings'
+import { Route as legalLayoutCookiesRouteImport } from './routes/(legal)/_layout/cookies'
+import { Route as legalLayoutPrivacyRouteImport } from './routes/(legal)/_layout/privacy'
+import { Route as legalLayoutTermsRouteImport } from './routes/(legal)/_layout/terms'
 import { Route as ApiAuthSplatRouteImport } from './routes/api/auth.$'
 import { Route as ApiImgStorageIdRouteImport } from './routes/api/img.$storageId'
 import { Route as AppSettingsIndexRouteImport } from './routes/app/settings/index'
@@ -47,23 +48,13 @@ const AppRoute = AppRouteImport.update({
   path: '/app',
   getParentRoute: () => rootRouteImport,
 } as any)
+const EnterRoute = EnterRouteImport.update({
+  id: '/enter',
+  path: '/enter',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const legalLayoutRoute = legalLayoutRouteImport.update({
   id: '/(legal)/_layout',
-  getParentRoute: () => rootRouteImport,
-} as any)
-const legalCookiesRoute = legalCookiesRouteImport.update({
-  id: '/(legal)/cookies',
-  path: '/cookies',
-  getParentRoute: () => rootRouteImport,
-} as any)
-const legalPrivacyRoute = legalPrivacyRouteImport.update({
-  id: '/(legal)/privacy',
-  path: '/privacy',
-  getParentRoute: () => rootRouteImport,
-} as any)
-const legalTermsRoute = legalTermsRouteImport.update({
-  id: '/(legal)/terms',
-  path: '/terms',
   getParentRoute: () => rootRouteImport,
 } as any)
 const AuthForgotPasswordRoute = AuthForgotPasswordRouteImport.update({
@@ -111,6 +102,21 @@ const AppSettingsRoute = AppSettingsRouteImport.update({
   path: '/settings',
   getParentRoute: () => AppRoute,
 } as any)
+const legalLayoutCookiesRoute = legalLayoutCookiesRouteImport.update({
+  id: '/cookies',
+  path: '/cookies',
+  getParentRoute: () => legalLayoutRoute,
+} as any)
+const legalLayoutPrivacyRoute = legalLayoutPrivacyRouteImport.update({
+  id: '/privacy',
+  path: '/privacy',
+  getParentRoute: () => legalLayoutRoute,
+} as any)
+const legalLayoutTermsRoute = legalLayoutTermsRouteImport.update({
+  id: '/terms',
+  path: '/terms',
+  getParentRoute: () => legalLayoutRoute,
+} as any)
 const ApiAuthSplatRoute = ApiAuthSplatRouteImport.update({
   id: '/api/auth/$',
   path: '/api/auth/$',
@@ -150,9 +156,7 @@ const AppSettingsSecurityRoute = AppSettingsSecurityRouteImport.update({
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
   '/app': typeof AppRouteWithChildren
-  '/cookies': typeof legalCookiesRoute
-  '/privacy': typeof legalPrivacyRoute
-  '/terms': typeof legalTermsRoute
+  '/enter': typeof EnterRoute
   '/forgot-password': typeof AuthForgotPasswordRoute
   '/login': typeof AuthLoginRoute
   '/magic-link': typeof AuthMagicLinkRoute
@@ -162,6 +166,9 @@ export interface FileRoutesByFullPath {
   '/app/admin': typeof AppAdminRoute
   '/app/settings': typeof AppSettingsRouteWithChildren
   '/app/': typeof AppIndexRoute
+  '/cookies': typeof legalLayoutCookiesRoute
+  '/privacy': typeof legalLayoutPrivacyRoute
+  '/terms': typeof legalLayoutTermsRoute
   '/api/auth/$': typeof ApiAuthSplatRoute
   '/api/img/$storageId': typeof ApiImgStorageIdRoute
   '/app/settings/billing': typeof AppSettingsBillingRoute
@@ -172,9 +179,7 @@ export interface FileRoutesByFullPath {
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
-  '/cookies': typeof legalCookiesRoute
-  '/privacy': typeof legalPrivacyRoute
-  '/terms': typeof legalTermsRoute
+  '/enter': typeof EnterRoute
   '/forgot-password': typeof AuthForgotPasswordRoute
   '/login': typeof AuthLoginRoute
   '/magic-link': typeof AuthMagicLinkRoute
@@ -183,6 +188,9 @@ export interface FileRoutesByTo {
   '/verify-email': typeof AuthVerifyEmailRoute
   '/app/admin': typeof AppAdminRoute
   '/app': typeof AppIndexRoute
+  '/cookies': typeof legalLayoutCookiesRoute
+  '/privacy': typeof legalLayoutPrivacyRoute
+  '/terms': typeof legalLayoutTermsRoute
   '/api/auth/$': typeof ApiAuthSplatRoute
   '/api/img/$storageId': typeof ApiImgStorageIdRoute
   '/app/settings/billing': typeof AppSettingsBillingRoute
@@ -196,10 +204,8 @@ export interface FileRoutesById {
   '/': typeof IndexRoute
   '/_auth': typeof AuthRouteWithChildren
   '/app': typeof AppRouteWithChildren
-  '/(legal)/_layout': typeof legalLayoutRoute
-  '/(legal)/cookies': typeof legalCookiesRoute
-  '/(legal)/privacy': typeof legalPrivacyRoute
-  '/(legal)/terms': typeof legalTermsRoute
+  '/enter': typeof EnterRoute
+  '/(legal)/_layout': typeof legalLayoutRouteWithChildren
   '/_auth/forgot-password': typeof AuthForgotPasswordRoute
   '/_auth/login': typeof AuthLoginRoute
   '/_auth/magic-link': typeof AuthMagicLinkRoute
@@ -209,6 +215,9 @@ export interface FileRoutesById {
   '/app/admin': typeof AppAdminRoute
   '/app/settings': typeof AppSettingsRouteWithChildren
   '/app/': typeof AppIndexRoute
+  '/(legal)/_layout/cookies': typeof legalLayoutCookiesRoute
+  '/(legal)/_layout/privacy': typeof legalLayoutPrivacyRoute
+  '/(legal)/_layout/terms': typeof legalLayoutTermsRoute
   '/api/auth/$': typeof ApiAuthSplatRoute
   '/api/img/$storageId': typeof ApiImgStorageIdRoute
   '/app/settings/billing': typeof AppSettingsBillingRoute
@@ -222,9 +231,7 @@ export interface FileRouteTypes {
   fullPaths:
     | '/'
     | '/app'
-    | '/cookies'
-    | '/privacy'
-    | '/terms'
+    | '/enter'
     | '/forgot-password'
     | '/login'
     | '/magic-link'
@@ -234,6 +241,9 @@ export interface FileRouteTypes {
     | '/app/admin'
     | '/app/settings'
     | '/app/'
+    | '/cookies'
+    | '/privacy'
+    | '/terms'
     | '/api/auth/$'
     | '/api/img/$storageId'
     | '/app/settings/billing'
@@ -244,9 +254,7 @@ export interface FileRouteTypes {
   fileRoutesByTo: FileRoutesByTo
   to:
     | '/'
-    | '/cookies'
-    | '/privacy'
-    | '/terms'
+    | '/enter'
     | '/forgot-password'
     | '/login'
     | '/magic-link'
@@ -255,6 +263,9 @@ export interface FileRouteTypes {
     | '/verify-email'
     | '/app/admin'
     | '/app'
+    | '/cookies'
+    | '/privacy'
+    | '/terms'
     | '/api/auth/$'
     | '/api/img/$storageId'
     | '/app/settings/billing'
@@ -267,10 +278,8 @@ export interface FileRouteTypes {
     | '/'
     | '/_auth'
     | '/app'
+    | '/enter'
     | '/(legal)/_layout'
-    | '/(legal)/cookies'
-    | '/(legal)/privacy'
-    | '/(legal)/terms'
     | '/_auth/forgot-password'
     | '/_auth/login'
     | '/_auth/magic-link'
@@ -280,6 +289,9 @@ export interface FileRouteTypes {
     | '/app/admin'
     | '/app/settings'
     | '/app/'
+    | '/(legal)/_layout/cookies'
+    | '/(legal)/_layout/privacy'
+    | '/(legal)/_layout/terms'
     | '/api/auth/$'
     | '/api/img/$storageId'
     | '/app/settings/billing'
@@ -293,10 +305,8 @@ export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
   AuthRoute: typeof AuthRouteWithChildren
   AppRoute: typeof AppRouteWithChildren
-  legalLayoutRoute: typeof legalLayoutRoute
-  legalCookiesRoute: typeof legalCookiesRoute
-  legalPrivacyRoute: typeof legalPrivacyRoute
-  legalTermsRoute: typeof legalTermsRoute
+  EnterRoute: typeof EnterRoute
+  legalLayoutRoute: typeof legalLayoutRouteWithChildren
   ApiAuthSplatRoute: typeof ApiAuthSplatRoute
   ApiImgStorageIdRoute: typeof ApiImgStorageIdRoute
 }
@@ -324,32 +334,18 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AppRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/enter': {
+      id: '/enter'
+      path: '/enter'
+      fullPath: '/enter'
+      preLoaderRoute: typeof EnterRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/(legal)/_layout': {
       id: '/(legal)/_layout'
       path: ''
       fullPath: ''
       preLoaderRoute: typeof legalLayoutRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/(legal)/cookies': {
-      id: '/(legal)/cookies'
-      path: '/cookies'
-      fullPath: '/cookies'
-      preLoaderRoute: typeof legalCookiesRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/(legal)/privacy': {
-      id: '/(legal)/privacy'
-      path: '/privacy'
-      fullPath: '/privacy'
-      preLoaderRoute: typeof legalPrivacyRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/(legal)/terms': {
-      id: '/(legal)/terms'
-      path: '/terms'
-      fullPath: '/terms'
-      preLoaderRoute: typeof legalTermsRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/_auth/forgot-password': {
@@ -414,6 +410,27 @@ declare module '@tanstack/react-router' {
       fullPath: '/app/settings'
       preLoaderRoute: typeof AppSettingsRouteImport
       parentRoute: typeof AppRoute
+    }
+    '/(legal)/_layout/cookies': {
+      id: '/(legal)/_layout/cookies'
+      path: '/cookies'
+      fullPath: '/cookies'
+      preLoaderRoute: typeof legalLayoutCookiesRouteImport
+      parentRoute: typeof legalLayoutRoute
+    }
+    '/(legal)/_layout/privacy': {
+      id: '/(legal)/_layout/privacy'
+      path: '/privacy'
+      fullPath: '/privacy'
+      preLoaderRoute: typeof legalLayoutPrivacyRouteImport
+      parentRoute: typeof legalLayoutRoute
+    }
+    '/(legal)/_layout/terms': {
+      id: '/(legal)/_layout/terms'
+      path: '/terms'
+      fullPath: '/terms'
+      preLoaderRoute: typeof legalLayoutTermsRouteImport
+      parentRoute: typeof legalLayoutRoute
     }
     '/api/auth/$': {
       id: '/api/auth/$'
@@ -521,14 +538,28 @@ const AppRouteChildren: AppRouteChildren = {
 
 const AppRouteWithChildren = AppRoute._addFileChildren(AppRouteChildren)
 
+interface legalLayoutRouteChildren {
+  legalLayoutCookiesRoute: typeof legalLayoutCookiesRoute
+  legalLayoutPrivacyRoute: typeof legalLayoutPrivacyRoute
+  legalLayoutTermsRoute: typeof legalLayoutTermsRoute
+}
+
+const legalLayoutRouteChildren: legalLayoutRouteChildren = {
+  legalLayoutCookiesRoute: legalLayoutCookiesRoute,
+  legalLayoutPrivacyRoute: legalLayoutPrivacyRoute,
+  legalLayoutTermsRoute: legalLayoutTermsRoute,
+}
+
+const legalLayoutRouteWithChildren = legalLayoutRoute._addFileChildren(
+  legalLayoutRouteChildren,
+)
+
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
   AuthRoute: AuthRouteWithChildren,
   AppRoute: AppRouteWithChildren,
-  legalLayoutRoute: legalLayoutRoute,
-  legalCookiesRoute: legalCookiesRoute,
-  legalPrivacyRoute: legalPrivacyRoute,
-  legalTermsRoute: legalTermsRoute,
+  EnterRoute: EnterRoute,
+  legalLayoutRoute: legalLayoutRouteWithChildren,
   ApiAuthSplatRoute: ApiAuthSplatRoute,
   ApiImgStorageIdRoute: ApiImgStorageIdRoute,
 }

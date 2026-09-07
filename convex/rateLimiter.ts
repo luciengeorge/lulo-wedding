@@ -25,6 +25,13 @@ export const rateLimiter = new RateLimiter(components.rateLimiter, {
   // Sync: per-user budget across all third-party API fetches — protects
   //   your upstream API allowances when a single user has many sources.
   syncSource: { kind: "token bucket", rate: 60, period: MINUTE, capacity: 20 },
+  // Guest gate: shared-password attempts per client IP. Fixed window rather than a
+  //   token bucket so a whole family behind one NAT/venue-wifi IP gets a predictable
+  //   allowance that fully resets, instead of a slowly-refilling budget that a second
+  //   person inherits half-empty. 20 per 15 min covers ~10 guests fumbling twice each
+  //   on the same IP, while capping an attacker at ~1,900 guesses/day per IP — nowhere
+  //   near enough against the passphrase's keyspace.
+  guestGate: { kind: "fixed window", rate: 20, period: 15 * MINUTE },
   // Generic: per-second hot-loop guard
   hotPath: { kind: "token bucket", rate: 1, period: SECOND, capacity: 5 },
 });

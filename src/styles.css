@@ -161,3 +161,58 @@
     @apply font-sans;
   }
 }
+
+/* ---------------------------------------------------------------------------
+ * Wedding motion.
+ *
+ * Deliberately CSS-only. Phase 1 is two non-scrolling screens, so there is
+ * nothing for scroll-linked animation to act on and no reason to ship a motion
+ * library yet. Everything here animates transform/opacity only, so it stays on
+ * the compositor.
+ * ------------------------------------------------------------------------- */
+
+/* A breeze. Painted botanicals should move like plants, not like UI: slow,
+   small, and out of phase with each other. */
+@keyframes lulo-sway {
+  from {
+    transform: rotate(-0.7deg) translate3d(0, 0, 0);
+  }
+  to {
+    transform: rotate(0.7deg) translate3d(0, -4px, 0);
+  }
+}
+
+.lulo-sway {
+  animation: lulo-sway var(--sway-duration, 11s) ease-in-out infinite alternate;
+  animation-delay: var(--sway-delay, 0s);
+  transform-origin: var(--sway-origin, top left);
+  will-change: transform;
+}
+
+/* Type settles in rather than popping. */
+@keyframes lulo-rise {
+  from {
+    opacity: 0;
+    transform: translate3d(0, 14px, 0);
+  }
+  to {
+    opacity: 1;
+    transform: translate3d(0, 0, 0);
+  }
+}
+
+.lulo-rise {
+  opacity: 0;
+  animation: lulo-rise 900ms cubic-bezier(0.22, 1, 0.36, 1) forwards;
+  animation-delay: var(--rise-delay, 0ms);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .lulo-sway {
+    animation: none;
+  }
+  .lulo-rise {
+    opacity: 1;
+    animation: none;
+  }
+}

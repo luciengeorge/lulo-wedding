@@ -26,6 +26,7 @@ import type * as email_templates_magicLink from "../email/templates/magicLink.js
 import type * as email_templates_resetPassword from "../email/templates/resetPassword.js";
 import type * as email_templates_verify from "../email/templates/verify.js";
 import type * as email_templates_welcome from "../email/templates/welcome.js";
+import type * as guests from "../guests.js";
 import type * as http from "../http.js";
 import type * as lib_plans from "../lib/plans.js";
 import type * as lib_webhook from "../lib/webhook.js";
@@ -64,6 +65,7 @@ declare const fullApi: ApiFromModules<{
   "email/templates/resetPassword": typeof email_templates_resetPassword;
   "email/templates/verify": typeof email_templates_verify;
   "email/templates/welcome": typeof email_templates_welcome;
+  guests: typeof guests;
   http: typeof http;
   "lib/plans": typeof lib_plans;
   "lib/webhook": typeof lib_webhook;
