@@ -23,6 +23,7 @@ import { Route as AdminIndexRouteImport } from './routes/admin/index'
 import { Route as AppIndexRouteImport } from './routes/app/index'
 import { Route as AppAdminRouteImport } from './routes/app/admin'
 import { Route as AppSettingsRouteImport } from './routes/app/settings'
+import { Route as RsvpIndexRouteImport } from './routes/rsvp.index'
 import { Route as RsvpTokenRouteImport } from './routes/rsvp.$token'
 import { Route as legalLayoutCookiesRouteImport } from './routes/(legal)/_layout/cookies'
 import { Route as legalLayoutPrivacyRouteImport } from './routes/(legal)/_layout/privacy'
@@ -103,6 +104,11 @@ const AppSettingsRoute = AppSettingsRouteImport.update({
   path: '/settings',
   getParentRoute: () => AppRoute,
 } as any)
+const RsvpIndexRoute = RsvpIndexRouteImport.update({
+  id: '/rsvp/',
+  path: '/rsvp/',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const RsvpTokenRoute = RsvpTokenRouteImport.update({
   id: '/rsvp/$token',
   path: '/rsvp/$token',
@@ -173,6 +179,7 @@ export interface FileRoutesByFullPath {
   '/rsvp/$token': typeof RsvpTokenRoute
   '/admin/': typeof AdminIndexRoute
   '/app/': typeof AppIndexRoute
+  '/rsvp/': typeof RsvpIndexRoute
   '/cookies': typeof legalLayoutCookiesRoute
   '/privacy': typeof legalLayoutPrivacyRoute
   '/terms': typeof legalLayoutTermsRoute
@@ -195,6 +202,7 @@ export interface FileRoutesByTo {
   '/rsvp/$token': typeof RsvpTokenRoute
   '/admin': typeof AdminIndexRoute
   '/app': typeof AppIndexRoute
+  '/rsvp': typeof RsvpIndexRoute
   '/cookies': typeof legalLayoutCookiesRoute
   '/privacy': typeof legalLayoutPrivacyRoute
   '/terms': typeof legalLayoutTermsRoute
@@ -223,6 +231,7 @@ export interface FileRoutesById {
   '/rsvp/$token': typeof RsvpTokenRoute
   '/admin/': typeof AdminIndexRoute
   '/app/': typeof AppIndexRoute
+  '/rsvp/': typeof RsvpIndexRoute
   '/(legal)/_layout/cookies': typeof legalLayoutCookiesRoute
   '/(legal)/_layout/privacy': typeof legalLayoutPrivacyRoute
   '/(legal)/_layout/terms': typeof legalLayoutTermsRoute
@@ -250,6 +259,7 @@ export interface FileRouteTypes {
     | '/rsvp/$token'
     | '/admin/'
     | '/app/'
+    | '/rsvp/'
     | '/cookies'
     | '/privacy'
     | '/terms'
@@ -272,6 +282,7 @@ export interface FileRouteTypes {
     | '/rsvp/$token'
     | '/admin'
     | '/app'
+    | '/rsvp'
     | '/cookies'
     | '/privacy'
     | '/terms'
@@ -299,6 +310,7 @@ export interface FileRouteTypes {
     | '/rsvp/$token'
     | '/admin/'
     | '/app/'
+    | '/rsvp/'
     | '/(legal)/_layout/cookies'
     | '/(legal)/_layout/privacy'
     | '/(legal)/_layout/terms'
@@ -319,6 +331,7 @@ export interface RootRouteChildren {
   EnterRoute: typeof EnterRoute
   legalLayoutRoute: typeof legalLayoutRouteWithChildren
   RsvpTokenRoute: typeof RsvpTokenRoute
+  RsvpIndexRoute: typeof RsvpIndexRoute
   ApiAuthSplatRoute: typeof ApiAuthSplatRoute
   ApiImgStorageIdRoute: typeof ApiImgStorageIdRoute
 }
@@ -422,6 +435,13 @@ declare module '@tanstack/react-router' {
       fullPath: '/app/settings'
       preLoaderRoute: typeof AppSettingsRouteImport
       parentRoute: typeof AppRoute
+    }
+    '/rsvp/': {
+      id: '/rsvp/'
+      path: '/rsvp'
+      fullPath: '/rsvp/'
+      preLoaderRoute: typeof RsvpIndexRouteImport
+      parentRoute: typeof rootRouteImport
     }
     '/rsvp/$token': {
       id: '/rsvp/$token'
@@ -587,6 +607,7 @@ const rootRouteChildren: RootRouteChildren = {
   EnterRoute: EnterRoute,
   legalLayoutRoute: legalLayoutRouteWithChildren,
   RsvpTokenRoute: RsvpTokenRoute,
+  RsvpIndexRoute: RsvpIndexRoute,
   ApiAuthSplatRoute: ApiAuthSplatRoute,
   ApiImgStorageIdRoute: ApiImgStorageIdRoute,
 }

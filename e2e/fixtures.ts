@@ -1,5 +1,6 @@
 import { test as base, expect, type Page } from "@playwright/test";
 import { execFileSync } from "node:child_process";
+import { readFile } from "node:fs/promises";
 
 /**
  * Talking to the throwaway backend from a spec.
@@ -164,6 +165,14 @@ export async function waitForHydration(page: Page): Promise<void> {
     undefined,
     { timeout: 30_000 },
   );
+}
+
+/** The unlocked-gate cookie as a request header, for asserting on server-rendered HTML. */
+export async function guestCookieHeader(): Promise<string> {
+  const state = JSON.parse(await readFile(GUEST_STATE, "utf8")) as {
+    cookies: { name: string; value: string }[];
+  };
+  return state.cookies.map((cookie) => `${cookie.name}=${cookie.value}`).join("; ");
 }
 
 export async function visit(page: Page, path: string): Promise<void> {

@@ -1,6 +1,6 @@
 import type { Page } from "@playwright/test";
 
-import { backend, expect, GUEST_STATE, party, test, visit, waitForEmail } from "./fixtures";
+import { backend, expect, guestCookieHeader, GUEST_STATE, party, test, visit, waitForEmail } from "./fixtures";
 
 // Already past the gate: these specs are about the RSVP, not the password.
 test.use({ storageState: GUEST_STATE });
@@ -240,5 +240,83 @@ test.describe("a link that does not resolve", () => {
   test("says so kindly rather than erroring", async ({ page }) => {
     await visit(page, "/rsvp/not-a-real-token");
     await expect(page.getByText(/could not find that invitation/i)).toBeVisible();
+  });
+});
+
+test.describe("finding an invitation again", () => {
+  /**
+   * The case a guest actually hits: replied months ago, lost the WhatsApp
+   * message, types the bare address. Before this there was no route back at all.
+   */
+  test("remembers the invitation this device opened", async ({ page }) => {
+    backend.seed([party({ token: TOKEN })]);
+
+    await visit(page, `/rsvp/${TOKEN}`);
+    await expect(page.getByText("Rae & Cherif")).toBeVisible();
+
+    await visit(page, "/rsvp");
+    await expect(page).toHaveURL(`/rsvp/${TOKEN}`);
+    await expect(page.getByText("Rae & Cherif")).toBeVisible();
+  });
+
+  /**
+   * The remembered token is a convenience, not a credential. A device that never
+   * opened an invitation is told so, rather than being shown someone else's or an
+   * empty form.
+   */
+  test("tells a device that has never opened one that it cannot tell", async ({ browser }) => {
+    backend.seed([party({ token: TOKEN })]);
+
+    // A fresh context: past the gate, but with no memory of any invitation.
+    const context = await browser.newContext({ storageState: GUEST_STATE });
+    const page = await context.newPage();
+    await visit(page, "/rsvp");
+
+    await expect(page).toHaveURL("/rsvp");
+    await expect(page.getByText(/Which invitation is yours/i)).toBeVisible();
+    await context.close();
+  });
+
+  test("still remembers after the reply is submitted", async ({ page }) => {
+    backend.seed([party({ token: TOKEN, headCount: 1 })]);
+    await visit(page, `/rsvp/${TOKEN}`);
+    await page.getByRole("button", { name: "JOYFULLY ACCEPT" }).click();
+    await fillGuest(page, 0, { first: "Rae", last: "Haddad", email: "rae@example.com", days: ["Wedding"] });
+    await page.getByLabel("Your email").fill("rae@example.com");
+    await page.getByRole("button", { name: "SEND OUR REPLY" }).click();
+    await expect(page.getByText("Thank you")).toBeVisible();
+
+    await visit(page, "/rsvp");
+    await expect(page).toHaveURL(`/rsvp/${TOKEN}`);
+    // Straight to the reply, not the question again.
+    await expect(page.getByText("Thank you")).toBeVisible();
+  });
+
+  test("does not remember a token that resolves to nothing", async ({ browser }) => {
+    const context = await browser.newContext({ storageState: GUEST_STATE });
+    const page = await context.newPage();
+
+    await visit(page, "/rsvp/not-a-real-token");
+    await expect(page.getByText(/could not find that invitation/i)).toBeVisible();
+
+    await visit(page, "/rsvp");
+    await expect(page.getByText(/Which invitation is yours/i)).toBeVisible();
+    await context.close();
+  });
+});
+
+test.describe("the invitation arrives without a round trip", () => {
+  /**
+   * The reason the page is loaded on the server. Guests arrive from WhatsApp on
+   * phones; their names should be in the first response, not fetched afterwards.
+   */
+  test("renders the party name in the server response", async ({ request }) => {
+    backend.seed([party({ token: TOKEN })]);
+
+    const response = await request.get(`/rsvp/${TOKEN}`, {
+      headers: { cookie: await guestCookieHeader() },
+    });
+    expect(response.status()).toBe(200);
+    expect(await response.text()).toContain("Rae &amp; Cherif");
   });
 });

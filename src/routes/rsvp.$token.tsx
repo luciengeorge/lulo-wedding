@@ -1,7 +1,6 @@
 import type { FunctionReturnType } from "convex/server";
 
-import { createFileRoute, notFound } from "@tanstack/react-router";
-import { useMutation, useQuery } from "convex/react";
+import { createFileRoute, notFound, useRouter } from "@tanstack/react-router";
 import { useMemo, useState } from "react";
 
 import type { GuestDraft } from "@/components/rsvp/guest-card";
@@ -15,6 +14,7 @@ import { CardLabel, RsvpCard, RsvpHeader, RsvpShell } from "@/components/rsvp/rs
 import { convexErrorMessage } from "@/lib/convex-error";
 import { FEATURES } from "@/lib/flags";
 import { requireGuestUnlocked } from "@/lib/functions/guest-gate";
+import { getRsvp, submitRsvp } from "@/lib/functions/rsvp";
 import { invitedEvents, isBlankCard, RSVP_EVENTS, validateReply } from "@/lib/rsvp-rules";
 import { seo } from "@/lib/seo";
 
@@ -32,6 +32,10 @@ export const Route = createFileRoute("/rsvp/$token")({
     if (!FEATURES.rsvp) throw notFound();
     return requireGuestUnlocked(location.href);
   },
+  // Loaded on the server, so the invitation is in the first response rather than
+  // a round trip later, and so the page does not depend on the browser's Convex
+  // client, which holds queries until an auth token a guest will never have.
+  loader: ({ params }) => getRsvp({ data: { token: params.token } }),
   head: () => ({
     meta: seo({
       title: "RSVP",
@@ -41,27 +45,38 @@ export const Route = createFileRoute("/rsvp/$token")({
     }),
   }),
   component: RsvpPage,
+  // Only reached on a client-side navigation between invitations; the first load
+  // arrives already rendered.
+  pendingComponent: RsvpSkeleton,
 });
 
 type Mode = "ask" | "accept" | "decline";
+
+type SubmitPayload = Parameters<typeof submitRsvp>[0]["data"];
+type Submit = (payload: SubmitPayload) => Promise<void>;
 
 /** Taken from the query itself, so the screens cannot drift from what it returns. */
 type RsvpData = NonNullable<FunctionReturnType<typeof api.rsvp.getByToken>>;
 
 function RsvpPage() {
   const { token } = Route.useParams();
-  const data = useQuery(api.rsvp.getByToken, { token });
+  const data = Route.useLoaderData();
 
-  if (data === undefined) return <RsvpSkeleton />;
   if (data === null) return <NotFound />;
 
   return <RsvpFlow token={token} data={data} />;
 }
 
 function RsvpFlow({ token, data }: { token: string; data: RsvpData }) {
+  const router = useRouter();
   const { party, deadlinePassed } = data;
   const events = invitedEvents(party);
-  const submit = useMutation(api.rsvp.submit);
+
+  /** Re-runs the loader, so the confirmation shows what was actually stored. */
+  const submit = async (payload: SubmitPayload) => {
+    await submitRsvp({ data: payload });
+    await router.invalidate();
+  };
 
   const hasReplied = party.respondedAt !== undefined;
   // A party who already answered opens on what they said, not on the question
@@ -169,7 +184,7 @@ function AcceptForm({
 }: {
   token: string;
   data: RsvpData;
-  submit: ReturnType<typeof useMutation<typeof api.rsvp.submit>>;
+  submit: Submit;
   onDecline: () => void;
   onDone: () => void;
 }) {
@@ -247,7 +262,7 @@ function AcceptForm({
         guests: all
           .filter((guest) => !isBlankCard(toReplyGuests([guest])[0]))
           .map((guest) => ({
-            guestId: guest.guestId as never,
+            guestId: guest.guestId,
             firstName: guest.firstName,
             lastName: guest.lastName,
             email: guest.noEmail || guest.email.trim() === "" ? undefined : guest.email,
@@ -382,7 +397,7 @@ function DeclineForm({
 }: {
   token: string;
   data: RsvpData;
-  submit: ReturnType<typeof useMutation<typeof api.rsvp.submit>>;
+  submit: Submit;
   onBack: () => void;
   onDone: () => void;
 }) {

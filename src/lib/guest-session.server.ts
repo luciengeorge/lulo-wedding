@@ -14,6 +14,15 @@ const GUEST_SESSION_MAX_AGE_SECONDS = 400 * 24 * 60 * 60;
 interface GuestSessionData {
   unlocked?: boolean;
   at?: number;
+  /**
+   * The RSVP token this device last opened.
+   *
+   * A convenience, not a credential: it records a token the guest already proved
+   * they hold by following their link, and unlocks nothing they could not reach
+   * with it. Anything that treated it as authentication would hand the next
+   * person on a shared phone someone else's reply.
+   */
+  token?: string;
 }
 
 function getGuestSessionPassword() {
