@@ -32,6 +32,10 @@ export const rateLimiter = new RateLimiter(components.rateLimiter, {
   //   on the same IP, while capping an attacker at ~1,900 guesses/day per IP — nowhere
   //   near enough against the passphrase's keyspace.
   guestGate: { kind: "fixed window", rate: 20, period: 15 * MINUTE },
+  // RSVP: submits per party token. Generous, because a family legitimately edits
+  //   their reply several times in one sitting, and the point is only to stop one
+  //   link being used to fire confirmation emails in a loop.
+  rsvpSubmit: { kind: "token bucket", rate: 20, period: HOUR, capacity: 8 },
   // Generic: per-second hot-loop guard
   hotPath: { kind: "token bucket", rate: 1, period: SECOND, capacity: 5 },
 });

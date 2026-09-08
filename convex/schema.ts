@@ -45,6 +45,19 @@ export default defineSchema({
     editedInAdminAt: v.optional(v.number()),
     note: v.optional(v.string()),
     contactEmail: v.optional(v.string()),
+    /**
+     * When the party last submitted the RSVP form. `earlyDecline` is the sheet
+     * recording a no before anyone was asked; this is the form being used.
+     */
+    respondedAt: v.optional(v.number()),
+    /**
+     * Stored rather than derived. A party that accepts and then ticks nothing is
+     * also a decline, and "no guest row says yes" cannot tell that apart from
+     * "has not replied yet".
+     */
+    declined: v.optional(v.boolean()),
+    /** What the guest typed on the decline screen. `note` is the couple's own. */
+    guestNote: v.optional(v.string()),
   })
     .index("by_import_key", ["importKey"])
     .index("by_token", ["token"])
@@ -69,6 +82,24 @@ export default defineSchema({
     brunch: rsvpStatus,
     brunchAt: v.optional(v.number()),
   }).index("by_party", ["partyId"]),
+
+  /**
+   * Outbound email, captured instead of sent.
+   *
+   * Only ever written when E2E_CAPTURE_EMAILS is set on the deployment, which is
+   * true for the throwaway backend the browser tests run against and false
+   * everywhere else. It exists so the tests can sign in through the real
+   * magic-link flow rather than through a back door that mints a session: a
+   * capture table that leaks costs an undelivered email, whereas a session-minting
+   * mutation living in the production bundle is a way in.
+   */
+  capturedEmails: defineTable({
+    to: v.string(),
+    subject: v.string(),
+    template: v.string(),
+    /** The rendered HTML, so a test can pull a link or assert on the copy. */
+    html: v.string(),
+  }).index("by_to", ["to"]),
 
   /**
    * Background sync job state. See convex/sync/README.md.
