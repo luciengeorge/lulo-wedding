@@ -1,9 +1,10 @@
-import { ConvexError, v } from "convex/values";
+import { ConvexError, v, type ObjectType } from "convex/values";
 
 import type { Doc } from "./_generated/dataModel";
 import type { MutationCtx, QueryCtx } from "./_generated/server";
 
 import { buildImportKey } from "../src/lib/guest-csv";
+import { MAX_BULK } from "../src/lib/party-bulk";
 import { deriveRsvp, type RsvpState } from "../src/lib/party-filters";
 import { mutation, query } from "./_generated/server";
 import { requireAdmin } from "./lib/adminAuth";
@@ -43,6 +44,26 @@ const partyEditableFields = {
   contactEmail: v.optional(v.string()),
 };
 
+/** The subset of party fields that are meaningful to set on many rows at once. */
+const partyBulkFields = {
+  invitedToPreWedding: v.optional(v.boolean()),
+  invitedToWedding: v.optional(v.boolean()),
+  invitedToBrunch: v.optional(v.boolean()),
+  saveTheDateSent: v.optional(v.boolean()),
+  wave: v.optional(partyWave),
+  who: v.optional(partyWho),
+  link: v.optional(partyLink),
+  plusOneAllowed: v.optional(v.boolean()),
+  earlyDecline: v.optional(v.boolean()),
+};
+
+export type PartyBulkFields = ObjectType<typeof partyBulkFields>;
+
+function validateBulkIds(partyIds: Doc<"parties">["_id"][]) {
+  if (partyIds.length === 0) throw new ConvexError("Select at least one party");
+  if (partyIds.length > MAX_BULK) throw new ConvexError(`Choose no more than ${MAX_BULK} parties per batch`);
+}
+
 const rsvpSummary = v.object({
   state: v.union(v.literal("attending"), v.literal("declined"), v.literal("awaiting"), v.literal("notInvited")),
   attending: v.number(),
@@ -70,6 +91,7 @@ const partyRow = v.object({
   note: v.optional(v.string()),
   contactEmail: v.optional(v.string()),
   rsvp: rsvpSummary,
+  editedInAdminAt: v.optional(v.number()),
 });
 
 export type PartyRow = {
@@ -241,5 +263,71 @@ export const deleteParty = mutation({
 
     await ctx.db.delete(partyId);
     return { deletedGuests: guests.length };
+  },
+});
+
+export const bulkUpdateParties = mutation({
+  args: { partyIds: v.array(v.id("parties")), fields: v.object(partyBulkFields) },
+  returns: v.object({ updated: v.number(), unchanged: v.number(), missing: v.number() }),
+  handler: async (ctx, { partyIds, fields }) => {
+    await requireAdmin(ctx);
+    validateBulkIds(partyIds);
+
+    const patch = Object.fromEntries(Object.entries(fields).filter(([, value]) => value !== undefined));
+    if (Object.keys(patch).length === 0) throw new ConvexError("Choose at least one field to update");
+
+    let updated = 0;
+    let unchanged = 0;
+    let missing = 0;
+    const editedInAdminAt = Date.now();
+    for (const partyId of new Set(partyIds)) {
+      const party = await ctx.db.get(partyId);
+      if (!party) {
+        missing++;
+        continue;
+      }
+
+      // A row that already holds these values is left alone, the way the importer's
+      // own diff does. Stamping it would mark it admin-edited, and parties.ts then
+      // ignores the sheet for it forever and warns about it on every future import.
+      // One "mark all 400 as sent" over a list that is mostly already sent would
+      // otherwise detach the whole guest list from the spreadsheet.
+      if (Object.entries(patch).every(([field, value]) => party[field as keyof typeof party] === value)) {
+        unchanged++;
+        continue;
+      }
+
+      await ctx.db.patch(partyId, { ...patch, editedInAdminAt });
+      updated++;
+    }
+    return { updated, unchanged, missing };
+  },
+});
+
+export const bulkDeleteParties = mutation({
+  args: { partyIds: v.array(v.id("parties")) },
+  returns: v.object({ deletedParties: v.number(), deletedGuests: v.number(), missing: v.number() }),
+  handler: async (ctx, { partyIds }) => {
+    await requireAdmin(ctx);
+    validateBulkIds(partyIds);
+
+    let deletedParties = 0;
+    let deletedGuests = 0;
+    let missing = 0;
+    for (const partyId of new Set(partyIds)) {
+      if (!(await ctx.db.get(partyId))) {
+        missing++;
+        continue;
+      }
+      const guests = await ctx.db
+        .query("guests")
+        .withIndex("by_party", (q) => q.eq("partyId", partyId))
+        .collect();
+      for (const guest of guests) await ctx.db.delete(guest._id);
+      await ctx.db.delete(partyId);
+      deletedParties++;
+      deletedGuests += guests.length;
+    }
+    return { deletedParties, deletedGuests, missing };
   },
 });

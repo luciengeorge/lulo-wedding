@@ -3,13 +3,22 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 
 import type { PartyRow } from "./party-row";
 
-import { GuestListTable, useGuestListTable, useRowWindow } from "./guest-list-table";
+import { GuestListTable, GuestListTableSkeleton, useGuestListTable, useRowWindow } from "./guest-list-table";
 
 /**
  * /admin cannot be opened by hand without a signed-in allowlisted account, so
  * the table's behaviour is pinned here instead: the cell rendering rules, and
  * the TanStack search / column-filter / sort wiring the toolbar drives.
  */
+
+/**
+ * The selection and infinite-scroll cases render 150 rows and then scroll the
+ * window to the end, re-rendering on every append. That is 1 to 4 seconds each
+ * on an idle machine and more with fifteen jsdom workers competing, so vitest's
+ * 5s default failed a different one of them on every run. Raised here rather
+ * than in vitest.config.ts, so the default keeps its bite on every other file.
+ */
+vi.setConfig({ testTimeout: 20_000 });
 
 const base: PartyRow = {
   _id: "p1" as PartyRow["_id"],
@@ -83,8 +92,16 @@ function scrollToEnd() {
 }
 
 /** Mirrors the page: the table owns its state, the controls drive it. */
-function Harness({ rows, onEdit = vi.fn() }: { rows: PartyRow[]; onEdit?: (party: PartyRow) => void }) {
-  const table = useGuestListTable(rows, { siteUrl: "https://lauralucien.com", onEdit });
+function Harness({
+  rows,
+  onEdit = vi.fn(),
+  selectionDisabled,
+}: {
+  rows: PartyRow[];
+  onEdit?: (party: PartyRow) => void;
+  selectionDisabled?: boolean;
+}) {
+  const table = useGuestListTable(rows, { siteUrl: "https://lauralucien.com", onEdit, selectionDisabled });
   const rowWindow = useRowWindow(table);
 
   return (
@@ -117,6 +134,12 @@ function Harness({ rows, onEdit = vi.fn() }: { rows: PartyRow[]; onEdit?: (party
       </button>
       <output aria-label="Filtered count">{table.getFilteredRowModel().rows.length}</output>
       <output aria-label="Rendered count">{rowWindow.visibleCount}</output>
+      <output aria-label="Selected ids">
+        {table
+          .getSelectedRowModel()
+          .rows.map((row) => row.id)
+          .join(",")}
+      </output>
       <GuestListTable table={table} rowWindow={rowWindow} />
     </>
   );
@@ -131,7 +154,7 @@ function partyNames(): string[] {
   return screen
     .getAllByRole("row")
     .slice(1)
-    .map((row) => within(row).getAllByRole("cell")[0]?.textContent ?? "");
+    .map((row) => within(row).getAllByRole("cell")[1]?.textContent ?? "");
 }
 
 describe("GuestListTable rendering", () => {
@@ -329,6 +352,103 @@ const manyRows = Array.from({ length: 150 }, (_, index) =>
     `p${index}`,
   ),
 );
+
+describe("GuestListTable selection", () => {
+  it("selects every matching row beyond the rendered window", () => {
+    render(<Harness rows={manyRows} />);
+    fireEvent.click(screen.getByRole("button", { name: "Only Laura" }));
+    const all = screen.getByRole("checkbox", { name: "Select all 75 matching parties" });
+    fireEvent.click(all);
+    expect(screen.getByLabelText("Selected ids").textContent?.split(",")).toHaveLength(75);
+    expect(all).toBeChecked();
+    expect(partyNames()).toHaveLength(60);
+    scrollToEnd();
+    expect(screen.getAllByRole("checkbox").every((checkbox) => checkbox.getAttribute("aria-checked") === "true")).toBe(
+      true,
+    );
+  });
+
+  it("retains hidden selections and derives the header state from matching rows only", () => {
+    render(<Harness rows={rows} />);
+    fireEvent.click(screen.getByRole("checkbox", { name: "Select Marc Zeidan" }));
+    expect(screen.getByRole("checkbox", { name: "Select all 3 matching parties" })).toBePartiallyChecked();
+    fireEvent.click(screen.getByRole("button", { name: "Only Laura" }));
+    const all = screen.getByRole("checkbox", { name: "Select all 2 matching parties" });
+    expect(all).not.toBeChecked();
+    expect(all).not.toBePartiallyChecked();
+    expect(screen.getByLabelText("Selected ids")).toHaveTextContent("p2");
+    fireEvent.click(all);
+    expect(all).toBeChecked();
+    fireEvent.click(all);
+    expect(screen.getByLabelText("Selected ids").textContent).toBe("p2");
+  });
+
+  /**
+   * The only in-flight guard on the table side. While a bulk write is running the
+   * boxes must not move, or the toast reports on a selection the couple can no
+   * longer see and the next action runs against a different set of rows.
+   */
+  it("freezes every checkbox while a bulk action is running", () => {
+    const { rerender } = render(<Harness rows={rows} />);
+    fireEvent.click(screen.getByRole("checkbox", { name: "Select Marc Zeidan" }));
+
+    rerender(<Harness rows={rows} selectionDisabled />);
+    // Base UI renders a span with aria-disabled, not a native disabled input.
+    const header = screen.getByRole("checkbox", { name: "Select all 3 matching parties" });
+    expect(screen.getAllByRole("checkbox").every((checkbox) => checkbox.getAttribute("aria-disabled") === "true")).toBe(
+      true,
+    );
+
+    fireEvent.click(header);
+    expect(screen.getByLabelText("Selected ids").textContent).toBe("p2");
+
+    rerender(<Harness rows={rows} />);
+    expect(header).not.toHaveAttribute("aria-disabled", "true");
+  });
+
+  it("keeps selection attached to the party through sorting, searching and refreshed data", () => {
+    const { rerender } = render(<Harness rows={rows} />);
+    fireEvent.click(screen.getByRole("checkbox", { name: "Select Marc Zeidan" }));
+    fireEvent.click(screen.getByRole("button", { name: /Party/ }));
+    fireEvent.change(screen.getByLabelText("Search"), { target: { value: "nayla" } });
+    expect(screen.getByLabelText("Selected ids").textContent).toBe("p2");
+    rerender(<Harness rows={[...rows].reverse()} />);
+    fireEvent.change(screen.getByLabelText("Search"), { target: { value: "" } });
+    expect(screen.getByRole("checkbox", { name: "Select Marc Zeidan" })).toBeChecked();
+    expect(screen.getByRole("checkbox", { name: "Select Nayla & Paul Bechara" })).not.toBeChecked();
+  });
+});
+
+describe("GuestListTableSkeleton", () => {
+  const widths = (container: HTMLElement) => [...container.querySelectorAll("col")].map((col) => col.style.width);
+
+  /**
+   * The point of a skeleton over a spinner: the chrome does not collapse and
+   * rebuild. If a column is ever added to the table without the skeleton
+   * following, the header would jump sideways when the rows land.
+   */
+  it("holds the same lanes as the loaded table", () => {
+    const skeleton = render(<GuestListTableSkeleton />);
+    const skeletonWidths = widths(skeleton.container);
+    skeleton.unmount();
+
+    const loaded = render(<Harness rows={rows} />);
+    expect(skeletonWidths).toEqual(widths(loaded.container));
+    expect(skeletonWidths.length).toBeGreaterThan(0);
+  });
+
+  it("keeps the real headers, so only the cells are placeholders", () => {
+    render(<GuestListTableSkeleton rows={3} />);
+    expect(screen.getByRole("columnheader", { name: "Party" })).toBeInTheDocument();
+    expect(screen.getAllByRole("row")).toHaveLength(1 + 1 + 3);
+  });
+
+  it("announces itself as busy rather than as an empty table", () => {
+    const { container } = render(<GuestListTableSkeleton />);
+    expect(container.querySelector("[aria-busy]")).toBeInTheDocument();
+    expect(screen.getByText("Loading the guest list")).toBeInTheDocument();
+  });
+});
 
 describe("GuestListTable infinite scroll", () => {
   it("renders a first chunk rather than all 150 rows", () => {

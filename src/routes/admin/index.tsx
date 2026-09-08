@@ -1,5 +1,5 @@
 import { createFileRoute } from "@tanstack/react-router";
-import { useQuery } from "convex/react";
+import { useMutation, useQuery } from "convex/react";
 import { useState } from "react";
 import { toast } from "sonner";
 
@@ -9,12 +9,18 @@ import type { InvitedToFilter, LinkFilter, WaveFilter, WhoFilter } from "@/lib/p
 
 import { api } from "@/../convex/_generated/api";
 import { AdminMultiSelect } from "@/components/admin/admin-multi-select";
-import { GuestListTable, useGuestListTable, useRowWindow } from "@/components/admin/guest-list-table";
+import { BulkActionsBar } from "@/components/admin/bulk-actions-bar";
+import {
+  GuestListTable,
+  GuestListTableSkeleton,
+  useGuestListTable,
+  useRowWindow,
+} from "@/components/admin/guest-list-table";
 import { ImportCsvDialog } from "@/components/admin/import-csv-dialog";
 import { PartyFormDialog } from "@/components/admin/party-form-dialog";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Spinner } from "@/components/ui/spinner";
+import { Skeleton } from "@/components/ui/skeleton";
 import { csvFilename, partiesToCsv } from "@/lib/party-csv-export";
 import { LINK_LABEL, WAVE_LABEL, WHO_LONG_LABEL } from "@/lib/party-labels";
 
@@ -62,9 +68,13 @@ function GuestListPage() {
   const [editing, setEditing] = useState<PartyRow | null>(null);
   const [formOpen, setFormOpen] = useState(false);
   const [importOpen, setImportOpen] = useState(false);
+  const [bulkBusy, setBulkBusy] = useState(false);
+  const bulkUpdateParties = useMutation(api.admin.bulkUpdateParties);
+  const bulkDeleteParties = useMutation(api.admin.bulkDeleteParties);
 
   const table = useGuestListTable(data?.rows, {
     siteUrl: SITE_URL,
+    selectionDisabled: bulkBusy,
     onEdit: (party) => {
       setEditing(party);
       setFormOpen(true);
@@ -185,11 +195,16 @@ function GuestListPage() {
 
       <section className="flex flex-1 flex-col gap-3 px-6 pb-8">
         {data === undefined ? (
-          <p className="flex items-center gap-2 py-8 text-[13px] text-[#71717A]">
-            <Spinner /> Loading the guest list
-          </p>
+          <GuestListTableSkeleton />
         ) : (
           <>
+            <BulkActionsBar
+              table={table}
+              busy={bulkBusy}
+              onBusyChange={setBulkBusy}
+              updateParties={bulkUpdateParties}
+              deleteParties={bulkDeleteParties}
+            />
             <GuestListTable table={table} rowWindow={rowWindow} />
 
             {/* The count has to say both numbers: the list keeps growing as you
@@ -224,13 +239,21 @@ function Stat({ label, value, hint }: { label: string; value: number | undefined
   return (
     <div className="flex flex-col gap-0.5">
       <span className="text-[12px] text-[#71717A]">{label}</span>
-      <span
-        className={`text-[26px] leading-none font-semibold ${value === 0 ? "text-[#A1A1AA]" : ""}`}
-        style={{ fontVariantNumeric: "tabular-nums" }}
-      >
-        {value ?? "—"}
+      {value === undefined ? (
+        // Same box the number will occupy, so the row does not resettle when the
+        // query lands. 26px type on a 26px line is a 26px tall glyph box.
+        <Skeleton className="h-[26px] w-10" />
+      ) : (
+        <span
+          className={`text-[26px] leading-none font-semibold ${value === 0 ? "text-[#A1A1AA]" : ""}`}
+          style={{ fontVariantNumeric: "tabular-nums" }}
+        >
+          {value}
+        </span>
+      )}
+      <span className="flex min-h-4 items-center text-[11px] text-[#A1A1AA]">
+        {value === undefined ? <Skeleton className="h-2.5 w-24" /> : (hint ?? "")}
       </span>
-      <span className="min-h-4 text-[11px] text-[#A1A1AA]">{value === undefined ? "" : (hint ?? "")}</span>
     </div>
   );
 }

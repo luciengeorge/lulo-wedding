@@ -6,6 +6,7 @@ import {
   createFilteredRowModel,
   createSortedRowModel,
   globalFilteringFeature,
+  rowSelectionFeature,
   rowSortingFeature,
   tableFeatures,
   useTable,
@@ -15,6 +16,8 @@ import { toast } from "sonner";
 
 import type { InvitedToFilter, RsvpState } from "@/lib/party-filters";
 
+import { Checkbox } from "@/components/ui/checkbox";
+import { Skeleton } from "@/components/ui/skeleton";
 import { foldForSearch, matchesAny, matchesInvitedTo, partySearchText, RSVP_LABEL } from "@/lib/party-filters";
 import { INVITE_EVENTS, LINK_LABEL, WAVE_LABEL, WHO_LABEL } from "@/lib/party-labels";
 
@@ -42,6 +45,7 @@ import type { PartyRow } from "./party-row";
 export type GuestListTableMeta = {
   siteUrl: string;
   onEdit: (party: PartyRow) => void;
+  selectionDisabled?: boolean;
 };
 
 type GuestListColumnMeta = {
@@ -83,6 +87,7 @@ const filterBySearch: FilterFn<GuestListFeatures, PartyRow> = (row, _columnId, v
 };
 
 const features = tableFeatures({
+  rowSelectionFeature,
   rowSortingFeature,
   sortedRowModel: createSortedRowModel(),
   columnFilteringFeature,
@@ -96,7 +101,40 @@ type GuestListFeatures = typeof features;
 
 const helper = createColumnHelper<GuestListFeatures, PartyRow>();
 
+const SELECTION_CHECKBOX_CLASS =
+  "border-[#D4D4D8] bg-[#FFFFFF] focus-visible:border-[#A1A1AA] focus-visible:ring-[#A1A1AA]/50 data-checked:border-[#18181B] data-checked:bg-[#18181B] data-checked:text-[#FFFFFF] data-indeterminate:border-[#18181B] data-indeterminate:bg-[#18181B] data-indeterminate:text-[#FFFFFF]";
+
 const columns = helper.columns([
+  helper.display({
+    id: "select",
+    meta: { width: 44 },
+    enableSorting: false,
+    enableColumnFilter: false,
+    enableGlobalFilter: false,
+    header: ({ table }) => {
+      const matching = table.getFilteredRowModel().rows.length;
+      const selected = table.getFilteredSelectedRowModel().rows.length;
+      return (
+        <Checkbox
+          aria-label={`Select all ${matching} matching parties`}
+          checked={matching > 0 && selected === matching}
+          indeterminate={selected > 0 && selected < matching}
+          disabled={matching === 0 || table.options.meta?.selectionDisabled}
+          onCheckedChange={(checked) => table.toggleAllRowsSelected(checked)}
+          className={SELECTION_CHECKBOX_CLASS}
+        />
+      );
+    },
+    cell: ({ row, table }) => (
+      <Checkbox
+        aria-label={`Select ${`${row.original.displayName} ${row.original.surname}`.trim()}`}
+        checked={row.getIsSelected()}
+        disabled={table.options.meta?.selectionDisabled}
+        onCheckedChange={(checked) => row.toggleSelected(checked)}
+        className={SELECTION_CHECKBOX_CLASS}
+      />
+    ),
+  }),
   // Sorted on surname first: the sheet is a family list, and the couple look for
   // families by surname even though the name is the line they read.
   helper.accessor((party) => foldForSearch(`${party.surname} ${party.displayName}`), {
@@ -240,6 +278,7 @@ export function useGuestListTable(rows: PartyRow[] | undefined, meta: GuestListT
     features,
     columns,
     data: rows ?? NO_ROWS,
+    getRowId: (party) => party._id,
     meta,
     globalFilterFn: filterBySearch,
     // Headers toggle asc <-> desc only. The third click would otherwise drop the
@@ -285,6 +324,93 @@ function RowActions({ party, meta }: { party: PartyRow; meta: GuestListTableMeta
       </button>
     </div>
   );
+}
+
+/**
+ * The table's own loading state.
+ *
+ * Renders the real chrome, the border, the lanes and the header row, with
+ * placeholder bars where the cells go. The column widths come from the same
+ * `columns` definition the live table uses, so the header does not jump sideways
+ * when the rows arrive. A centred spinner would collapse the layout and then
+ * rebuild it, which reads as the page breaking and repairing itself.
+ */
+export function GuestListTableSkeleton({ rows = 8 }: { rows?: number }) {
+  return (
+    <div className="overflow-x-auto rounded-[9px] border border-[#E4E4E7]" aria-busy>
+      <table className="w-full table-fixed border-collapse" style={{ minWidth: TABLE_WIDTH }}>
+        <colgroup>
+          {columns.map((column, index) => (
+            <col key={column.id ?? index} style={{ width: column.meta?.width }} />
+          ))}
+        </colgroup>
+
+        <thead>
+          <tr className="h-[38px] bg-[#FAFAFA]">
+            {columns.map((column, index) => (
+              <th
+                key={column.id ?? index}
+                scope="col"
+                className={`px-3.5 text-[11px] font-medium tracking-[0.03em] text-[#71717A] uppercase ${
+                  column.meta?.align === "right" ? "text-right" : "text-left"
+                }`}
+              >
+                {typeof column.header === "string" ? column.header : null}
+              </th>
+            ))}
+          </tr>
+        </thead>
+
+        <tbody>
+          <tr className="sr-only">
+            <td colSpan={columns.length}>Loading the guest list</td>
+          </tr>
+          {Array.from({ length: rows }, (_, row) => (
+            <tr key={row} className="h-[52px] border-b border-[#F4F4F5] last:border-b-0">
+              {columns.map((column, index) => (
+                <td key={column.id ?? index} className="px-3.5">
+                  <SkeletonCell columnId={column.id} />
+                </td>
+              ))}
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </div>
+  );
+}
+
+/** Shaped per lane, because a row of identical grey bars does not read as a table. */
+function SkeletonCell({ columnId }: { columnId: string | undefined }) {
+  switch (columnId) {
+    case "select":
+      return <Skeleton className="size-4 rounded-[4px]" />;
+    case "party":
+      return (
+        <div className="flex flex-col gap-1.5">
+          <Skeleton className="h-3 w-[62%]" />
+          <Skeleton className="h-2.5 w-[38%]" />
+        </div>
+      );
+    case "seats":
+      return <Skeleton className="h-3 w-6" />;
+    case "invitedTo":
+      return (
+        <div className="flex items-center gap-1">
+          <Skeleton className="h-[21px] w-14 rounded-[5px]" />
+          <Skeleton className="h-[21px] w-14 rounded-[5px]" />
+        </div>
+      );
+    case "actions":
+      return (
+        <div className="flex items-center justify-end gap-2.5">
+          <Skeleton className="h-3 w-14" />
+          <Skeleton className="h-3 w-7" />
+        </div>
+      );
+    default:
+      return <Skeleton className="h-3 w-[70%]" />;
+  }
 }
 
 /** Rows on screen before the first append, and the size of every append after. */
