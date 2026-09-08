@@ -26,10 +26,36 @@ answer so a stale placeholder is obvious.
 | 13 | **FAQ** content | FAQ section | none | 2026-09-07 |
 | 14 | **Registry** details | Registry section, agreed to include | none | 2026-09-07 |
 | 15 | **Six placeholder parties** in the sheet need real names | Guest list correctness | imported as-is | 2026-09-07, flagged not actioned |
+| 16 | **Slack bot token and channel** for RSVP notifications | The planned Slack notification below | not built | 2026-09-08, Lucien will supply when we build it |
 
 Item 15, the exact rows: `Lucy` and `Pascale & Biche` have blank surnames;
 `Noura & Jad` and `Celine & Jack` have `??` as the surname; `Dominique & Elias?`
 and `? & Wasim` carry a literal question mark in the name.
+
+## Planned, not started
+
+**Slack notification on every RSVP.** Post to a channel whenever a party replies or
+changes their reply, so Laura and Lucien see replies arriving without opening the
+admin.
+
+Shape it should take when we build it:
+
+- A Convex `internalAction` invoked from the same place as the confirmation email,
+  scheduled with `ctx.scheduler.runAfter` rather than awaited. The same reasoning
+  applies: a Slack outage must never roll back a reply the guest was told was
+  saved, and it must never make the form fail.
+- The token belongs on the **Convex deployment**, not Vercel, since that is where
+  the action runs. This project has now hit the app-env vs deployment-env split
+  four times; see the ADMIN_EMAILS note in the daily log.
+- The message should carry what the couple actually want at a glance: the party
+  name, which events, how many seats of the invitation are now spoken for, and
+  whether this was a first reply or a change. A bare "someone replied" would send
+  them to the admin every time, which defeats the point.
+- Updates are frequent by design, since a party may reply for some seats and come
+  back later. Worth deciding then whether every edit posts, or only the first
+  reply plus material changes.
+
+Needs from Lucien: bot token and channel (item 16 above).
 
 ## Answered
 
