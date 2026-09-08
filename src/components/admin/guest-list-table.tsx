@@ -262,10 +262,22 @@ const RSVP_CLASS: Record<RsvpState, string> = {
   notInvited: "text-[#C4C4C8]",
 };
 
+/**
+ * What a party has actually told us.
+ *
+ * A reply can be partial: a household of four may name two people now and the
+ * rest later. "2 of 4 attending" reads as finished and hides that, so a party
+ * with seats still unspoken for says so outright. Two coming and two declined is
+ * a different fact from two coming and two unheard of, and the couple cater
+ * against them differently.
+ */
 function rsvpText(party: PartyRow): string {
-  if (party.rsvp.state !== "attending") return RSVP_LABEL[party.rsvp.state];
-  const seats = party.headCount + (party.plusOneAllowed ? 1 : 0);
-  return `${party.rsvp.attending} of ${seats} attending`;
+  const { state, attending, seatsNamed } = party.rsvp;
+  if (state !== "attending") return RSVP_LABEL[state];
+
+  const unanswered = party.headCount - seatsNamed;
+  const coming = `${attending} coming`;
+  return unanswered > 0 ? `${coming}, ${unanswered} not yet said` : `${coming} of ${seatsNamed}`;
 }
 
 /**

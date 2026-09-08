@@ -37,7 +37,7 @@ const base: PartyRow = {
   invitedToBrunch: false,
   saveTheDateSent: true,
   earlyDecline: false,
-  rsvp: { state: "awaiting", attending: 0, guestCount: 0 },
+  rsvp: { state: "awaiting", attending: 0, guestCount: 0, seatsNamed: 0 },
 };
 
 function party(overrides: Partial<PartyRow>, id: string): PartyRow {
@@ -189,18 +189,40 @@ describe("GuestListTable rendering", () => {
     render(
       <Harness
         rows={[
-          party({ rsvp: { state: "attending", attending: 3, guestCount: 4 } }, "p1"),
-          party({ earlyDecline: true, rsvp: { state: "declined", attending: 0, guestCount: 0 } }, "p2"),
-          party({ rsvp: { state: "awaiting", attending: 0, guestCount: 0 } }, "p3"),
-          party({ invitedToWedding: false, rsvp: { state: "notInvited", attending: 0, guestCount: 0 } }, "p4"),
+          party({ headCount: 4, rsvp: { state: "attending", attending: 3, guestCount: 4, seatsNamed: 4 } }, "p1"),
+          party({ earlyDecline: true, rsvp: { state: "declined", attending: 0, guestCount: 0, seatsNamed: 0 } }, "p2"),
+          party({ rsvp: { state: "awaiting", attending: 0, guestCount: 0, seatsNamed: 0 } }, "p3"),
+          party(
+            { invitedToWedding: false, rsvp: { state: "notInvited", attending: 0, guestCount: 0, seatsNamed: 0 } },
+            "p4",
+          ),
         ]}
       />,
     );
 
-    expect(screen.getByText("3 of 4 attending").className).toContain("#166534");
+    expect(screen.getByText("3 coming of 4").className).toContain("#166534");
     expect(screen.getByText("Declined").className).toContain("#9F1239");
     expect(screen.getByText("Awaiting reply").className).toContain("#A1A1AA");
     expect(screen.getByText("Not yet invited").className).toContain("#C4C4C8");
+  });
+
+  /**
+   * A household can name two people now and the rest later, so a partial reply
+   * must not render the same as a settled one. "2 of 4 attending" reads as
+   * finished and hides the two nobody has heard about.
+   */
+  it("says how many seats a party has not spoken for yet", () => {
+    render(
+      <Harness
+        rows={[
+          party({ headCount: 4, rsvp: { state: "attending", attending: 2, guestCount: 2, seatsNamed: 2 } }, "p1"),
+          party({ headCount: 4, rsvp: { state: "attending", attending: 2, guestCount: 4, seatsNamed: 4 } }, "p2"),
+        ]}
+      />,
+    );
+
+    expect(screen.getByText("2 coming, 2 not yet said")).toBeInTheDocument();
+    expect(screen.getByText("2 coming of 4")).toBeInTheDocument();
   });
 
   it("offers copy-link and edit on every row, and edit reaches the page", () => {

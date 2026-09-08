@@ -87,12 +87,12 @@ const invited: RsvpParty = {
 };
 
 function guest(overrides: Partial<RsvpGuest> = {}): RsvpGuest {
-  return { preWedding: "pending", wedding: "pending", brunch: "pending", ...overrides };
+  return { preWedding: "pending", wedding: "pending", brunch: "pending", isPlusOne: false, ...overrides };
 }
 
 describe("deriveRsvp", () => {
   it("is awaiting a reply when the party is invited and nobody has answered", () => {
-    expect(deriveRsvp(invited, [])).toEqual({ state: "awaiting", attending: 0, guestCount: 0 });
+    expect(deriveRsvp(invited, [])).toEqual({ state: "awaiting", attending: 0, guestCount: 0, seatsNamed: 0 });
   });
 
   it("is not yet invited when no event flag is set", () => {
@@ -101,7 +101,7 @@ describe("deriveRsvp", () => {
 
   it("counts only guests who said yes to an event the party is invited to", () => {
     const guests = [guest({ wedding: "yes" }), guest({ brunch: "yes" }), guest({ wedding: "no" })];
-    expect(deriveRsvp(invited, guests)).toEqual({ state: "attending", attending: 1, guestCount: 3 });
+    expect(deriveRsvp(invited, guests)).toEqual({ state: "attending", attending: 1, guestCount: 3, seatsNamed: 3 });
   });
 
   it("counts the brunch once the party is actually invited to it", () => {

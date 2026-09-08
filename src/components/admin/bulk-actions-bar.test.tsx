@@ -28,7 +28,12 @@ const rows: PartyRow[] = Array.from({ length: 240 }, (_, index) => ({
   invitedToBrunch: false,
   saveTheDateSent: true,
   earlyDecline: false,
-  rsvp: { state: index < 2 ? "attending" : "awaiting", attending: index < 2 ? 2 : 0, guestCount: index < 2 ? 2 : 0 },
+  rsvp: {
+    state: index < 2 ? "attending" : "awaiting",
+    attending: index < 2 ? 2 : 0,
+    guestCount: index < 2 ? 2 : 0,
+    seatsNamed: index < 2 ? 2 : 0,
+  },
 }));
 
 const updateParties =

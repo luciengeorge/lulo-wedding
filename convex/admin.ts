@@ -67,6 +67,7 @@ function validateBulkIds(partyIds: Doc<"parties">["_id"][]) {
 const rsvpSummary = v.object({
   state: v.union(v.literal("attending"), v.literal("declined"), v.literal("awaiting"), v.literal("notInvited")),
   attending: v.number(),
+  seatsNamed: v.number(),
   guestCount: v.number(),
 });
 
@@ -96,7 +97,7 @@ const partyRow = v.object({
 
 export type PartyRow = {
   _id: Doc<"parties">["_id"];
-  rsvp: { state: RsvpState; attending: number; guestCount: number };
+  rsvp: { state: RsvpState; attending: number; guestCount: number; seatsNamed: number };
 } & Omit<Doc<"parties">, "_id" | "_creationTime">;
 
 /**

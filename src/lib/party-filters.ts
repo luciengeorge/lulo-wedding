@@ -96,6 +96,15 @@ export type RsvpSummary = {
   /** Guests who said yes to at least one event this party is invited to. */
   attending: number;
   guestCount: number;
+  /**
+   * Named seats the party has actually spoken for, excluding any plus one.
+   *
+   * A party may reply for some seats now and the rest later, so "2 of 4 coming"
+   * has to be distinguishable from "2 coming and 2 we have not heard about". Both
+   * would otherwise render the same, and the couple cater against them
+   * differently.
+   */
+  seatsNamed: number;
 };
 
 type RsvpStatus = "pending" | "yes" | "no";
@@ -111,6 +120,8 @@ export type RsvpGuest = {
   preWedding: RsvpStatus;
   wedding: RsvpStatus;
   brunch: RsvpStatus;
+  /** A plus one occupies no seat of the party's own, so they are counted separately. */
+  isPlusOne: boolean;
 };
 
 /**
@@ -122,8 +133,10 @@ export type RsvpGuest = {
  * that is a real answer even though no guest row exists to carry it.
  */
 export function deriveRsvp(party: RsvpParty, guests: readonly RsvpGuest[]): RsvpSummary {
+  const seatsNamed = guests.filter((guest) => !guest.isPlusOne).length;
+
   if (party.earlyDecline) {
-    return { state: "declined", attending: 0, guestCount: guests.length };
+    return { state: "declined", attending: 0, guestCount: guests.length, seatsNamed };
   }
 
   const invitedToAnything = party.invitedToPreWedding || party.invitedToWedding || party.invitedToBrunch;
@@ -135,13 +148,13 @@ export function deriveRsvp(party: RsvpParty, guests: readonly RsvpGuest[]): Rsvp
       (party.invitedToBrunch && guest.brunch === "yes"),
   ).length;
 
-  if (attending > 0) return { state: "attending", attending, guestCount: guests.length };
+  if (attending > 0) return { state: "attending", attending, guestCount: guests.length, seatsNamed };
 
   // Guest rows only exist once a party has replied, so rows with nobody
   // attending mean the whole party declined.
-  if (guests.length > 0) return { state: "declined", attending: 0, guestCount: guests.length };
+  if (guests.length > 0) return { state: "declined", attending: 0, guestCount: guests.length, seatsNamed };
 
-  if (!invitedToAnything) return { state: "notInvited", attending: 0, guestCount: 0 };
+  if (!invitedToAnything) return { state: "notInvited", attending: 0, guestCount: 0, seatsNamed };
 
-  return { state: "awaiting", attending: 0, guestCount: 0 };
+  return { state: "awaiting", attending: 0, guestCount: 0, seatsNamed };
 }
