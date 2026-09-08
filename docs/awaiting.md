@@ -51,9 +51,11 @@ Shape it should take when we build it:
   name, which events, how many seats of the invitation are now spoken for, and
   whether this was a first reply or a change. A bare "someone replied" would send
   them to the admin every time, which defeats the point.
-- Updates are frequent by design, since a party may reply for some seats and come
-  back later. Worth deciding then whether every edit posts, or only the first
-  reply plus material changes.
+- **Every edit posts, not just the first reply** (Lucien, 2026-09-08). A party may
+  reply for some seats and come back later, so expect several messages from one
+  household. That makes the message body matter more, not less: each one has to
+  say what changed, or a run of near-identical posts becomes unreadable and the
+  couple stop looking at the channel.
 
 Needs from Lucien: bot token and channel (item 16 above).
 
