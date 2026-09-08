@@ -4,6 +4,7 @@ import { PostHogProvider as BasePostHogProvider } from "@posthog/react";
 import posthog from "posthog-js";
 import { useEffect, useRef } from "react";
 
+import { maskAnalyticsPath, maskAnalyticsUrl } from "@/lib/analytics-path";
 import { authClient } from "@/lib/auth-client";
 import { createLogger } from "@/lib/logger";
 
@@ -19,6 +20,16 @@ if (typeof window !== "undefined" && isProduction && posthogKey) {
     autocapture: false,
     capture_pageleave: true,
     capture_pageview: true,
+    // /rsvp/<token> is the guest's only credential, so it never leaves the
+    // device in an event. See src/lib/analytics-path.ts.
+    sanitize_properties: (properties) => ({
+      ...properties,
+      ...(typeof properties.$current_url === "string"
+        ? { $current_url: maskAnalyticsUrl(properties.$current_url) }
+        : {}),
+      ...(typeof properties.$pathname === "string" ? { $pathname: maskAnalyticsPath(properties.$pathname) } : {}),
+      ...(typeof properties.$referrer === "string" ? { $referrer: maskAnalyticsUrl(properties.$referrer) } : {}),
+    }),
     defaults: "2026-01-30",
     person_profiles: "identified_only",
   });

@@ -1,6 +1,8 @@
 import { useRouter } from "@tanstack/react-router";
 import { useEffect } from "react";
 
+import { maskAnalyticsPath, maskAnalyticsUrl } from "@/lib/analytics-path";
+
 const GA_MEASUREMENT_ID = import.meta.env.VITE_GA_MEASUREMENT_ID as string | undefined;
 const isProduction = import.meta.env.PROD;
 
@@ -34,9 +36,11 @@ export function GoogleAnalyticsPageViews() {
 
     const sendPageView = () => {
       if (typeof window === "undefined" || typeof window.gtag !== "function") return;
+      // Masked: /rsvp/<token> is the guest's only credential and must not be
+      // handed to an analytics vendor. See src/lib/analytics-path.ts.
       window.gtag("config", GA_MEASUREMENT_ID, {
-        page_location: window.location.href,
-        page_path: window.location.pathname,
+        page_location: maskAnalyticsUrl(window.location.href),
+        page_path: maskAnalyticsPath(window.location.pathname),
         page_title: document.title,
       });
     };
