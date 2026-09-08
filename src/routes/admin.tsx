@@ -60,19 +60,23 @@ function AdminLayout() {
 
   return (
     <div className="flex min-h-svh flex-col bg-white text-[#18181B]">
-      <header className="flex h-[60px] shrink-0 items-center justify-between border-b border-[#E4E4E7] px-6">
-        <div className="flex items-baseline gap-2.5">
+      {/* Nothing wraps: on a phone the breadcrumb and the address are the first
+          things to go, because the name and the way out are what matter. */}
+      <header className="flex h-[60px] shrink-0 items-center justify-between gap-3 border-b border-[#E4E4E7] px-4 sm:px-6">
+        <div className="flex min-w-0 items-baseline gap-2.5">
           <span className="font-script text-[22px] leading-none text-ink">LL</span>
-          <span className="text-[13.5px] font-semibold">Laura &amp; Lucien</span>
-          <span className="text-[13.5px] text-[#D4D4D8]">/</span>
-          <span className="text-[13.5px] text-[#52525B]">Guest list</span>
+          <span className="truncate text-[13.5px] font-semibold">Laura &amp; Lucien</span>
+          <span className="hidden text-[13.5px] text-[#D4D4D8] sm:inline">/</span>
+          <span className="hidden text-[13.5px] whitespace-nowrap text-[#52525B] sm:inline">Guest list</span>
         </div>
-        <div className="flex items-center gap-4">
-          <span className="text-[12.5px] text-[#71717A]">{admin.user.email}</span>
+        <div className="flex shrink-0 items-center gap-4">
+          <span className="hidden max-w-[220px] truncate text-[12.5px] text-[#71717A] md:inline">
+            {admin.user.email}
+          </span>
           <button
             type="button"
             onClick={handleSignOut}
-            className="text-[12.5px] text-[#52525B] underline-offset-4 hover:underline"
+            className="text-[12.5px] whitespace-nowrap text-[#52525B] underline-offset-4 hover:underline"
           >
             Sign out
           </button>

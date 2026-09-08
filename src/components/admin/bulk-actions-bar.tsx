@@ -270,7 +270,7 @@ export function BulkActionsBar({ table, busy, onBusyChange, updateParties, delet
         ) : null}
         <button
           type="button"
-          className={cn(CONTROL_CLASS, "ml-auto border-transparent bg-transparent")}
+          className={cn(CONTROL_CLASS, "ml-auto shrink-0 border-transparent bg-transparent")}
           disabled={busy}
           onClick={() => table.resetRowSelection(true)}
         >

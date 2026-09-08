@@ -109,7 +109,10 @@ function GuestListPage() {
 
   return (
     <div className="flex flex-1 flex-col">
-      <section className="flex gap-10 border-b border-[#E4E4E7] px-6 py-4">
+      {/* A scrolling strip on a phone rather than a grid: five stats stacked two
+          abreast pushes the table itself below the fold, and the whole point of
+          this screen is the table. */}
+      <section className="flex gap-7 overflow-x-auto border-b border-[#E4E4E7] px-4 py-4 sm:gap-10 sm:overflow-x-visible sm:px-6">
         <Stat label="Parties" value={stats?.parties} hint="invited units" />
         <Stat
           label="Maximum guests"
@@ -129,51 +132,53 @@ function GuestListPage() {
         />
       </section>
 
-      <section className="flex flex-wrap items-center gap-2 px-6 py-3.5">
+      <section className="flex flex-col gap-2 px-4 py-3.5 sm:flex-row sm:flex-wrap sm:items-center sm:px-6">
         <Input
           type="search"
           value={table.state.globalFilter ?? ""}
           onChange={(event) => table.setGlobalFilter(event.target.value)}
           placeholder="Search name or surname"
           aria-label="Search name or surname"
-          className="h-8 w-[240px] text-[12.5px]"
+          className="h-8 w-full text-[12.5px] sm:w-[240px]"
         />
-        <AdminMultiSelect
-          value={columnFilterValues<WaveFilter>(table, "wave")}
-          onChange={(values) => setColumnFilterValues(table, "wave", values)}
-          options={WAVE_OPTIONS}
-          emptyLabel="All waves"
-          unitLabel="waves"
-          aria-label="Wave"
-        />
-        <AdminMultiSelect
-          value={columnFilterValues<WhoFilter>(table, "whose")}
-          onChange={(values) => setColumnFilterValues(table, "whose", values)}
-          options={WHO_OPTIONS}
-          emptyLabel="Anyone's"
-          // "selected" rather than a noun: the values are three people and two
-          // couples, so "2 people" would be a lie half the time.
-          unitLabel="selected"
-          aria-label="Whose"
-        />
-        <AdminMultiSelect
-          value={columnFilterValues<LinkFilter>(table, "whereFrom")}
-          onChange={(values) => setColumnFilterValues(table, "whereFrom", values)}
-          options={LINK_OPTIONS}
-          emptyLabel="Any link"
-          unitLabel="links"
-          aria-label="Link"
-        />
-        <AdminMultiSelect
-          value={columnFilterValues<InvitedToFilter>(table, "invitedTo")}
-          onChange={(values) => setColumnFilterValues(table, "invitedTo", values)}
-          options={INVITED_TO_OPTIONS}
-          emptyLabel="Any invite"
-          unitLabel="invites"
-          aria-label="Invited to"
-        />
+        <div className="flex flex-wrap items-center gap-2">
+          <AdminMultiSelect
+            value={columnFilterValues<WaveFilter>(table, "wave")}
+            onChange={(values) => setColumnFilterValues(table, "wave", values)}
+            options={WAVE_OPTIONS}
+            emptyLabel="All waves"
+            unitLabel="waves"
+            aria-label="Wave"
+          />
+          <AdminMultiSelect
+            value={columnFilterValues<WhoFilter>(table, "whose")}
+            onChange={(values) => setColumnFilterValues(table, "whose", values)}
+            options={WHO_OPTIONS}
+            emptyLabel="Anyone's"
+            // "selected" rather than a noun: the values are three people and two
+            // couples, so "2 people" would be a lie half the time.
+            unitLabel="selected"
+            aria-label="Whose"
+          />
+          <AdminMultiSelect
+            value={columnFilterValues<LinkFilter>(table, "whereFrom")}
+            onChange={(values) => setColumnFilterValues(table, "whereFrom", values)}
+            options={LINK_OPTIONS}
+            emptyLabel="Any link"
+            unitLabel="links"
+            aria-label="Link"
+          />
+          <AdminMultiSelect
+            value={columnFilterValues<InvitedToFilter>(table, "invitedTo")}
+            onChange={(values) => setColumnFilterValues(table, "invitedTo", values)}
+            options={INVITED_TO_OPTIONS}
+            emptyLabel="Any invite"
+            unitLabel="invites"
+            aria-label="Invited to"
+          />
+        </div>
 
-        <div className="ml-auto flex items-center gap-2">
+        <div className="flex flex-wrap items-center gap-2 sm:ml-auto">
           <Button size="sm" variant="outline" onClick={handleExport} disabled={data === undefined}>
             Export CSV
           </Button>
@@ -193,7 +198,7 @@ function GuestListPage() {
         </div>
       </section>
 
-      <section className="flex flex-1 flex-col gap-3 px-6 pb-8">
+      <section className="flex flex-1 flex-col gap-3 px-4 pb-8 sm:px-6">
         {data === undefined ? (
           <GuestListTableSkeleton />
         ) : (
@@ -237,8 +242,10 @@ function GuestListPage() {
  */
 function Stat({ label, value, hint }: { label: string; value: number | undefined; hint?: string }) {
   return (
-    <div className="flex flex-col gap-0.5">
-      <span className="text-[12px] text-[#71717A]">{label}</span>
+    // Fixed width while the strip scrolls, so "Save-the-date sent" stays on one
+    // line instead of breaking into three and dragging the row's height with it.
+    <div className="flex w-[128px] shrink-0 flex-col gap-0.5 sm:w-auto">
+      <span className="text-[12px] whitespace-nowrap text-[#71717A]">{label}</span>
       {value === undefined ? (
         // Same box the number will occupy, so the row does not resettle when the
         // query lands. 26px type on a 26px line is a 26px tall glyph box.

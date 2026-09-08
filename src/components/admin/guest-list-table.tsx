@@ -486,6 +486,9 @@ export function GuestListTable({ table, rowWindow }: { table: GuestListTableInst
   }, [hasMore, showMore, visibleCount]);
 
   return (
+    // The lanes are fixed and total ~1060px, so on a phone this scrolls sideways.
+    // That is the honest behaviour for a table of this shape: squeezing nine
+    // columns into 390px would make every one of them unreadable.
     <div className="overflow-x-auto rounded-[9px] border border-[#E4E4E7]">
       <table className="w-full table-fixed border-collapse" style={{ minWidth: TABLE_WIDTH }}>
         <colgroup>
