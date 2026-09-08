@@ -5,6 +5,8 @@ dist-ssr
 *.local
 count.txt
 .env
+.env.local
+.env.e2e
 .nitro
 .tanstack
 .wrangler
@@ -18,3 +20,7 @@ todos.json
 
 # monogram guide-generation scratch
 tools/monogram/.g_*.png
+
+.e2e
+test-results
+playwright-report

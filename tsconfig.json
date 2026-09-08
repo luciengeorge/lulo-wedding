@@ -1,5 +1,9 @@
 {
   "include": ["**/*.ts", "**/*.tsx"],
+  // TypeScript does not skip dot-directories, so without this the E2E mirror in
+  // .e2e/app is compiled as a second copy of the whole app: twice the work, and a
+  // stale mirror would fail the typecheck on code that is already fixed here.
+  "exclude": ["node_modules", ".e2e", ".output", ".nitro", ".tanstack", ".vercel"],
   "compilerOptions": {
     "target": "ES2022",
     "jsx": "react-jsx",

@@ -18,11 +18,16 @@
     "email:dev": "email dev --dir ./convex/email/templates --port 3001",
     "email:export": "email export --dir ./convex/email/templates --outDir ./.email-out",
     "test": "vitest run",
-    "lint": "oxfmt src && oxlint src",
-    "lint:check": "oxfmt --check src && oxlint src",
+    "lint": "oxfmt src e2e scripts && oxlint src e2e scripts",
+    "lint:check": "oxfmt --check src e2e scripts && oxlint src e2e scripts",
     "format:check": "oxfmt --check .",
     "format": "oxfmt .",
-    "typecheck": "tsgo --noEmit"
+    "typecheck": "tsgo --noEmit",
+    "e2e": "playwright test",
+    "e2e:ui": "playwright test --ui",
+    "e2e:backend": "node scripts/e2e/backend.mjs",
+    "e2e:app": "dotenv -e .env.e2e -- vite dev --mode e2e --host 127.0.0.1 --port 3100 --strictPort",
+    "e2e:clean": "node scripts/e2e/backend.mjs --clean"
   },
   "dependencies": {
     "@ai-sdk/openai": "^4.0.60",
@@ -79,6 +84,7 @@
     "zod": "^4.5.4"
   },
   "devDependencies": {
+    "@playwright/test": "^1.63.0",
     "@react-email/ui": "6.9.3",
     "@tailwindcss/typography": "^0.5.20",
     "@tanstack/devtools-vite": "^0.8.5",

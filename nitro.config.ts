@@ -1,5 +1,14 @@
 import { defineNitroConfig } from "nitro/config";
 
+/**
+ * Local Convex runs on plain http/ws at 127.0.0.1, which `connect-src ... wss:`
+ * blocks and `upgrade-insecure-requests` would rewrite. Production talks to
+ * Convex over wss:// and is unaffected, so the allowance is scoped to a
+ * development build rather than widened for everyone.
+ */
+const isProduction = process.env.NODE_ENV === "production";
+const localConvex = isProduction ? [] : ["ws://127.0.0.1:*", "http://127.0.0.1:*"];
+
 const securityHeaders = {
   "Content-Security-Policy": [
     "default-src 'self'",
@@ -12,10 +21,11 @@ const securityHeaders = {
     "font-src 'self' data: https://fonts.gstatic.com https:",
     "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com",
     "script-src 'self' 'unsafe-inline' https://va.vercel-scripts.com https://vercel.live https://eu-assets.i.posthog.com https://us-assets.i.posthog.com https://www.googletagmanager.com",
-    "connect-src 'self' https: wss:",
+    ["connect-src 'self' https: wss:", ...localConvex].join(" "),
     "worker-src 'self' blob:",
     "media-src 'self' blob: data: https:",
-    "upgrade-insecure-requests",
+    // Would rewrite the local backend's http:// to https:// and break every query.
+    ...(isProduction ? ["upgrade-insecure-requests"] : []),
   ].join("; "),
   "Cross-Origin-Opener-Policy": "same-origin",
   "Cross-Origin-Resource-Policy": "same-origin",

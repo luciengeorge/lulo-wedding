@@ -6,12 +6,14 @@ import { render } from "@react-email/components";
 import { v } from "convex/values";
 import { Resend } from "resend";
 
+import { internal } from "../_generated/api";
 import { internalAction } from "../_generated/server";
 import AccountDeletedEmail from "./templates/accountDeleted";
 import ChangeEmail from "./templates/changeEmail";
 import DeleteAccount from "./templates/deleteAccount";
 import MagicLinkEmail from "./templates/magicLink";
 import ResetPasswordEmail from "./templates/resetPassword";
+import RsvpConfirmationEmail from "./templates/rsvpConfirmation";
 import VerifyEmail from "./templates/verify";
 import WelcomeEmail from "./templates/welcome";
 
@@ -23,6 +25,7 @@ const TEMPLATES = {
   changeEmail: ChangeEmail,
   deleteAccount: DeleteAccount,
   accountDeleted: AccountDeletedEmail,
+  rsvpConfirmation: RsvpConfirmationEmail,
 } as const;
 
 type TemplateName = keyof typeof TEMPLATES;
@@ -50,20 +53,34 @@ export const sendEmail = internalAction({
       v.literal("changeEmail"),
       v.literal("deleteAccount"),
       v.literal("accountDeleted"),
+      v.literal("rsvpConfirmation"),
     ),
     props: v.any(),
   },
-  handler: async (_ctx, { to, subject, template, props }) => {
+  handler: async (ctx, { to, subject, template, props }) => {
     const apiKey = process.env.RESEND_API_KEY;
     const from = process.env.RESEND_FROM_EMAIL;
+    const capture = process.env.E2E_CAPTURE_EMAILS === "1";
+
+    const element = buildTemplate(template, props ?? {});
+    const html = await render(element);
+    const text = await render(element, { plainText: true });
+
+    // The seam the browser tests use. Capturing the email rather than bypassing
+    // the auth means the tests sign in through the real magic-link flow, and the
+    // worst case if this flag ever leaked into production is undelivered mail
+    // rather than a way to mint a session. Capturing deployments carry no Resend
+    // credentials and should not need any.
+    if (capture) {
+      await ctx.runMutation(internal.email.captured.record, { to, subject, template, html });
+      return { id: null };
+    }
+
     if (!apiKey || !from) {
       throw new Error("RESEND_API_KEY and RESEND_FROM_EMAIL must be set");
     }
 
     const resend = new Resend(apiKey);
-    const element = buildTemplate(template, props ?? {});
-    const html = await render(element);
-    const text = await render(element, { plainText: true });
 
     const result = await resend.emails.send({
       from,
