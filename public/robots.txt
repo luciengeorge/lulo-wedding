@@ -1,3 +1,5 @@
-# https://www.robotstxt.org/robotstxt.html
+# A private event. Nothing here should be crawled or indexed.
+# The pages also carry <meta name="robots" content="noindex, nofollow">, which is
+# what actually removes them from an index; this only asks crawlers not to fetch.
 User-agent: *
-Disallow:
+Disallow: /
