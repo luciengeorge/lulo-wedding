@@ -15,6 +15,23 @@ import { rateLimiter } from "./rateLimiter";
  * to arrange a scenario.
  */
 
+/**
+ * Refuses to run anywhere that is not a throwaway test deployment.
+ *
+ * `reset` deletes every party and guest. These are internal functions, so no
+ * browser can reach them, but `npx convex run` and the Convex dashboard can, and
+ * this file is deployed to production along with everything else. One misclick in
+ * the dashboard would erase the guest list.
+ *
+ * E2E_CAPTURE_EMAILS is set only on the harness's local backend, so the check
+ * fails closed everywhere real.
+ */
+function assertTestDeployment() {
+  if (process.env.E2E_CAPTURE_EMAILS !== "1") {
+    throw new Error("e2e fixtures refuse to run: this is not a test deployment.");
+  }
+}
+
 const partyFields = {
   displayName: v.string(),
   surname: v.string(),
@@ -42,6 +59,7 @@ export const reset = internalMutation({
   args: {},
   returns: v.object({ parties: v.number(), guests: v.number(), emails: v.number() }),
   handler: async (ctx) => {
+    assertTestDeployment();
     const counts = { parties: 0, guests: 0, emails: 0 };
 
     // Submits are rate limited per party token, and the specs reuse a handful of
@@ -70,6 +88,7 @@ export const seedParties = internalMutation({
   args: { parties: v.array(v.object(partyFields)) },
   returns: v.array(v.object({ displayName: v.string(), token: v.string() })),
   handler: async (ctx, { parties }) => {
+    assertTestDeployment();
     const created: { displayName: string; token: string }[] = [];
 
     for (const party of parties) {
@@ -177,6 +196,7 @@ export const resetRateLimits = internalMutation({
   args: {},
   returns: v.null(),
   handler: async (ctx) => {
+    assertTestDeployment();
     for (const key of ["127.0.0.1", "::1", "unknown"]) {
       await rateLimiter.reset(ctx, "guestGate", { key });
     }
