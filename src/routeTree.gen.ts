@@ -23,6 +23,7 @@ import { Route as AdminIndexRouteImport } from './routes/admin/index'
 import { Route as AppIndexRouteImport } from './routes/app/index'
 import { Route as AppAdminRouteImport } from './routes/app/admin'
 import { Route as AppSettingsRouteImport } from './routes/app/settings'
+import { Route as RsvpTokenRouteImport } from './routes/rsvp.$token'
 import { Route as legalLayoutCookiesRouteImport } from './routes/(legal)/_layout/cookies'
 import { Route as legalLayoutPrivacyRouteImport } from './routes/(legal)/_layout/privacy'
 import { Route as legalLayoutTermsRouteImport } from './routes/(legal)/_layout/terms'
@@ -102,6 +103,11 @@ const AppSettingsRoute = AppSettingsRouteImport.update({
   path: '/settings',
   getParentRoute: () => AppRoute,
 } as any)
+const RsvpTokenRoute = RsvpTokenRouteImport.update({
+  id: '/rsvp/$token',
+  path: '/rsvp/$token',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const legalLayoutCookiesRoute = legalLayoutCookiesRouteImport.update({
   id: '/cookies',
   path: '/cookies',
@@ -164,6 +170,7 @@ export interface FileRoutesByFullPath {
   '/verify-email': typeof AuthVerifyEmailRoute
   '/app/admin': typeof AppAdminRoute
   '/app/settings': typeof AppSettingsRouteWithChildren
+  '/rsvp/$token': typeof RsvpTokenRoute
   '/admin/': typeof AdminIndexRoute
   '/app/': typeof AppIndexRoute
   '/cookies': typeof legalLayoutCookiesRoute
@@ -185,6 +192,7 @@ export interface FileRoutesByTo {
   '/reset-password': typeof AuthResetPasswordRoute
   '/verify-email': typeof AuthVerifyEmailRoute
   '/app/admin': typeof AppAdminRoute
+  '/rsvp/$token': typeof RsvpTokenRoute
   '/admin': typeof AdminIndexRoute
   '/app': typeof AppIndexRoute
   '/cookies': typeof legalLayoutCookiesRoute
@@ -212,6 +220,7 @@ export interface FileRoutesById {
   '/_auth/verify-email': typeof AuthVerifyEmailRoute
   '/app/admin': typeof AppAdminRoute
   '/app/settings': typeof AppSettingsRouteWithChildren
+  '/rsvp/$token': typeof RsvpTokenRoute
   '/admin/': typeof AdminIndexRoute
   '/app/': typeof AppIndexRoute
   '/(legal)/_layout/cookies': typeof legalLayoutCookiesRoute
@@ -238,6 +247,7 @@ export interface FileRouteTypes {
     | '/verify-email'
     | '/app/admin'
     | '/app/settings'
+    | '/rsvp/$token'
     | '/admin/'
     | '/app/'
     | '/cookies'
@@ -259,6 +269,7 @@ export interface FileRouteTypes {
     | '/reset-password'
     | '/verify-email'
     | '/app/admin'
+    | '/rsvp/$token'
     | '/admin'
     | '/app'
     | '/cookies'
@@ -285,6 +296,7 @@ export interface FileRouteTypes {
     | '/_auth/verify-email'
     | '/app/admin'
     | '/app/settings'
+    | '/rsvp/$token'
     | '/admin/'
     | '/app/'
     | '/(legal)/_layout/cookies'
@@ -306,6 +318,7 @@ export interface RootRouteChildren {
   AppRoute: typeof AppRouteWithChildren
   EnterRoute: typeof EnterRoute
   legalLayoutRoute: typeof legalLayoutRouteWithChildren
+  RsvpTokenRoute: typeof RsvpTokenRoute
   ApiAuthSplatRoute: typeof ApiAuthSplatRoute
   ApiImgStorageIdRoute: typeof ApiImgStorageIdRoute
 }
@@ -409,6 +422,13 @@ declare module '@tanstack/react-router' {
       fullPath: '/app/settings'
       preLoaderRoute: typeof AppSettingsRouteImport
       parentRoute: typeof AppRoute
+    }
+    '/rsvp/$token': {
+      id: '/rsvp/$token'
+      path: '/rsvp/$token'
+      fullPath: '/rsvp/$token'
+      preLoaderRoute: typeof RsvpTokenRouteImport
+      parentRoute: typeof rootRouteImport
     }
     '/(legal)/_layout/cookies': {
       id: '/(legal)/_layout/cookies'
@@ -566,6 +586,7 @@ const rootRouteChildren: RootRouteChildren = {
   AppRoute: AppRouteWithChildren,
   EnterRoute: EnterRoute,
   legalLayoutRoute: legalLayoutRouteWithChildren,
+  RsvpTokenRoute: RsvpTokenRoute,
   ApiAuthSplatRoute: ApiAuthSplatRoute,
   ApiImgStorageIdRoute: ApiImgStorageIdRoute,
 }
