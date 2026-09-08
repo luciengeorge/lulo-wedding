@@ -64,7 +64,11 @@ export function AdminMultiSelect<T extends string>({
         onChange(selected.filter((option): option is T => option !== CLEAR_VALUE));
       }}
     >
+      {/* 32px, like every other control on this screen: the search box, the action
+          buttons and the bulk-actions bar. The default trigger is 36px, which left
+          the filter row sitting on two different heights. */}
       <SelectTrigger
+        size="sm"
         aria-label={ariaLabel}
         className={cn("text-[12.5px]", value.length > 0 && "border-[#A1A1AA] font-medium", className)}
       >

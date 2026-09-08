@@ -1,11 +1,19 @@
-import { createFileRoute } from "@tanstack/react-router";
+import { createFileRoute, Link } from "@tanstack/react-router";
 
 import { Monogram } from "@/components/wedding/monogram";
+import { getAdminSession } from "@/lib/functions/admin-session";
 import { requireGuestUnlocked } from "@/lib/functions/guest-gate";
 import { canonical, seo } from "@/lib/seo";
 
 export const Route = createFileRoute("/")({
-  beforeLoad: ({ location }) => requireGuestUnlocked(location.href),
+  beforeLoad: async ({ location }) => {
+    await requireGuestUnlocked(location.href);
+
+    // Only ever true for the two allowlisted accounts, so a guest never learns
+    // that an admin exists, let alone where it is.
+    const admin = await getAdminSession();
+    return { isAdmin: admin.status === "ok" };
+  },
   head: () => ({
     meta: seo({
       description: "Save the date — 17 July 2027, Lebanon. Invitation and details to follow.",
@@ -17,10 +25,24 @@ export const Route = createFileRoute("/")({
 });
 
 function SaveTheDate() {
+  const { isAdmin } = Route.useRouteContext();
+
   return (
     <div className="relative flex min-h-svh w-full flex-col overflow-hidden bg-paper [background-image:url('/art/paper-tile.webp')] bg-[length:560px_428px] bg-repeat text-ink">
       <SceneArt />
       <OliveBranch />
+
+      {/* Only rendered for a signed-in allowlisted account, so a guest never sees
+          it and never learns the admin exists. Quiet on purpose: this is the
+          couple's own shortcut on their invitation, not a piece of the design. */}
+      {isAdmin ? (
+        <Link
+          to="/admin"
+          className="absolute top-4 right-5 z-20 font-display text-[13px] tracking-caps text-ink/70 underline-offset-4 transition-opacity hover:text-ink hover:underline lg:top-6 lg:right-8"
+        >
+          GUEST LIST
+        </Link>
+      ) : null}
 
       {/* On mobile the scene owns the bottom of the screen, so the column is
           padded clear of it. On desktop it sits beside the panel instead. */}

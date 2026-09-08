@@ -1,4 +1,4 @@
-import { createFileRoute, Outlet, useNavigate } from "@tanstack/react-router";
+import { createFileRoute, Link, Outlet, useNavigate } from "@tanstack/react-router";
 import { toast } from "sonner";
 
 import { authClient } from "@/lib/auth-client";
@@ -64,8 +64,20 @@ function AdminLayout() {
           things to go, because the name and the way out are what matter. */}
       <header className="flex h-[60px] shrink-0 items-center justify-between gap-3 border-b border-[#E4E4E7] px-4 sm:px-6">
         <div className="flex min-w-0 items-baseline gap-2.5">
-          <span className="font-script text-[22px] leading-none text-ink">LL</span>
-          <span className="truncate text-[13.5px] font-semibold">Laura &amp; Lucien</span>
+          <Link to="/" className="flex min-w-0 items-baseline gap-2.5 rounded-sm hover:opacity-80">
+            {/* The artwork, not the letters. Setting "LL" in Pinyon Script renders two
+                separate L's, which at this size reads as a smudge rather than as the
+                interlocking mark on the invitation. Decorative: the name follows it. */}
+            <img
+              src="/art/monogram-ink.svg"
+              alt=""
+              aria-hidden
+              width={26}
+              height={26}
+              className="size-[26px] shrink-0 self-center"
+            />
+            <span className="truncate text-[13.5px] font-semibold">Laura &amp; Lucien</span>
+          </Link>
           <span className="hidden text-[13.5px] text-[#D4D4D8] sm:inline">/</span>
           <span className="hidden text-[13.5px] whitespace-nowrap text-[#52525B] sm:inline">Guest list</span>
         </div>
