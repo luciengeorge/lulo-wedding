@@ -5,7 +5,7 @@ import { requireGuestUnlocked } from "@/lib/functions/guest-gate";
 import { canonical, seo } from "@/lib/seo";
 
 export const Route = createFileRoute("/")({
-  beforeLoad: () => requireGuestUnlocked(),
+  beforeLoad: ({ location }) => requireGuestUnlocked(location.href),
   head: () => ({
     meta: seo({
       description: "Save the date — 17 July 2027, Lebanon. Invitation and details to follow.",

@@ -1,14 +1,31 @@
 import { createFileRoute, redirect, useRouter } from "@tanstack/react-router";
 import { useState } from "react";
+import z from "zod";
 
 import { Monogram } from "@/components/wedding/monogram";
 import { enterGate, isGuestUnlocked } from "@/lib/functions/guest-gate";
+import { safeRedirect } from "@/lib/safe-redirect";
 import { canonical, seo } from "@/lib/seo";
 
+/**
+ * Where to go once the password is accepted. Validated here as well as where the
+ * param is written, because this is the side that reads it off the URL and a
+ * hand-typed `?redirect=` never went through the writing side at all.
+ */
+const GateSearchSchema = z.object({
+  redirect: z
+    .string()
+    .optional()
+    .catch(undefined)
+    .transform((value) => (value === undefined ? undefined : safeRedirect(value))),
+});
+
 export const Route = createFileRoute("/enter")({
-  beforeLoad: async () => {
-    // Someone who already has the cookie should never see the gate again.
-    if (await isGuestUnlocked()) throw redirect({ to: "/" });
+  validateSearch: GateSearchSchema,
+  beforeLoad: async ({ search }) => {
+    // Someone who already has the cookie should never see the gate again, and
+    // should land on what they were actually trying to open.
+    if (await isGuestUnlocked()) throw redirect({ to: search.redirect ?? "/" });
   },
   head: () => ({
     // Same preview as the save-the-date: a guest who is sent the bare link
@@ -24,6 +41,7 @@ export const Route = createFileRoute("/enter")({
 
 function GatePage() {
   const router = useRouter();
+  const { redirect: redirectTo } = Route.useSearch();
   const [password, setPassword] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [pending, setPending] = useState(false);
@@ -37,7 +55,7 @@ function GatePage() {
     try {
       const result = await enterGate({ data: { password } });
       if (result.ok) {
-        await router.navigate({ to: "/" });
+        await router.navigate({ to: redirectTo ?? "/" });
         return;
       }
       setError(

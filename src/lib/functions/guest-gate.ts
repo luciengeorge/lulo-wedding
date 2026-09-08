@@ -7,6 +7,7 @@ import z from "zod";
 import { api } from "@/../convex/_generated/api";
 import { fetchAuthMutation } from "@/lib/auth-server";
 import { useGuestSession } from "@/lib/guest-session.server";
+import { safeRedirect } from "@/lib/safe-redirect";
 
 /** Where an un-unlocked guest gets sent. The route is owned by the UI side. */
 const GATE_ROUTE = "/enter";
@@ -69,10 +70,18 @@ export const isGuestUnlocked = createServerFn({ method: "GET" }).handler(async (
 /**
  * Call from a route's `beforeLoad` to require the guest gate. Throws a redirect to
  * the gate page when the session is not unlocked.
+ *
+ * Pass the route's `location.href` so the gate can send them back afterwards.
+ * Without it every party who taps their personal RSVP link, and none of them have
+ * the cookie the first time, types the password and lands on the save-the-date
+ * with their own link gone from the screen.
  */
-export async function requireGuestUnlocked(): Promise<void> {
+export async function requireGuestUnlocked(returnTo?: string): Promise<void> {
   const unlocked = await isGuestUnlocked();
   if (!unlocked) {
-    throw redirect({ to: GATE_ROUTE });
+    // Only carried when it is worth carrying: "/" is where the gate goes anyway,
+    // and a redirect param pointing at the home page is just noise in the URL.
+    const target = safeRedirect(returnTo);
+    throw redirect({ to: GATE_ROUTE, search: target === "/" ? {} : { redirect: target } });
   }
 }
