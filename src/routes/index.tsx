@@ -1,5 +1,6 @@
-import { createFileRoute, Link } from "@tanstack/react-router";
+import { createFileRoute } from "@tanstack/react-router";
 
+import { AdminBar } from "@/components/wedding/admin-bar";
 import { Monogram } from "@/components/wedding/monogram";
 import { getAdminSession } from "@/lib/functions/admin-session";
 import { requireGuestUnlocked } from "@/lib/functions/guest-gate";
@@ -32,17 +33,7 @@ function SaveTheDate() {
       <SceneArt />
       <OliveBranch />
 
-      {/* Only rendered for a signed-in allowlisted account, so a guest never sees
-          it and never learns the admin exists. Quiet on purpose: this is the
-          couple's own shortcut on their invitation, not a piece of the design. */}
-      {isAdmin ? (
-        <Link
-          to="/admin"
-          className="absolute top-4 right-5 z-20 font-display text-[13px] tracking-caps text-ink/70 underline-offset-4 transition-opacity hover:text-ink hover:underline lg:top-6 lg:right-8"
-        >
-          GUEST LIST
-        </Link>
-      ) : null}
+      {isAdmin ? <AdminBar /> : null}
 
       {/* On mobile the scene owns the bottom of the screen, so the column is
           padded clear of it. On desktop it sits beside the panel instead. */}
