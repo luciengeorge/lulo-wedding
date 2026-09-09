@@ -3,3 +3,11 @@
 # what actually removes them from an index; this only asks crawlers not to fetch.
 User-agent: *
 Disallow: /
+
+# Except the one image the emails point at. Gmail does not load a remote image
+# directly — it fetches through googleusercontent, and that proxy honours this
+# file. With a blanket Disallow the monogram renders as a broken-image box in
+# every Gmail inbox while working perfectly in curl and in Apple Mail, which
+# fetch it themselves. Allow wins over Disallow on the longer match.
+# It is a decorative monogram, so nothing is exposed by letting it be fetched.
+Allow: /art/monogram-email.png
