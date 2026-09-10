@@ -19,7 +19,7 @@ _GZ = hm.height(_GX, _GY)
 SHOTS = {
     "overview": {"loc": (-17.0, -21.0, 12.5), "target": (0.5, 1.2, 0.6), "focal": 35, "fstop": 2.0},
     "overview_portrait": {"loc": (-19.0, -23.5, 14.0), "target": (0.5, 1.4, 0.6), "focal": 35, "fstop": 2.0, "portrait": True},
-    "shore": {"loc": (-6.9, _CM5 - 2.6, 1.6), "target": (-5.0, _CM5 + 0.55, 0.5), "focal": 45, "fstop": 5.6},
+    "shore": {"loc": (-8.4, _CM5 - 4.2, 2.3), "target": (-4.6, _CM5 + 0.7, 0.5), "focal": 40, "fstop": 5.6},
     "hill": {"loc": (4.8, -4.4, 6.4), "target": (2.4, 4.0, 1.9), "focal": 40, "fstop": 5.6},
     "garden": {"loc": (_GX - 2.4, _GY - 3.4, _GZ + 3.0), "target": (_GX, _GY, _GZ + 0.2), "focal": 40, "fstop": 5.6},
     "post": {"loc": (0.9, -2.2, 3.2), "target": (0.4, 0.25, 0.35), "focal": 40, "fstop": 5.6},
