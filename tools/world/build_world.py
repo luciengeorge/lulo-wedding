@@ -16,7 +16,7 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
 import bpy  # noqa: E402
 
-from scene import cameras, common, sea, terrain  # noqa: E402
+from scene import cameras, common, flora, sea, terrain  # noqa: E402
 
 
 def build():
@@ -24,6 +24,9 @@ def build():
     ground = common.collection("Ground")
     terrain.build(ground)
     sea.build(common.collection("Sea"))
+    counts = flora.build(common.collection("Flora"))
+    for kind, n in sorted(counts.items()):
+        print(f"FLORA {kind} {n}")
     cameras.add_camera("overview", cameras.SHOTS["overview"])
     bpy.context.scene.camera = bpy.data.objects["overview"]
     # Provisional light and sky until Task 8 replaces them.

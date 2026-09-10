@@ -60,7 +60,7 @@ GRASS_DRY = mix(FOLIAGE, FIELD, 0.5)
 ROAD = mix(FIELD, BARK, 0.25)
 
 # Flora
-OLIVE = mix(FOLIAGE, SEA, 0.3)
+OLIVE = mix(FOLIAGE, SEA, 0.2)
 CYPRESS = shade(FOLIAGE, 0.55)
 PINE = shade(FOLIAGE, 0.8)
 CEDAR = mix(shade(FOLIAGE, 0.6), SEA, 0.2)
