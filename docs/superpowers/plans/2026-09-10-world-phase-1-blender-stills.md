@@ -1297,7 +1297,7 @@ if __name__ == "__main__":
 ```bash
 pnpm world:preview 2>&1 | grep -E "^(BUILD_S|OBJECTS|SAVED|RENDER_S|LUMINANCE)|Error|Traceback"
 ```
-Expected: `OBJECTS 6`, `RENDER_S` under 30, `LUMINANCE` between 0.25 and 0.65, no traceback.
+Expected: `OBJECTS 7`, `RENDER_S` under 30, `LUMINANCE` between 0.25 and 0.65, no traceback.
 
 Then Read `tools/world/out/preview.png`. Acceptance: a cream slab seen from the south-west with a landmass rising toward the back, a flat pale-teal sea across the front, visible stair-steps in the middle band (the terraces), a darker knoll to the right of centre, and a ridge along the back. No black faces, no holes, the skirt joins the land without a gap. If the terraces are invisible, the sun is too high; set `sun.rotation_euler = (1.1, 0.0, 0.6)` and re-run. If the sea is opaque white, the sea `alpha` is being ignored: confirm the material is on the sea object and re-run.
 
@@ -2209,3 +2209,13 @@ Push the branch and send the nine stills for review. The review question is the 
 - **Not in this plan, deliberately**: bake, glTF export, gltf-transform, KTX2, and anything under `src/`. Those are phase two and start only after approval.
 
 Type and name consistency checked: `common.material` signature is identical in every caller; material names `"window"`, `"lantern"`, `"paper"`, `"roof-ink"`, `"stone"`, `"stone-dark"`, `"trunk"`, `"road"` are spelled the same in Tasks 4 through 9; `cameras.SHOTS` keys match `stills.STILLS`; `layout.PLACES` ids match `test_layout` and `places.py`.
+
+## Amendments during execution
+
+Recorded here so the plan stays truthful; the tasks above are left as written.
+
+- **Task 2, terraces (2026-09-10).** A hard `floor` on a 0.1 grid aliased into teeth wherever a contour ran diagonally, and into rows of pillars on the knoll flank. `heightmap.py` now cuts terraces from `smooth_height` (no roughness), makes each riser a continuous ramp `RISER_WIDTH = 0.16` wide via `terrace(s, k)`, and fades terracing out with `terrace_weight` where the ground is too steep to hold one. New helpers `gradient`, `riser_fraction`, `slope`. Tests updated to match.
+- **Task 4, terrain painting.** Stone on risers is painted into the vertex colour by `slope` with a soft edge (`_paint`) instead of a per-face material index, which scalloped. One material `"ground"` replaces `grass`/`stone-dark`/`sand` on the terrain.
+- **Task 1, palette.** `GRASS = mix(FOLIAGE, FIELD, 0.22)` and `GRASS_DRY = mix(FOLIAGE, FIELD, 0.5)`; the original halves read as sand under Cycles.
+- **Task 4, camera.** Overview pulled back to `(-17, -21, 12.5)` at 35 mm so the whole table and a margin of card fit; portrait likewise.
+- **Task 4, provisional sky** strength 0.15 to land luminance in range. Task 8 replaces it.

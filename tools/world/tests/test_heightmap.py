@@ -27,14 +27,44 @@ class HeightmapTest(unittest.TestCase):
         self.assertGreater(ridge, foothills + 1.5)
 
     def test_terraces_quantise_inside_the_band(self):
-        # Well inside the band the fade weight is 1, so heights sit 0.04 above a step.
+        # Well inside the band the fade weight is 1. On a flat top the height sits
+        # 0.04 above a step; on a riser it lies between that step and the next.
         for x in (-8.0, -3.0, 0.5, 6.0, 9.0):
             for y in (-0.5, 0.8, 2.0, 2.9):
-                h = hm.height(x, y)
-                if h <= 0.05:
+                s = hm.smooth_height(x, y)
+                if s <= 0.05 or hm.terrace_weight(x, y) < 0.999:
                     continue
-                remainder = (h - 0.04) / hm.TERRACE_STEP
-                self.assertAlmostEqual(remainder, round(remainder), places=5, msg=f"{x},{y}")
+                h = hm.height(x, y)
+                n = math.floor(s / hm.TERRACE_STEP)
+                frac = s / hm.TERRACE_STEP - n
+                low, high = n * hm.TERRACE_STEP + 0.04, (n + 1) * hm.TERRACE_STEP + 0.04
+                if frac < 0.4:
+                    self.assertAlmostEqual(h, low, places=5, msg=f"{x},{y}")
+                else:
+                    self.assertTrue(low - 1e-6 <= h <= high + 1e-6, f"{x},{y}: {h} not in [{low}, {high}]")
+
+    def test_terrace_function_is_continuous_and_monotonic(self):
+        previous = hm.terrace(0.0, 0.3)
+        for i in range(1, 400):
+            s = i * 0.005
+            current = hm.terrace(s, 0.3)
+            self.assertGreaterEqual(current + 1e-9, previous)
+            self.assertLess(current - previous, 0.05)
+            previous = current
+
+    def test_riser_fraction_follows_the_gradient(self):
+        points = [(x, y) for x in (-6.0, 0.0, 4.0) for y in (-0.5, 1.0, 2.5)]
+        for a in points:
+            for b in points:
+                if hm.gradient(*a) > hm.gradient(*b) + 1e-6:
+                    self.assertGreaterEqual(hm.riser_fraction(*a), hm.riser_fraction(*b))
+
+    def test_terracing_fades_out_on_steep_ground(self):
+        self.assertEqual(hm.terrace_weight(0.0, 5.5), 0.0)
+        gentle = hm.terrace_weight(-8.0, 1.5)
+        self.assertGreater(gentle, 0.5)
+        steep_flank = min(hm.terrace_weight(hm.VILLAGE[0] + dx, hm.VILLAGE[1] + dy) for dx, dy in ((-1.6, 0), (1.6, 0), (0, -1.2), (0, 1.2)))
+        self.assertLess(steep_flank, gentle)
 
     def test_no_quantisation_outside_the_band(self):
         h = hm.height(0.5, 5.5)
