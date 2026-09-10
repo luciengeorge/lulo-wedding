@@ -21,6 +21,14 @@ RIDGE_Y, RIDGE_H = 6.5, 3.6
 INLAND_RISE, INLAND_REACH = 2.4, 4.5
 VILLAGE = (3.0, 2.5)
 
+# Levelled ground cut into the slope for a place that needs a flat floor:
+# id -> ((x, y), half width, half depth). The level is the natural terrace
+# height at the centre, so a plateau is one wide terrace, not a mesa.
+PLATEAUS = {
+    "garden": ((-5.5, 1.6), 1.75, 1.35),
+}
+PLATEAU_APRON = 0.5
+
 
 def smoothstep(a: float, b: float, t: float) -> float:
     if t <= a:
@@ -95,7 +103,7 @@ def terrace_weight(x: float, y: float) -> float:
     return band * steep
 
 
-def height(x: float, y: float) -> float:
+def _height_unlevelled(x: float, y: float) -> float:
     smooth = smooth_height(x, y)
     if smooth > 0.05:
         weight = terrace_weight(x, y)
@@ -103,6 +111,35 @@ def height(x: float, y: float) -> float:
             stepped = terrace(smooth, min(0.6, riser_fraction(x, y)))
             return base_height(x, y) * (1.0 - weight) + stepped * weight
     return base_height(x, y)
+
+
+def plateau_mask(x: float, y: float) -> float:
+    """1 inside a plateau, easing to 0 across PLATEAU_APRON outside it."""
+    mask = 0.0
+    for (cx, cy), hw, hd in PLATEAUS.values():
+        dx, dy = max(0.0, abs(x - cx) - hw), max(0.0, abs(y - cy) - hd)
+        mask = max(mask, 1.0 - smoothstep(0.0, PLATEAU_APRON, math.hypot(dx, dy)))
+    return mask
+
+
+_levels: dict[str, float] = {}
+
+
+def plateau_level(name: str) -> float:
+    if name not in _levels:
+        (cx, cy), _, _ = PLATEAUS[name]
+        _levels[name] = _height_unlevelled(cx, cy)
+    return _levels[name]
+
+
+def height(x: float, y: float) -> float:
+    h = _height_unlevelled(x, y)
+    for name, ((cx, cy), hw, hd) in PLATEAUS.items():
+        dx, dy = max(0.0, abs(x - cx) - hw), max(0.0, abs(y - cy) - hd)
+        m = 1.0 - smoothstep(0.0, PLATEAU_APRON, math.hypot(dx, dy))
+        if m > 0.0:
+            h = h * (1.0 - m) + plateau_level(name) * m
+    return h
 
 
 def slope(x: float, y: float) -> float:

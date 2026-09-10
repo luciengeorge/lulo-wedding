@@ -216,8 +216,11 @@ def build(coll):
         put("pine", x, y, s, yaw)
     for x, y, s, yaw in placement.scatter((-hw, 6.0, hw, hd), 1.3, _cedar_density, seed=33, exclude=zones):
         put("cedar", x, y, s * 1.05, yaw)
+    # Roadside cypress keep out of the places' clearings but not off the roads
+    # themselves, so only the place discs apply here.
+    place_zones = [(p["pos"][0], p["pos"][1], layout.PLACE_RADIUS[pid]) for pid, p in layout.PLACES.items()]
     for x, y, yaw in placement.along(layout.COAST_ROAD, 0.8, 0.3, seed=34) + placement.along(layout.HILL_ROAD, 0.7, 0.28, seed=35):
-        if hm.is_land(x, y):
+        if hm.is_land(x, y) and not any((x - zx) ** 2 + (y - zy) ** 2 < r * r for zx, zy, r in place_zones):
             put("cypress", x, y, 1.0, yaw)
     rng = random.Random(36)
     for x, y in placement.resample(layout.COAST_ROAD, 1.4):

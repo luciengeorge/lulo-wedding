@@ -28,7 +28,7 @@ HILL_ROAD = [
 PLACES = {
     "shore": {"label": "By the sea", "pos": (-5.0, hm.coastline(-5.0) + 0.55)},
     "hill": {"label": "On the hill", "pos": hm.VILLAGE},
-    "garden": {"label": "In the garden", "pos": (-2.5, 3.6)},
+    "garden": {"label": "In the garden", "pos": (-5.5, 1.6)},
     "post": {"label": "The post house", "pos": (0.4, 0.2)},
     "hotel": {"label": "Where to stay", "pos": (6.5, 0.6)},
     "harbour": {"label": "Getting there", "pos": (5.5, hm.coastline(5.5) - 0.9)},
@@ -40,8 +40,8 @@ PLACES = {
 PLACE_RADIUS = {
     "shore": 1.4,
     "hill": 1.3,
-    "garden": 1.9,
-    "post": 0.8,
+    "garden": 2.3,
+    "post": 1.6,
     "hotel": 1.7,
     "harbour": 1.2,
     "cedars": 0.6,

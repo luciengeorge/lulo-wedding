@@ -32,7 +32,7 @@ class HeightmapTest(unittest.TestCase):
         for x in (-8.0, -3.0, 0.5, 6.0, 9.0):
             for y in (-0.5, 0.8, 2.0, 2.9):
                 s = hm.smooth_height(x, y)
-                if s <= 0.05 or hm.terrace_weight(x, y) < 0.999:
+                if s <= 0.05 or hm.terrace_weight(x, y) < 0.999 or hm.plateau_mask(x, y) > 0.0:
                     continue
                 h = hm.height(x, y)
                 n = math.floor(s / hm.TERRACE_STEP)
@@ -74,6 +74,14 @@ class HeightmapTest(unittest.TestCase):
     def test_village_knoll_rises_above_its_surroundings(self):
         vx, vy = hm.VILLAGE
         self.assertGreater(hm.height(vx, vy), hm.height(vx - 4.0, vy) + 0.3)
+
+    def test_garden_plateau_is_level(self):
+        (cx, cy), hw, hd = hm.PLATEAUS["garden"]
+        level = hm.height(cx, cy)
+        for dx in (-hw, 0.0, hw):
+            for dy in (-hd, 0.0, hd):
+                self.assertAlmostEqual(hm.height(cx + dx, cy + dy), level, places=6)
+        self.assertNotAlmostEqual(hm.height(cx, cy + hd + hm.PLATEAU_APRON + 0.5), level, places=1)
 
     def test_finite_everywhere(self):
         for i in range(0, 241, 8):

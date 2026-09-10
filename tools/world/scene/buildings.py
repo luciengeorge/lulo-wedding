@@ -75,12 +75,21 @@ def ribbon(name, polyline, width, coll, mat, lift=0.025):
 
 
 def _square(coll):
+    """A stone platform, not a disc: the knoll falls away on its south side, so the
+    square needs a wall down into the slope like every terrace does."""
     vx, vy = hm.VILLAGE
     z = hm.height(vx, vy) + 0.03
     segs = 24
-    verts = [(vx, vy, z)] + [(vx + math.cos(i * math.tau / segs) * layout.SQUARE_RADIUS, vy + math.sin(i * math.tau / segs) * layout.SQUARE_RADIUS, z) for i in range(segs)]
+    top = [(vx + math.cos(i * math.tau / segs) * layout.SQUARE_RADIUS, vy + math.sin(i * math.tau / segs) * layout.SQUARE_RADIUS, z) for i in range(segs)]
+    base = [(x, y, z - 0.9) for x, y, _ in top]
+    verts = [(vx, vy, z)] + top + base
     faces = [(0, 1 + i, 1 + (i + 1) % segs) for i in range(segs)]
-    common.mesh_object("square", verts, faces, coll, [common.material("road", palette.ROAD, 0.95)])
+    faces += [(1 + i, 1 + segs + i, 1 + segs + (i + 1) % segs, 1 + (i + 1) % segs) for i in range(segs)]
+    road = common.material("road", palette.ROAD, 0.95)
+    stone = common.material("stone-dark", palette.STONE_DARK, 0.9)
+    obj = common.mesh_object("square", verts, faces, coll, [road, stone])
+    for poly in obj.data.polygons:
+        poly.material_index = 0 if poly.index < segs else 1
 
 
 def build(coll):
