@@ -27,7 +27,12 @@
     "e2e:ui": "playwright test --ui",
     "e2e:backend": "node scripts/e2e/backend.mjs",
     "e2e:app": "dotenv -e .env.e2e -- vite dev --mode e2e --host 127.0.0.1 --port 3100 --strictPort",
-    "e2e:clean": "node scripts/e2e/backend.mjs --clean"
+    "e2e:clean": "node scripts/e2e/backend.mjs --clean",
+    "world:build": "tools/world/blender.sh -b --python tools/world/build_world.py -- --out tools/world/out",
+    "world:preview": "tools/world/blender.sh -b --python tools/world/build_world.py -- --out tools/world/out --preview",
+    "world:stills": "tools/world/blender.sh -b --python tools/world/stills.py -- --out public/world/stills",
+    "world:stills:preview": "tools/world/blender.sh -b --python tools/world/stills.py -- --out tools/world/out/stills --preview",
+    "world:test": "python3 -m unittest discover -s tools/world/tests -t tools/world"
   },
   "dependencies": {
     "@ai-sdk/openai": "^4.0.60",
