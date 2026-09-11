@@ -27,7 +27,6 @@ answer so a stale placeholder is obvious.
 | 14 | **Registry** details | Registry section, agreed to include | none | 2026-09-07 |
 | 15 | **Six placeholder parties** in the sheet need real names | Guest list correctness | imported as-is | 2026-09-07, flagged not actioned |
 | 16 | **Slack bot token and channel** for RSVP notifications | The planned Slack notification below | not built | 2026-09-08, Lucien will supply when we build it |
-| 17 | **Diorama geography**: a real Lebanese ridge and coast, or invented? | The world's terrain and the overview still | invented ridge, archetypal coast | 2026-09-10 |
 | 18 | **Diorama look approval** on the phase-one stills in `public/world/stills/` | Any web code for the immersive site | none, stills rendered | 2026-09-10 |
 
 Item 15, the exact rows: `Lucy` and `Pascale & Biche` have blank surnames;
@@ -75,3 +74,6 @@ Needs from Lucien: bot token and channel (item 16 above).
 | One RSVP submission per party, or several? | Flexible: a party may answer for some seats and come back for the rest | 2026-09-08 |
 | Email sending | Resend, from a subdomain; DMARC record added | 2026-09-08 |
 | Admin edits vs CSV re-import | Admin wins; `editedInAdminAt` detaches the row from the importer | 2026-09-07 |
+| Diorama geography | As close to reality as possible without being exact; literal geography in the overview, from real elevation data | 2026-09-11 |
+| Diorama paper state | The sea stays visible unpainted | 2026-09-11 |
+| Diorama legend | Behind a single button | 2026-09-11 |

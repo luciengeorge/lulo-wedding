@@ -284,9 +284,11 @@ Each phase ends with a review on the preview URL.
   `docs/awaiting.md`. Places are archetypes with copy that says so, never invented
   detail that looks real.
 
-## Unresolved
+## Resolved on 2026-09-11
 
-- Mountain silhouette: a real Lebanese ridge or an invented one?
-- Should the overview show the real geography (Beirut, the coast road) or stay abstract?
-- Does the paper state show the sea at all, or is the table bare paper until paint?
-- Legend always visible, or a single button that opens it?
+| Question | Answer |
+|---|---|
+| Mountain silhouette and coast | Not required to be exact, but as close to reality as possible: terrain from real elevation data, real coastline, real town positions, at a souvenir-model scale where buildings stay legible |
+| Geography in the overview | Literal: the guest should recognise the coast |
+| Sea in the paper state | Visible: the sea reads as water even unpainted, by finish rather than colour |
+| Legend | Behind a single button, not always visible |
