@@ -1,90 +1,133 @@
-"""Roads, the village, and the nine places from the spec.
+"""Roads, towns, landmarks and the nine places, from real coordinates.
 
-Positions are in table units. Anything that must agree with the terrain uses
-heightmap.coastline() rather than a hard-coded y, so moving the shore moves the
-things that stand on it.
+Everything here is placed with frame.to_table so the diorama is literal
+geography at souvenir scale: real shapes and positions, oversized buildings.
+The venues are still unknown (docs/awaiting.md rows 2 to 4); the hill place
+sits at the foot of the Warde slopes because Lucien named that spot, and the
+others are placeholders near towns a guest would recognise.
 """
 
 import math
 import random
 
+from . import frame
 from . import heightmap as hm
 from . import placement
 
-COAST_OFFSET = 1.3
-SQUARE_RADIUS = 0.9
 
-COAST_ROAD = [(x * 0.5, hm.coastline(x * 0.5) + COAST_OFFSET) for x in range(-24, 25)]
+def _pts(*ids_or_coords):
+    out = []
+    for item in ids_or_coords:
+        if isinstance(item, str):
+            out.append(frame.landmark_xy(item))
+        else:
+            out.append(frame.to_table(*item))
+    return out
 
-HILL_ROAD = [
-    (-0.5, hm.coastline(-0.5) + COAST_OFFSET),
-    (0.6, 0.6),
-    (1.9, 1.2),
-    (1.2, 2.0),
-    (2.4, 2.8),
-    (3.0, 2.5),
+
+# Waypoints along the real highways, densified later by the ribbon builder.
+ROADS = {
+    "coast": _pts("airport", (33.870, 35.500), "ashrafieh", (33.905, 35.545), "dbayeh", "zouk", "jounieh", "tabarja", (34.070, 35.640), "byblos"),
+    "faraya": _pts("jounieh", (33.985, 35.660), "ajaltoun", (33.990, 35.720), "faytroun", (34.006, 35.790), "faraya", "warde"),
+    "metn": _pts("ashrafieh", (33.880, 35.580), "broummana", (33.900, 35.660), "bikfaya"),
+}
+
+# kind decides the vocabulary: city blocks small and dense, villages loose.
+TOWNS = {
+    "beirut": {"pos": frame.to_table(33.885, 35.510), "radius": 2.3, "kind": "city", "count": 120, "scale": 0.2, "label": "Beirut"},
+    "dbayeh": {"pos": frame.landmark_xy("dbayeh"), "radius": 0.95, "kind": "town", "count": 14, "scale": 0.4, "label": "Dbayeh"},
+    "zouk": {"pos": frame.landmark_xy("zouk"), "radius": 0.9, "kind": "town", "count": 12, "scale": 0.4, "label": "Zouk"},
+    "jounieh": {"pos": frame.landmark_xy("jounieh"), "radius": 1.5, "kind": "town", "count": 26, "scale": 0.42, "label": "Jounieh"},
+    "byblos": {"pos": frame.landmark_xy("byblos"), "radius": 1.15, "kind": "town", "count": 18, "scale": 0.45, "label": "Byblos"},
+    "broummana": {"pos": frame.landmark_xy("broummana"), "radius": 1.15, "kind": "village", "count": 14, "scale": 0.55, "label": "Broummana"},
+    "bikfaya": {"pos": frame.landmark_xy("bikfaya"), "radius": 1.15, "kind": "village", "count": 14, "scale": 0.55, "label": "Bikfaya"},
+    "ajaltoun": {"pos": frame.landmark_xy("ajaltoun"), "radius": 0.95, "kind": "village", "count": 10, "scale": 0.55, "label": "Ajaltoun"},
+    "faytroun": {"pos": frame.landmark_xy("faytroun"), "radius": 0.85, "kind": "village", "count": 8, "scale": 0.55, "label": "Faytroun"},
+    "faraya": {"pos": frame.landmark_xy("faraya"), "radius": 1.35, "kind": "village", "count": 22, "scale": 0.6, "label": "Faraya"},
+    "warde": {"pos": frame.landmark_xy("warde"), "radius": 1.1, "kind": "resort", "count": 6, "scale": 0.6, "label": "Warde"},
+}
+
+TOWERS = [
+    {**dict(zip(("x", "y"), frame.landmark_xy("ashrafieh"))), "w": 0.22, "d": 0.22, "h": 1.35, "label": "Ashrafieh Tower"},
+    {**dict(zip(("x", "y"), frame.to_table(33.896, 35.500))), "w": 0.2, "d": 0.2, "h": 0.95, "label": "downtown"},
+    {**dict(zip(("x", "y"), frame.to_table(33.892, 35.488))), "w": 0.18, "d": 0.18, "h": 0.85, "label": "Raouche"},
+    {**dict(zip(("x", "y"), frame.to_table(33.900, 35.520))), "w": 0.2, "d": 0.2, "h": 1.05, "label": "Mar Mikhael"},
 ]
 
+SQUARE = {"pos": frame.landmark_xy("faraya"), "radius": 0.55}
+
+SKI = {
+    "base": frame.landmark_xy("warde"),
+    "top": frame.to_table(33.998, 35.882),
+    "pistes": [
+        _pts("warde", (34.003, 35.872), (34.000, 35.885)),
+        _pts("warde", (34.008, 35.874), (34.006, 35.888)),
+        _pts("warde", (33.999, 35.870), (33.995, 35.882)),
+    ],
+}
+
 PLACES = {
-    "shore": {"label": "By the sea", "pos": (-5.0, hm.coastline(-5.0) + 0.55)},
-    "hill": {"label": "On the hill", "pos": hm.VILLAGE},
-    "garden": {"label": "In the garden", "pos": (-5.5, 1.6)},
-    "post": {"label": "The post house", "pos": (0.4, 0.2)},
-    "hotel": {"label": "Where to stay", "pos": (6.5, 0.6)},
-    "harbour": {"label": "Getting there", "pos": (5.5, hm.coastline(5.5) - 0.9)},
-    "cedars": {"label": "Things to do", "pos": (-6.0, 6.4)},
-    "steps": {"label": "Registry", "pos": (3.6, 2.9)},
-    "square": {"label": "Questions", "pos": (2.6, 2.1)},
+    "shore": {"label": "By the sea", "pos": frame.to_table(33.978, 35.626), "note": "Jounieh bay corniche, placeholder"},
+    "hill": {"label": "On the hill", "pos": frame.landmark_xy("warde"), "note": "Foot of the Warde slopes, named by Lucien"},
+    "garden": {"label": "In the garden", "pos": frame.to_table(33.918, 35.690), "note": "Above Bikfaya, placeholder"},
+    "post": {"label": "The post house", "pos": frame.to_table(34.013, 35.826), "note": "Faraya village"},
+    "hotel": {"label": "Where to stay", "pos": frame.to_table(33.976, 35.640), "note": "Jounieh hillside below Harissa"},
+    "harbour": {"label": "Getting there", "pos": frame.to_table(34.121, 35.640), "note": "Byblos harbour"},
+    "cedars": {"label": "Things to do", "pos": frame.to_table(34.018, 35.850), "note": "High slopes above Faraya"},
+    "steps": {"label": "Registry", "pos": frame.landmark_xy("harissa"), "note": "Harissa, the statue and its steps"},
+    "square": {"label": "Questions", "pos": frame.landmark_xy("faraya"), "note": "Faraya square"},
 }
 
-PLACE_RADIUS = {
-    "shore": 1.4,
-    "hill": 1.3,
-    "garden": 2.3,
-    "post": 1.6,
-    "hotel": 1.7,
-    "harbour": 1.2,
-    "cedars": 0.6,
-    "steps": 0.5,
-    "square": 0.6,
-}
+PLACE_RADIUS = {"shore": 1.2, "hill": 1.7, "garden": 2.3, "post": 0.9, "hotel": 1.6, "harbour": 1.0, "cedars": 0.8, "steps": 0.7, "square": 0.7}
 
 
-def _near_road(x, y, radius=0.32):
-    for ax, ay in placement.resample(COAST_ROAD, 0.2) + placement.resample(HILL_ROAD, 0.2):
-        if math.hypot(x - ax, y - ay) < radius:
-            return True
+def _near_road(x, y, radius):
+    for road in ROADS.values():
+        for ax, ay in placement.resample(road, 0.2):
+            if math.hypot(x - ax, y - ay) < radius:
+                return True
     return False
 
 
-def village_houses(seed=3):
-    """Houses ring the square and spill downhill. Deterministic for a seed."""
+def town_houses(seed=3):
+    """Every town's houses. Cities pack a jittered grid; villages ring loosely."""
     rng = random.Random(seed)
-    vx, vy = hm.VILLAGE
     houses = []
-    attempts = 0
-    while len(houses) < 34 and attempts < 4000:
-        attempts += 1
-        r = rng.uniform(SQUARE_RADIUS + 0.55, 3.6)
-        a = rng.uniform(0.0, math.tau)
-        x, y = vx + math.cos(a) * r, vy + math.sin(a) * r * 0.8
-        w, d, h = rng.uniform(0.55, 0.95), rng.uniform(0.5, 0.8), rng.uniform(0.42, 0.78)
-        if not hm.is_land(x, y) or hm.height(x, y) < 0.3:
-            continue
-        if _near_road(x, y, 0.45):
-            continue
-        if any(math.hypot(x - o["x"], y - o["y"]) <= (max(w, d) + max(o["w"], o["d"])) / 2 + 0.12 for o in houses):
-            continue
-        yaw = math.atan2(vy - y, vx - x) + rng.uniform(-0.25, 0.25)
-        houses.append({"x": x, "y": y, "w": w, "d": d, "h": h, "yaw": yaw})
+    for tid, town in sorted(TOWNS.items()):
+        cx, cy = town["pos"]
+        r, s = town["radius"], town["scale"]
+        placed = []
+        attempts = 0
+        while len(placed) < town["count"] and attempts < 9000:
+            attempts += 1
+            if town["kind"] == "city":
+                gx = cx + rng.uniform(-r, r)
+                gy = cy + rng.uniform(-r * 0.75, r * 0.75)
+                x, y = round(gx / 0.24) * 0.24 + rng.uniform(-0.02, 0.02), round(gy / 0.24) * 0.24 + rng.uniform(-0.02, 0.02)
+                w, d, h = s * rng.uniform(0.8, 1.0), s * rng.uniform(0.8, 1.0), rng.uniform(0.28, 0.55)
+            else:
+                a, rr = rng.uniform(0.0, math.tau), rng.uniform(0.15, r)
+                x, y = cx + math.cos(a) * rr, cy + math.sin(a) * rr * 0.8
+                w, d, h = s * rng.uniform(0.85, 1.15), s * rng.uniform(0.8, 1.05), s * rng.uniform(0.7, 1.1)
+            if not hm.is_land(x, y):
+                continue
+            if _near_road(x, y, 0.17):
+                continue
+            if any(math.hypot(x - o["x"], y - o["y"]) <= (max(w, d) + max(o["w"], o["d"])) / 2 + 0.06 for o in placed):
+                continue
+            yaw = 0.0 if town["kind"] == "city" else math.atan2(cy - y, cx - x) + rng.uniform(-0.3, 0.3)
+            placed.append({"x": x, "y": y, "w": w, "d": d, "h": h, "yaw": yaw, "town": tid})
+        houses += placed
     return houses
 
 
 def exclusions():
-    """Discs nothing may be scattered into: places, houses, roads, the square."""
     zones = [(p["pos"][0], p["pos"][1], PLACE_RADIUS[pid]) for pid, p in PLACES.items()]
-    zones.append((hm.VILLAGE[0], hm.VILLAGE[1], SQUARE_RADIUS + 0.2))
-    zones += [(h["x"], h["y"], max(h["w"], h["d"]) * 0.8) for h in village_houses()]
-    zones += [(x, y, 0.3) for x, y in placement.resample(COAST_ROAD, 0.3)]
-    zones += [(x, y, 0.3) for x, y in placement.resample(HILL_ROAD, 0.3)]
+    # A city fills a rectangle of half sides r by 0.75 r, so its disc must reach the corners.
+    zones += [(t["pos"][0], t["pos"][1], t["radius"] * (1.3 if t["kind"] == "city" else 1.0) + 0.2) for t in TOWNS.values()]
+    zones += [(t["x"], t["y"], 0.4) for t in TOWERS]
+    for road in ROADS.values():
+        zones += [(x, y, 0.28) for x, y in placement.resample(road, 0.3)]
+    for piste in SKI["pistes"]:
+        zones += [(x, y, 0.3) for x, y in placement.resample(piste, 0.3)]
     return zones
