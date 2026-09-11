@@ -1,31 +1,37 @@
-"""The shape of the table.
+"""The shape of the table, read from real elevation.
 
-Sea toward negative y, a wobbling coastline near SHORE_Y, terraced groves rising
-inland, a knoll for the village, and a ridge along the back. Every number that
-shapes the land is a named constant here so the look can be tuned in one place.
+data/heightmap.json holds metres on a 0.1 grid, written by fetch_terrain.py.
+This module samples it, exaggerates it so a diorama reads, drops the seabed
+away from the coast, cuts terraces into the slopes where Lebanese hillsides are
+terraced, and levels plateaus for places that need a flat floor.
 """
 
+import json
 import math
+import os
+from collections import deque
 
-from . import noise
+from . import frame
 
 TABLE_W, TABLE_D = 24.0, 16.0
 SEA_LEVEL = 0.0
-SHORE_Y = -3.0
+EXAGGERATION = 3.0
 TERRACE_STEP = 0.35
-# Horizontal width of a riser. A hard floor aliases on the mesh grid into teeth
-# wherever a contour runs diagonally; a short continuous ramp cannot.
 RISER_WIDTH = 0.16
-TERRACE_BAND = (-1.0, 4.0)
-RIDGE_Y, RIDGE_H = 6.5, 3.6
-INLAND_RISE, INLAND_REACH = 2.4, 4.5
-VILLAGE = (3.0, 2.5)
+# Metres. Terraces begin above the coastal towns and end where the slopes turn
+# to pine and rock.
+TERRACE_ELEV = (150.0, 1100.0)
+SEABED_DEPTH = 0.45
+SEABED_REACH = 1.6
 
-# Levelled ground cut into the slope for a place that needs a flat floor:
-# id -> ((x, y), half width, half depth). The level is the natural terrace
-# height at the centre, so a plateau is one wide terrace, not a mesa.
+_DATA = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "data", "heightmap.json")
+
+# Places that need a flat floor: name -> ((x, y), half width, half depth).
+# Positions come from the frame so they move with it.
 PLATEAUS = {
-    "garden": ((-5.5, 1.6), 1.75, 1.35),
+    "garden": (tuple(round(v, 3) for v in frame.to_table(33.918, 35.690)), 1.75, 1.35),
+    "hill": (tuple(round(v, 3) for v in frame.landmark_xy("warde")), 1.6, 1.3),
+    "hotel": (tuple(round(v, 3) for v in frame.to_table(33.976, 35.640)), 1.5, 0.9),
 }
 PLATEAU_APRON = 0.5
 
@@ -39,34 +45,63 @@ def smoothstep(a: float, b: float, t: float) -> float:
     return u * u * (3.0 - 2.0 * u)
 
 
-def coastline(x: float) -> float:
-    """y of the water's edge at this x. Wobbles up to 0.9 either side of SHORE_Y."""
-    return SHORE_Y + (noise.fbm(x * 0.18 + 7.3, 0.0, octaves=3, seed=11) - 0.5) * 1.8
+class _Grid:
+    def __init__(self):
+        raw = json.load(open(_DATA))
+        self.res, self.w, self.h = raw["res"], raw["w"], raw["h"]
+        self.x0, self.y0 = raw["x0"], raw["y0"]
+        self.elev = raw["elev"]
+        self.coast = self._coast_distance()
+
+    def _coast_distance(self):
+        """Cells of sea distance to the nearest land cell, by breadth-first search."""
+        dist = [[0 if self.elev[j][i] > 0 else -1 for i in range(self.w)] for j in range(self.h)]
+        queue = deque((i, j) for j in range(self.h) for i in range(self.w) if dist[j][i] == 0)
+        while queue:
+            i, j = queue.popleft()
+            for di, dj in ((1, 0), (-1, 0), (0, 1), (0, -1)):
+                ni, nj = i + di, j + dj
+                if 0 <= ni < self.w and 0 <= nj < self.h and dist[nj][ni] == -1:
+                    dist[nj][ni] = dist[j][i] + 1
+                    queue.append((ni, nj))
+        return dist
+
+    def _cell(self, x: float, y: float):
+        fx = min(max((x - self.x0) / self.res, 0.0), self.w - 1.001)
+        fy = min(max((y - self.y0) / self.res, 0.0), self.h - 1.001)
+        i, j = int(fx), int(fy)
+        return i, j, fx - i, fy - j
+
+    def sample(self, table, x: float, y: float) -> float:
+        i, j, u, v = self._cell(x, y)
+        a, b = table[j][i], table[j][i + 1]
+        c, d = table[j + 1][i], table[j + 1][i + 1]
+        return (a * (1 - u) + b * u) * (1 - v) + (c * (1 - u) + d * u) * v
+
+
+_grid = None
+
+
+def _g() -> _Grid:
+    global _grid
+    if _grid is None:
+        _grid = _Grid()
+    return _grid
+
+
+def elevation_m(x: float, y: float) -> float:
+    return _g().sample(_g().elev, x, y)
+
+
+def coast_distance(x: float, y: float) -> float:
+    return _g().sample(_g().coast, x, y) * _g().res
 
 
 def smooth_height(x: float, y: float) -> float:
-    """The land without its small-scale roughness. Terraces are cut from this so a
-    step boundary is a continuous contour, not a per-vertex coin toss."""
-    d = y - coastline(x)
-    if d <= 0:
-        return -0.6 * smoothstep(0.0, 2.5, -d)
-    # Saturating rise, so the land behind the ridge falls away instead of climbing to the edge.
-    ramp = INLAND_RISE * (1.0 - math.exp(-d / INLAND_REACH))
-    ridge = RIDGE_H * math.exp(-(((y - RIDGE_Y) / 2.2) ** 2)) * (0.75 + 0.25 * noise.fbm(x * 0.25, 3.1, seed=5))
-    vx, vy = VILLAGE
-    knoll = 1.1 * math.exp(-(((x - vx) / 2.6) ** 2 + ((y - vy) / 1.9) ** 2))
-    return ramp + ridge + knoll
-
-
-def roughness(x: float, y: float) -> float:
-    d = y - coastline(x)
-    if d <= 0:
-        return 0.0
-    return 0.35 * (noise.fbm(x * 0.6, y * 0.6, seed=2) - 0.5) * smoothstep(0.0, 1.5, d)
-
-
-def base_height(x: float, y: float) -> float:
-    return smooth_height(x, y) + roughness(x, y)
+    m = elevation_m(x, y)
+    if m <= 0.0:
+        return -SEABED_DEPTH * smoothstep(0.0, SEABED_REACH, coast_distance(x, y))
+    return frame.metres_to_units(m) * EXAGGERATION
 
 
 def gradient(x: float, y: float) -> float:
@@ -81,24 +116,21 @@ def terrace(s: float, k: float) -> float:
     each terrace. Flat tops sit 0.04 above a multiple of TERRACE_STEP."""
     n = math.floor(s / TERRACE_STEP)
     f = s / TERRACE_STEP - n
-    lift = smoothstep(1.0 - k, 1.0, f)
-    return (n + lift) * TERRACE_STEP + 0.04
+    return (n + smoothstep(1.0 - k, 1.0, f)) * TERRACE_STEP + 0.04
 
 
 def riser_fraction(x: float, y: float) -> float:
-    """The fraction of a terrace's width taken by its riser, so the riser is
-    RISER_WIDTH wide on the ground whatever the slope. Unclamped above: a value
-    past about 0.5 means the ground is too steep to hold a terrace at all."""
     return max(0.05, RISER_WIDTH * gradient(x, y) / TERRACE_STEP)
 
 
 def terrace_weight(x: float, y: float) -> float:
-    """How terraced this point is: 1 on the groves, fading to 0 toward the pines
-    and on ground too steep for a terrace to be wider than its riser."""
-    lo, hi = TERRACE_BAND
-    if not (lo <= y <= hi):
+    """1 where hillsides are terraced, fading with elevation at both ends and on
+    ground too steep for a terrace to be wider than its riser."""
+    m = elevation_m(x, y)
+    lo, hi = TERRACE_ELEV
+    band = smoothstep(lo, lo + 100.0, m) * (1.0 - smoothstep(hi - 150.0, hi, m))
+    if band <= 0.0:
         return 0.0
-    band = 1.0 - smoothstep(hi - 0.8, hi, y)
     steep = 1.0 - smoothstep(0.35, 0.6, riser_fraction(x, y))
     return band * steep
 
@@ -109,12 +141,11 @@ def _height_unlevelled(x: float, y: float) -> float:
         weight = terrace_weight(x, y)
         if weight > 0.0:
             stepped = terrace(smooth, min(0.6, riser_fraction(x, y)))
-            return base_height(x, y) * (1.0 - weight) + stepped * weight
-    return base_height(x, y)
+            return smooth * (1.0 - weight) + stepped * weight
+    return smooth
 
 
 def plateau_mask(x: float, y: float) -> float:
-    """1 inside a plateau, easing to 0 across PLATEAU_APRON outside it."""
     mask = 0.0
     for (cx, cy), hw, hd in PLATEAUS.values():
         dx, dy = max(0.0, abs(x - cx) - hw), max(0.0, abs(y - cy) - hd)
@@ -143,7 +174,6 @@ def height(x: float, y: float) -> float:
 
 
 def slope(x: float, y: float) -> float:
-    """Gradient magnitude of the final surface, for painting stone onto risers."""
     eps = 0.04
     gx = (height(x + eps, y) - height(x - eps, y)) / (2 * eps)
     gy = (height(x, y + eps) - height(x, y - eps)) / (2 * eps)
@@ -151,4 +181,4 @@ def slope(x: float, y: float) -> float:
 
 
 def is_land(x: float, y: float) -> bool:
-    return height(x, y) > SEA_LEVEL + 0.02
+    return elevation_m(x, y) > 0.0
