@@ -58,7 +58,7 @@ shot and an HTML card.
 | Place | Content | Status |
 |---|---|---|
 | Shore | Pre-wedding, Thursday 15 July | archetype now, venue name later |
-| Hill | Wedding, Saturday 17 July | archetype now, venue name later |
+| Hill | Wedding, Saturday 17 July | at Warde, the foot of the slopes; venue name later |
 | Garden | Brunch, Sunday 18 July | archetype now, venue name later |
 | Post house | RSVP form | built |
 | Hotel | Where to stay | geometry only, unmarked until content |
@@ -292,3 +292,5 @@ Each phase ends with a review on the preview URL.
 | Geography in the overview | Literal: the guest should recognise the coast |
 | Sea in the paper state | Visible: the sea reads as water even unpainted, by finish rather than colour |
 | Legend | Behind a single button, not always visible |
+| Frame | Ashrafieh in Beirut at the south-west to the foot of the Warde ski slopes above Faraya at the north-east, from real elevation |
+| Wedding venue location | Warde, the foot of the slopes. The hill place is the venue |

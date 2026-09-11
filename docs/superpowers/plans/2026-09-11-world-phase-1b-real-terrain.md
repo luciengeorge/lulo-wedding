@@ -19,7 +19,7 @@
 - Elevation source: `https://s3.amazonaws.com/elevation-tiles-prod/terrarium/{z}/{x}/{y}.png` at zoom 11, decoded as `R * 256 + G + B / 256 - 32768` metres. Raw tiles are cached under `tools/world/data/tiles/` and ignored by git; the resampled `tools/world/data/heightmap.json` is committed and is what every build reads. A build never touches the network.
 - Vertical exaggeration `EXAGGERATION = 3.0`. Metres to table units: `m / 2200 * EXAGGERATION`. Sannine at 2613 m becomes 3.56 units; Warde at 1931 m becomes 2.63.
 - Buildings keep souvenir scale (a village house about 0.6 wide). Cities use a smaller vocabulary (Beirut blocks about 0.25) so density reads without covering the headland.
-- Place positions for the venues are placeholders until `docs/awaiting.md` rows 2 to 4 are answered. The hill place sits at the foot of the Warde slopes because Lucien named it; say so in code comments.
+- The wedding venue is at Warde, the foot of the slopes (Lucien, 2026-09-11): the hill place is the venue, its name and address still open. The shore, garden and other places remain placeholders until `docs/awaiting.md` rows 3 and 4 are answered; say so in code comments.
 - No em-dashes anywhere.
 
 ---
@@ -1104,7 +1104,35 @@ def build(coll):
 - [ ] **Step 5: places re-homed, plus Harissa, Pigeon Rocks and the ski base**
 
 In `tools/world/scene/places.py`:
-- `_hill`: the campanile now stands at the plateau at Warde; replace `nx_, ny_ = x, y + layout.SQUARE_RADIUS + 0.55` with `nx_, ny_ = x, y + 0.9` and remove the two `hill-lamp`/`hill-lantern` loops' dependence on the square (keep the lanterns at `(x + px, y, z + 0.5)`).
+- `_hill`: Warde is the wedding venue (Lucien, 2026-09-11), so the campanile gives way to a mountain venue. Replace the whole function with:
+```python
+def _hill(coll):
+    """The wedding venue at the foot of the Warde slopes: a long stone hall with
+    the ink roof, a wide terrace looking down the valley, a pergola along the
+    terrace edge, lanterns, and the pistes rising behind."""
+    x, y = layout.PLACES["hill"]["pos"]
+    z = hm.height(x, y)
+    stone = _mat("stone", palette.STONE)
+    roof_ink = _mat("roof-ink", palette.ROOF_INK, 0.75)
+    wood = _mat("trunk", palette.TRUNK, 0.95)
+    # The hall sits at the back of the plateau, the terrace in front toward the valley (negative y).
+    hx, hy = x, y + 0.45
+    buildings.house("venue-hall", hx, hy, 1.7, 0.75, 0.62, 0.0, coll, roof_mat=roof_ink, windows=True)
+    common.box("venue-wing", (0.6, 0.6, 0.5 + buildings.FOOTING), (hx - 1.1, hy + 0.1, z - buildings.FOOTING), coll, stone)
+    buildings._hip_roof("venue-wing-roof", 0.6, 0.6, 0.5, coll, roof_ink).location = (hx - 1.1, hy + 0.1, z)
+    common.box("venue-terrace", (2.4, 1.1, 0.1 + buildings.FOOTING), (x, y - 0.35, z - buildings.FOOTING), coll, stone)
+    common.box("venue-parapet", (2.4, 0.06, 0.16), (x, y - 0.9, z + 0.1), coll, _mat("stone-dark", palette.STONE_DARK, 0.9))
+    for i, px in enumerate((-1.0, -0.5, 0.0, 0.5, 1.0)):
+        common.cylinder(f"venue-post{i}", 0.03, 0.55, (x + px, y - 0.75, z + 0.1 + 0.275), coll, wood, segments=6)
+    common.box("venue-beam", (2.2, 0.05, 0.05), (x, y - 0.75, z + 0.65), coll, wood)
+    for i in range(10):
+        common.box(f"venue-slat{i}", (0.04, 0.5, 0.03), (x - 1.0 + i * 0.22, y - 0.55, z + 0.69), coll, wood)
+    for i, px in enumerate((-0.9, -0.3, 0.3, 0.9)):
+        lantern(f"venue-lantern{i}", (x + px, y - 0.75, z + 0.6), coll)
+    for i in range(5):
+        common.box(f"venue-step{i}", (0.9, 0.14, 0.05 * (5 - i)), (x, y - 0.95 - 0.14 * i - 0.07, z - 0.02), coll, stone)
+```
+The `steps` place moves to Harissa (Task 4 already does this), so the venue's own steps are decorative.
 - `_garden`: unchanged; it reads `layout.PLACES["garden"]["pos"]`.
 - `_shore`: unchanged in body; it now lands on the Jounieh corniche.
 - `_harbour`: replace `shore_y = hm.coastline(x) + 0.2` with a search for the shore: 

@@ -12,7 +12,7 @@ answer so a stale placeholder is obvious.
 | # | Item | Needed by | Placeholder in use | Asked |
 |---|------|-----------|--------------------|-------|
 | 1 | **RSVP deadline** | RSVP screens, confirmation email, server-side cutoff (`RSVP_DEADLINE`) | "1 June 2027" throughout the Paper designs | 2026-09-08, "not set yet, will get back to you" |
-| 2 | **Wedding venue** name and address (17/07) | Details page, confirmation email, map link | none, section not built | 2026-09-07 |
+| 2 | **Wedding venue** name and address (17/07) | Details page, confirmation email, map link | location known: foot of the Warde slopes above Faraya (Lucien, 2026-09-11); name and address still open | 2026-09-07 |
 | 3 | **Pre-wedding venue** name and address (15/07) | Details page | none | 2026-09-07 |
 | 4 | **Brunch venue** name and address (18/07) | Details page | none | 2026-09-07 |
 | 5 | **Start times** for all three events | Details page, RSVP event list, calendar links | dates only, no times shown | 2026-09-07 |
@@ -77,3 +77,4 @@ Needs from Lucien: bot token and channel (item 16 above).
 | Diorama geography | As close to reality as possible without being exact; literal geography in the overview, from real elevation data | 2026-09-11 |
 | Diorama paper state | The sea stays visible unpainted | 2026-09-11 |
 | Diorama legend | Behind a single button | 2026-09-11 |
+| Diorama frame and venue | Ashrafieh to the foot of the Warde slopes; the wedding is at Warde, so the hill place is the venue, not a placeholder | 2026-09-11 |
