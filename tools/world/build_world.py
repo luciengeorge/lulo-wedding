@@ -32,6 +32,7 @@ def build(time_of_day="afternoon"):
     cameras.add_camera("overview", cameras.SHOTS["overview"])
     bpy.context.scene.camera = bpy.data.objects["overview"]
     lighting.setup(bpy.context.scene)
+    lighting.setup_compositor(bpy.context.scene)
     lighting.set_time(bpy.context.scene, time_of_day)
 
 

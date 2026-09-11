@@ -29,9 +29,10 @@ _DATA = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 # Places that need a flat floor: name -> ((x, y), half width, half depth).
 # Positions come from the frame so they move with it.
 PLATEAUS = {
-    "garden": (tuple(round(v, 3) for v in frame.to_table(33.918, 35.690)), 1.75, 1.35),
-    "hill": (tuple(round(v, 3) for v in frame.landmark_xy("warde")), 1.6, 1.3),
-    "hotel": (tuple(round(v, 3) for v in frame.to_table(33.976, 35.640)), 1.5, 0.9),
+    "garden": (tuple(round(v, 3) for v in frame.to_table(33.930, 35.726)), 1.75, 1.35),
+    "hill": (tuple(round(v, 3) for v in frame.landmark_xy("warde")), 1.3, 1.1),
+    # Kept small so it flattens nothing but its own footprint.
+    "hotel": (tuple(round(v, 3) for v in frame.to_table(34.003, 35.757)), 0.8, 0.5),
 }
 PLATEAU_APRON = 0.5
 

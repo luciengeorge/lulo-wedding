@@ -18,7 +18,6 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import bpy  # noqa: E402
 
 import build_world  # noqa: E402
-from lib import palette  # noqa: E402
 from scene import cameras, common, lighting  # noqa: E402
 
 STILLS = [
@@ -31,6 +30,7 @@ STILLS = [
     ("garden", "garden", "afternoon", False),
     ("post-house", "post", "afternoon", False),
     ("harbour", "harbour", "dusk", False),
+    ("beirut", "beirut", "dusk", False),
 ]
 
 FULL = {"width": 1920, "height": 1080, "samples": 384}
@@ -52,13 +52,12 @@ def render(name, shot_name, time_of_day, paper, out, quality):
     scene.render.image_settings.quality = 90
     scene.render.filepath = os.path.join(out, f"{name}.webp")
 
-    view_layer = bpy.context.view_layer
-    view_layer.material_override = common.material("paper", palette.PAPER, 0.7) if paper else None
+    common.paper_mode(paper)
 
     started = time.time()
     bpy.ops.render.render(write_still=True)
     print(f"STILL {name} {time.time() - started:.0f}s LUMINANCE {cameras.mean_luminance(scene.render.filepath):.3f}")
-    view_layer.material_override = None
+    common.paper_mode(False)
 
 
 def main():

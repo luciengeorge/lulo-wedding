@@ -1,6 +1,7 @@
 """Thin helpers over bpy so the scene modules read as geometry, not API."""
 
 import math
+import random
 
 import bpy
 from mathutils import Matrix, Vector
@@ -46,6 +47,14 @@ def material(name, color, roughness=0.85, emission=None, emission_strength=0.0, 
     nodes = mat.node_tree.nodes
     bsdf = nodes["Principled BSDF"]
     bsdf.inputs["Base Color"].default_value = palette.rgba(color)
+    if name.startswith("paper"):
+        grain = nodes.new("ShaderNodeTexNoise")
+        grain.inputs["Scale"].default_value = 180.0
+        grain.inputs["Detail"].default_value = 4.0
+        bump = nodes.new("ShaderNodeBump")
+        bump.inputs["Strength"].default_value = 0.035
+        mat.node_tree.links.new(grain.outputs["Fac"], bump.inputs["Height"])
+        mat.node_tree.links.new(bump.outputs["Normal"], bsdf.inputs["Normal"])
     bsdf.inputs["Roughness"].default_value = roughness
     bsdf.inputs["Alpha"].default_value = alpha
     if emission is not None:
@@ -157,3 +166,64 @@ def place_on_ground(x, y, lift=0.0):
 def look_at(obj, target):
     direction = Vector(target) - obj.location
     obj.rotation_euler = direction.to_track_quat("-Z", "Y").to_euler()
+
+
+def lathe(name, profile, coll, mat, segments=9, seed=0):
+    """Revolve a (radius, height) profile around z. The first and last rings are
+    capped to a point so the result is a closed, faceted solid. `seed` jitters
+    ring radii a touch so a tree is not a perfect spindle."""
+    rng = random.Random(seed)
+    verts, faces = [], []
+    rings = []
+    for r, z in profile:
+        ring = []
+        for i in range(segments):
+            a = i * math.tau / segments
+            rr = r * rng.uniform(0.9, 1.1) if r > 0.001 else 0.0
+            ring.append(len(verts))
+            verts.append((math.cos(a) * rr, math.sin(a) * rr, z))
+        rings.append(ring)
+    for lower, upper in zip(rings, rings[1:]):
+        for i in range(segments):
+            j = (i + 1) % segments
+            faces.append((lower[i], lower[j], upper[j], upper[i]))
+    top = len(verts)
+    verts.append((0.0, 0.0, profile[-1][1] + 0.02))
+    for i in range(segments):
+        faces.append((rings[-1][i], rings[-1][(i + 1) % segments], top))
+    bottom = len(verts)
+    verts.append((0.0, 0.0, profile[0][1] - 0.02))
+    for i in range(segments):
+        faces.append((rings[0][(i + 1) % segments], rings[0][i], bottom))
+    return mesh_object(name, verts, faces, coll, [mat])
+
+
+_saved_materials: dict[str, list] = {}
+
+
+def paper_mode(on: bool):
+    """The unpainted maquette. Everything becomes matte paper except water, which
+    becomes glossy paper so the sea stays visible by finish rather than colour.
+
+    Works on mesh data, not object slots: instances share a mesh, so swapping
+    through objects would save the already-swapped paper for later instances and
+    never restore them."""
+    matte = material("paper", palette.PAPER, 0.7)
+    gloss = material("paper-gloss", palette.PAPER, 0.08)
+    if on:
+        for mesh in bpy.data.meshes:
+            if not mesh.materials:
+                continue
+            saved = list(mesh.materials)
+            _saved_materials[mesh.name] = saved
+            water = mesh.name in ("sea", "garden-water") or any(m is not None and m.name.startswith("sea") for m in saved)
+            for i in range(len(mesh.materials)):
+                mesh.materials[i] = gloss if water else matte
+    else:
+        for name, mats in _saved_materials.items():
+            mesh = bpy.data.meshes.get(name)
+            if mesh is None:
+                continue
+            for i, mat in enumerate(mats):
+                mesh.materials[i] = mat
+        _saved_materials.clear()

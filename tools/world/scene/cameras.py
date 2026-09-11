@@ -10,20 +10,26 @@ from lib import layout
 from . import common
 
 # location, target, focal length mm, f-stop. Portrait shots set sensor_fit VERTICAL.
-# Place shots are anchored to the coastline where the place is, so moving the
-# shore moves the camera with it.
-_C5, _CM5 = hm.coastline(5.5), hm.coastline(-5.0)
-_GX, _GY = layout.PLACES["garden"]["pos"]
-_GZ = hm.height(_GX, _GY)
+# Place shots are anchored to the place position and its ground height, so
+# moving a place moves its camera with it. Small f-stops give the shallow depth
+# of field of a photographed miniature.
+
+
+def _place_shot(pid, dx, dy, dz, tz, focal, fstop=1.2):
+    px, py = layout.PLACES[pid]["pos"]
+    pz = hm.height(px, py)
+    return {"loc": (px + dx, py + dy, pz + dz), "target": (px, py, pz + tz), "focal": focal, "fstop": fstop}
+
 
 SHOTS = {
-    "overview": {"loc": (-17.0, -21.0, 12.5), "target": (0.5, 1.2, 0.6), "focal": 35, "fstop": 2.0},
-    "overview_portrait": {"loc": (-19.0, -23.5, 14.0), "target": (0.5, 1.4, 0.6), "focal": 35, "fstop": 2.0, "portrait": True},
-    "shore": {"loc": (-8.4, _CM5 - 4.2, 2.3), "target": (-4.6, _CM5 + 0.7, 0.5), "focal": 40, "fstop": 5.6},
-    "hill": {"loc": (4.8, -4.4, 6.4), "target": (2.4, 4.0, 1.9), "focal": 40, "fstop": 5.6},
-    "garden": {"loc": (_GX - 2.4, _GY - 3.4, _GZ + 3.0), "target": (_GX, _GY, _GZ + 0.2), "focal": 40, "fstop": 5.6},
-    "post": {"loc": (0.9, -2.2, 3.2), "target": (0.4, 0.25, 0.35), "focal": 40, "fstop": 5.6},
-    "harbour": {"loc": (8.2, _C5 - 4.2, 1.9), "target": (5.5, _C5 - 0.7, 0.25), "focal": 50, "fstop": 5.6},
+    "overview": {"loc": (-15.5, -23.0, 7.2), "target": (0.8, 1.6, 2.2), "focal": 35, "fstop": 2.0},
+    "overview_portrait": {"loc": (-17.5, -25.5, 8.5), "target": (0.8, 1.8, 2.4), "focal": 35, "fstop": 2.0, "portrait": True},
+    "shore": _place_shot("shore", -2.6, -4.0, 1.9, 0.4, 40),
+    "hill": _place_shot("hill", 1.2, -4.2, 2.3, 0.5, 40, fstop=2.8),
+    "garden": _place_shot("garden", -2.4, -3.4, 3.0, 0.2, 40),
+    "post": _place_shot("post", 0.6, -2.4, 2.6, 0.4, 40),
+    "harbour": _place_shot("harbour", 2.7, -3.5, 1.7, 0.2, 50),
+    "beirut": {"loc": (-9.5, -12.5, 3.2), "target": (-4.8, -5.8, 0.6), "focal": 45, "fstop": 1.2},
 }
 
 
@@ -55,7 +61,7 @@ def configure_render(scene, width, height, samples):
     scene.render.resolution_y = height
     scene.render.resolution_percentage = 100
     scene.view_settings.view_transform = "AgX"
-    scene.render.film_transparent = False
+    scene.render.film_transparent = True
 
 
 def mean_luminance(path):

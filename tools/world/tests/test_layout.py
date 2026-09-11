@@ -21,6 +21,10 @@ class LayoutTest(unittest.TestCase):
     def test_towns_are_where_they_are(self):
         for tid in ("beirut", "jounieh", "byblos", "broummana", "bikfaya", "faraya", "warde"):
             self.assertIn(tid, layout.TOWNS)
+        for tid in ("jounieh", "bikfaya", "faraya", "warde"):
+            self.assertGreaterEqual(sum(1 for h in layout.town_houses() if h["town"] == tid), 4, tid)
+        for tid in ():
+            self.assertIn(tid, layout.TOWNS)
         bx, by = frame.landmark_xy("ashrafieh")
         tx, ty = layout.TOWNS["beirut"]["pos"]
         self.assertLess(math.hypot(bx - tx, by - ty), 1.2)

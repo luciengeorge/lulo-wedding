@@ -44,10 +44,14 @@ def _paint(mesh, verts):
                 if z < hm.SEA_LEVEL:
                     c = palette.SAND
                 else:
+                    m = hm.elevation_m(x, y)
                     dry = noise.fbm(x * 0.9, y * 0.9, octaves=3, seed=21)
                     grass = palette.mix(palette.GRASS, palette.GRASS_DRY, dry)
+                    # Above the pine line the slopes turn to limestone scree.
+                    high = hm.smoothstep(1350.0, 1900.0, m)
+                    ground = palette.mix(grass, palette.mix(palette.ROCK, palette.SNOWFIELD, 0.45), high)
                     stone = hm.smoothstep(0.9, 1.9, hm.slope(x, y))
-                    c = palette.mix(grass, palette.STONE_DARK, stone)
+                    c = palette.mix(ground, palette.STONE_DARK, stone)
                 cache[vi] = palette.rgba(c)
             col.data[li].color = cache[vi]
 

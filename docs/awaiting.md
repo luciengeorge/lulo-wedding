@@ -27,7 +27,8 @@ answer so a stale placeholder is obvious.
 | 14 | **Registry** details | Registry section, agreed to include | none | 2026-09-07 |
 | 15 | **Six placeholder parties** in the sheet need real names | Guest list correctness | imported as-is | 2026-09-07, flagged not actioned |
 | 16 | **Slack bot token and channel** for RSVP notifications | The planned Slack notification below | not built | 2026-09-08, Lucien will supply when we build it |
-| 18 | **Diorama look approval** on the phase-one stills in `public/world/stills/` | Any web code for the immersive site | none, stills rendered | 2026-09-10 |
+| 18 | **Diorama look approval** on the stills in `public/world/stills/`, now on real terrain from Ashrafieh to Warde | Any web code for the immersive site | none, stills rendered | 2026-09-10, re-asked 2026-09-11 |
+| 19 | **Where the other places go**: pre-wedding, brunch, hotel, garden are placeholders on the map | Place positions in `tools/world/lib/layout.py` | shore at Jounieh bay, garden east of Bikfaya, hotel above Faytroun | 2026-09-11 |
 
 Item 15, the exact rows: `Lucy` and `Pascale & Biche` have blank surnames;
 `Noura & Jad` and `Celine & Jack` have `??` as the surname; `Dominique & Elias?`

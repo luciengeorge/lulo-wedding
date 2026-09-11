@@ -74,30 +74,43 @@ def ribbon(name, polyline, width, coll, mat, lift=0.025):
     return common.mesh_object(name, verts, faces, coll, [mat], smooth_deg=50)
 
 
-def _square(coll):
-    """A stone platform, not a disc: the knoll falls away on its south side, so the
-    square needs a wall down into the slope like every terrace does."""
-    vx, vy = hm.VILLAGE
-    z = hm.height(vx, vy) + 0.03
+def _platform(name, cx, cy, radius, coll, top_mat, side_mat, depth=0.9):
+    z = hm.height(cx, cy) + 0.03
     segs = 24
-    top = [(vx + math.cos(i * math.tau / segs) * layout.SQUARE_RADIUS, vy + math.sin(i * math.tau / segs) * layout.SQUARE_RADIUS, z) for i in range(segs)]
-    base = [(x, y, z - 0.9) for x, y, _ in top]
-    verts = [(vx, vy, z)] + top + base
+    top = [(cx + math.cos(i * math.tau / segs) * radius, cy + math.sin(i * math.tau / segs) * radius, z) for i in range(segs)]
+    base = [(x, y, z - depth) for x, y, _ in top]
+    verts = [(cx, cy, z)] + top + base
     faces = [(0, 1 + i, 1 + (i + 1) % segs) for i in range(segs)]
     faces += [(1 + i, 1 + segs + i, 1 + segs + (i + 1) % segs, 1 + (i + 1) % segs) for i in range(segs)]
-    road = common.material("road", palette.ROAD, 0.95)
-    stone = common.material("stone-dark", palette.STONE_DARK, 0.9)
-    obj = common.mesh_object("square", verts, faces, coll, [road, stone])
+    obj = common.mesh_object(name, verts, faces, coll, [top_mat, side_mat])
     for poly in obj.data.polygons:
         poly.material_index = 0 if poly.index < segs else 1
+    return obj
+
+
+def tower(name, x, y, w, d, h, coll):
+    """A city tower: a tall stone box with a glass band per floor."""
+    z = hm.height(x, y)
+    stone = common.material("stone", palette.STONE, 0.9)
+    glass = common.material("glass", palette.GLASS, 0.15)
+    common.box(f"{name}-core", (w, d, h + FOOTING), (x, y, z - FOOTING), coll, stone)
+    floors = max(3, int(h / 0.12))
+    for i in range(floors):
+        common.box(f"{name}-band{i}", (w + 0.012, d + 0.012, 0.045), (x, y, z + 0.05 + i * (h / floors)), coll, glass)
 
 
 def build(coll):
     road = common.material("road", palette.ROAD, 0.95)
-    ribbon("coast-road", layout.COAST_ROAD, 0.34, coll, road)
-    ribbon("hill-road", layout.HILL_ROAD, 0.28, coll, road)
-    _square(coll)
-    houses = layout.village_houses()
+    stone_dark = common.material("stone-dark", palette.STONE_DARK, 0.9)
+    for rid, poly in layout.ROADS.items():
+        ribbon(f"road-{rid}", poly, 0.3 if rid == "coast" else 0.22, coll, road)
+    _platform("square", layout.SQUARE["pos"][0], layout.SQUARE["pos"][1], layout.SQUARE["radius"], coll, road, stone_dark)
+    pale = common.material("piste", palette.SNOWFIELD, 0.95)
+    for i, piste in enumerate(layout.SKI["pistes"]):
+        ribbon(f"piste-{i}", piste, 0.26, coll, pale, lift=0.02)
+    houses = layout.town_houses()
     for i, hse in enumerate(houses):
-        house(f"house.{i:02d}", hse["x"], hse["y"], hse["w"], hse["d"], hse["h"], hse["yaw"], coll)
+        house(f"house.{i:03d}", hse["x"], hse["y"], hse["w"], hse["d"], hse["h"], hse["yaw"], coll, windows=hse["w"] > 0.35)
+    for i, t in enumerate(layout.TOWERS):
+        tower(f"tower.{i}", t["x"], t["y"], t["w"], t["d"], t["h"], coll)
     return len(houses)

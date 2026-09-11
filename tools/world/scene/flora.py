@@ -9,46 +9,20 @@ import math
 import random
 
 from lib import heightmap as hm
-from lib import layout, palette, placement
+from lib import layout, noise, palette, placement
 
 from . import common
 
 PROTOTYPES = {}
 
-
-def _lathe(name, profile, coll, mat, segments=9, seed=0):
-    """Revolve a (radius, height) profile around z. The first and last rings are
-    capped to a point so the result is a closed, faceted solid. `seed` jitters
-    ring radii a touch so a tree is not a perfect spindle."""
-    rng = random.Random(seed)
-    verts, faces = [], []
-    rings = []
-    for r, z in profile:
-        ring = []
-        for i in range(segments):
-            a = i * math.tau / segments
-            rr = r * rng.uniform(0.9, 1.1) if r > 0.001 else 0.0
-            ring.append(len(verts))
-            verts.append((math.cos(a) * rr, math.sin(a) * rr, z))
-        rings.append(ring)
-    for lower, upper in zip(rings, rings[1:]):
-        for i in range(segments):
-            j = (i + 1) % segments
-            faces.append((lower[i], lower[j], upper[j], upper[i]))
-    top = len(verts)
-    verts.append((0.0, 0.0, profile[-1][1] + 0.02))
-    for i in range(segments):
-        faces.append((rings[-1][i], rings[-1][(i + 1) % segments], top))
-    bottom = len(verts)
-    verts.append((0.0, 0.0, profile[0][1] - 0.02))
-    for i in range(segments):
-        faces.append((rings[0][(i + 1) % segments], rings[0][i], bottom))
-    return common.mesh_object(name, verts, faces, coll, [mat])
+# On real land at 2.2 km per unit a tree is texture, not a landmark. Every
+# instance is scaled by this so the relief, towns and roads carry the image.
+TREE_SCALE = 0.42
 
 
 def _trunk(name, radius, height, coll, lean=0.0, segments=7):
     trunk = common.material("trunk", palette.TRUNK, 0.95)
-    t = _lathe(name, [(radius, 0.0), (radius * 0.9, height * 0.5), (radius * 0.7, height)], coll, trunk, segments=segments)
+    t = common.lathe(name, [(radius, 0.0), (radius * 0.9, height * 0.5), (radius * 0.7, height)], coll, trunk, segments=segments)
     t.rotation_euler = (lean, 0.0, 0.0)
     return t
 
@@ -80,7 +54,7 @@ def _olive(coll):
 
 def _cypress(coll):
     mat = common.material("cypress", palette.CYPRESS, 0.9)
-    body = _lathe(
+    body = common.lathe(
         "cypress-body",
         [(0.03, 0.12), (0.11, 0.25), (0.14, 0.5), (0.13, 0.8), (0.1, 1.05), (0.06, 1.28), (0.02, 1.46)],
         coll,
@@ -98,7 +72,7 @@ def _cypress(coll):
 
 def _pine(coll):
     mat = common.material("pine", palette.PINE, 0.9)
-    crown = _lathe(
+    crown = common.lathe(
         "pine-crown",
         [(0.12, 0.78), (0.36, 0.88), (0.44, 1.0), (0.38, 1.14), (0.2, 1.26), (0.05, 1.32)],
         coll,
@@ -184,47 +158,59 @@ def _prototypes(coll):
     return PROTOTYPES
 
 
-def _terrace_density(x, y):
-    lo, hi = hm.TERRACE_BAND
-    if not hm.is_land(x, y) or not (lo <= y <= hi) or hm.height(x, y) < 0.12:
+def _olive_density(x, y):
+    """Olive groves on the lower slopes, thinning with height and kept off steep ground."""
+    m = hm.elevation_m(x, y)
+    if m <= 20.0 or hm.gradient(x, y) > 2.0:
         return 0.0
-    return 0.85
+    return 0.55 * (1.0 - hm.smoothstep(550.0, 800.0, m))
 
 
 def _pine_density(x, y):
-    return 0.5 if hm.is_land(x, y) and 3.9 <= y <= 6.2 else 0.0
+    """Stone pine on the middle slopes, in stands rather than a blanket."""
+    m = hm.elevation_m(x, y)
+    if m <= 0.0 or hm.gradient(x, y) > 2.2:
+        return 0.0
+    stands = noise.fbm(x * 0.35, y * 0.35, octaves=3, seed=44)
+    return 0.6 * hm.smoothstep(350.0, 550.0, m) * (1.0 - hm.smoothstep(1200.0, 1400.0, m)) * hm.smoothstep(0.42, 0.62, stands)
 
 
 def _cedar_density(x, y):
-    return 0.6 if hm.is_land(x, y) and 6.0 <= y <= 7.7 else 0.0
+    m = hm.elevation_m(x, y)
+    if m <= 0.0:
+        return 0.0
+    return 0.35 * hm.smoothstep(1400.0, 1600.0, m) * (1.0 - hm.smoothstep(1950.0, 2150.0, m))
 
 
 def build(coll):
     protos = _prototypes(coll)
     zones = layout.exclusions()
     counts = {}
-    hw, hd = hm.TABLE_W / 2 - 0.4, hm.TABLE_D / 2 - 0.4
+    hw, hd = hm.TABLE_W / 2 - 0.3, hm.TABLE_D / 2 - 0.3
+    bounds = (-hw, -hd, hw, hd)
 
     def put(kind, x, y, scale, yaw, lift=0.0):
         n = counts.get(kind, 0)
-        common.instance(f"{kind}.{n:03d}", protos[kind], common.place_on_ground(x, y, lift), coll, scale=scale, yaw=yaw)
+        common.instance(f"{kind}.{n:03d}", protos[kind], common.place_on_ground(x, y, lift), coll, scale=scale * TREE_SCALE, yaw=yaw)
         counts[kind] = n + 1
 
-    for x, y, s, yaw in placement.scatter((-hw, -1.0, hw, 4.0), 0.5, _terrace_density, seed=31, exclude=zones, jitter=0.3):
+    for x, y, s, yaw in placement.scatter(bounds, 0.32, _olive_density, seed=31, exclude=zones, jitter=0.3):
         put("olive", x, y, s, yaw)
-    for x, y, s, yaw in placement.scatter((-hw, 3.8, hw, 6.3), 0.75, _pine_density, seed=32, exclude=zones):
+    for x, y, s, yaw in placement.scatter(bounds, 0.36, _pine_density, seed=32, exclude=zones):
         put("pine", x, y, s, yaw)
-    for x, y, s, yaw in placement.scatter((-hw, 6.0, hw, hd), 1.3, _cedar_density, seed=33, exclude=zones):
+    for x, y, s, yaw in placement.scatter(bounds, 0.6, _cedar_density, seed=33, exclude=zones):
         put("cedar", x, y, s * 1.05, yaw)
-    # Roadside cypress keep out of the places' clearings but not off the roads
-    # themselves, so only the place discs apply here.
     place_zones = [(p["pos"][0], p["pos"][1], layout.PLACE_RADIUS[pid]) for pid, p in layout.PLACES.items()]
-    for x, y, yaw in placement.along(layout.COAST_ROAD, 0.8, 0.3, seed=34) + placement.along(layout.HILL_ROAD, 0.7, 0.28, seed=35):
-        if hm.is_land(x, y) and not any((x - zx) ** 2 + (y - zy) ** 2 < r * r for zx, zy, r in place_zones):
-            put("cypress", x, y, 1.0, yaw)
+    for rid, road in layout.ROADS.items():
+        for x, y, yaw in placement.along(road, 0.45, 0.2, seed=34 + len(rid)):
+            if hm.is_land(x, y) and not any((x - zx) ** 2 + (y - zy) ** 2 < r * r for zx, zy, r in place_zones):
+                put("cypress", x, y, 1.0, yaw)
     rng = random.Random(36)
-    for x, y in placement.resample(layout.COAST_ROAD, 1.4):
-        sy = hm.coastline(x) + 0.35
-        if rng.random() < 0.75 and hm.is_land(x, sy):
-            put("palm", x, sy, rng.uniform(0.85, 1.15), rng.uniform(0, math.tau))
+    for x, y in placement.resample(layout.ROADS["coast"], 0.7):
+        # Palms on the seaward side of the corniche: step toward the sea until the ground is low.
+        for step in (0.25, 0.45, 0.65):
+            px, py = x, y - step
+            if hm.is_land(px, py) and hm.elevation_m(px, py) < 40.0 and rng.random() < 0.7:
+                put("palm", px, py, rng.uniform(0.85, 1.15), rng.uniform(0, math.tau))
+                break
     return counts

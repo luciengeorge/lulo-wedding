@@ -44,7 +44,7 @@ TOWNS = {
     "ajaltoun": {"pos": frame.landmark_xy("ajaltoun"), "radius": 0.95, "kind": "village", "count": 10, "scale": 0.55, "label": "Ajaltoun"},
     "faytroun": {"pos": frame.landmark_xy("faytroun"), "radius": 0.85, "kind": "village", "count": 8, "scale": 0.55, "label": "Faytroun"},
     "faraya": {"pos": frame.landmark_xy("faraya"), "radius": 1.35, "kind": "village", "count": 22, "scale": 0.6, "label": "Faraya"},
-    "warde": {"pos": frame.landmark_xy("warde"), "radius": 1.1, "kind": "resort", "count": 6, "scale": 0.6, "label": "Warde"},
+    "warde": {"pos": frame.to_table(34.022, 35.885), "radius": 1.0, "kind": "resort", "count": 6, "scale": 0.6, "label": "Warde"},
 }
 
 TOWERS = [
@@ -67,18 +67,18 @@ SKI = {
 }
 
 PLACES = {
-    "shore": {"label": "By the sea", "pos": frame.to_table(33.978, 35.626), "note": "Jounieh bay corniche, placeholder"},
+    "shore": {"label": "By the sea", "pos": frame.to_table(33.986, 35.623), "note": "North end of Jounieh bay, placeholder"},
     "hill": {"label": "On the hill", "pos": frame.landmark_xy("warde"), "note": "Foot of the Warde slopes, named by Lucien"},
-    "garden": {"label": "In the garden", "pos": frame.to_table(33.918, 35.690), "note": "Above Bikfaya, placeholder"},
+    "garden": {"label": "In the garden", "pos": frame.to_table(33.930, 35.726), "note": "On the ridge east of Bikfaya, placeholder"},
     "post": {"label": "The post house", "pos": frame.to_table(34.013, 35.826), "note": "Faraya village"},
-    "hotel": {"label": "Where to stay", "pos": frame.to_table(33.976, 35.640), "note": "Jounieh hillside below Harissa"},
+    "hotel": {"label": "Where to stay", "pos": frame.to_table(34.003, 35.757), "note": "Above Faytroun on the Faraya road, where guests would stay"},
     "harbour": {"label": "Getting there", "pos": frame.to_table(34.121, 35.640), "note": "Byblos harbour"},
-    "cedars": {"label": "Things to do", "pos": frame.to_table(34.018, 35.850), "note": "High slopes above Faraya"},
+    "cedars": {"label": "Things to do", "pos": frame.to_table(34.024, 35.843), "note": "High slopes above Faraya"},
     "steps": {"label": "Registry", "pos": frame.landmark_xy("harissa"), "note": "Harissa, the statue and its steps"},
     "square": {"label": "Questions", "pos": frame.landmark_xy("faraya"), "note": "Faraya square"},
 }
 
-PLACE_RADIUS = {"shore": 1.2, "hill": 1.7, "garden": 2.3, "post": 0.9, "hotel": 1.6, "harbour": 1.0, "cedars": 0.8, "steps": 0.7, "square": 0.7}
+PLACE_RADIUS = {"shore": 0.8, "hill": 1.25, "garden": 1.9, "post": 0.9, "hotel": 0.9, "harbour": 1.0, "cedars": 0.8, "steps": 0.7, "square": 0.7}
 
 
 def _near_road(x, y, radius):
@@ -112,6 +112,8 @@ def town_houses(seed=3):
             if not hm.is_land(x, y):
                 continue
             if _near_road(x, y, 0.17):
+                continue
+            if any(math.hypot(x - p["pos"][0], y - p["pos"][1]) < PLACE_RADIUS[pid] for pid, p in PLACES.items()):
                 continue
             if any(math.hypot(x - o["x"], y - o["y"]) <= (max(w, d) + max(o["w"], o["d"])) / 2 + 0.06 for o in placed):
                 continue
