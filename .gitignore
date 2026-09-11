@@ -28,3 +28,4 @@ playwright-report
 # Blender world build outputs; regenerate with pnpm world:build
 tools/world/out/
 __pycache__/
+tools/world/data/tiles/

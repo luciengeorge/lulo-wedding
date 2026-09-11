@@ -32,6 +32,7 @@
     "world:preview": "tools/world/blender.sh -b --python tools/world/build_world.py -- --out tools/world/out --preview",
     "world:stills": "tools/world/blender.sh -b --python tools/world/stills.py -- --out public/world/stills",
     "world:stills:preview": "tools/world/blender.sh -b --python tools/world/stills.py -- --out tools/world/out/stills --preview",
+    "world:terrain": "python3 tools/world/fetch_terrain.py",
     "world:test": "python3 -m unittest discover -s tools/world/tests -t tools/world"
   },
   "dependencies": {
