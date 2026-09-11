@@ -69,6 +69,7 @@ Coordinate system: Blender, z up. The table is 24 by 16 units, x from -12 to 12 
 ### Task 1: Scaffold, palette module, test harness
 
 **Files:**
+
 - Create: `tools/world/blender.sh`
 - Create: `tools/world/lib/__init__.py`, `tools/world/scene/__init__.py`, `tools/world/tests/__init__.py`
 - Create: `tools/world/lib/palette.py`
@@ -77,11 +78,13 @@ Coordinate system: Blender, z up. The table is 24 by 16 units, x from -12 to 12 
 - Modify: `.gitignore`
 
 **Interfaces:**
+
 - Produces: `palette.hex_to_linear(h: str) -> tuple[float, float, float]`, `palette.mix(a, b, t)`, `palette.shade(c, k)`, `palette.rgba(c, alpha=1.0) -> tuple[4 floats]`, and the constants `PAPER, INK, BARK, AMBER, FOLIAGE, SEA, FIELD, FADED, STONE, STONE_DARK, EARTH, SAND, GRASS, GRASS_DRY, ROAD, OLIVE, CYPRESS, PINE, CEDAR, PALM, TRUNK, ROOF, ROOF_INK, SEA_SHALLOW, SEA_DEEP, WINDOW, LANTERN`.
 
 - [ ] **Step 1: Write the failing palette test**
 
 `tools/world/tests/test_palette.py`:
+
 ```python
 import unittest
 
@@ -135,11 +138,13 @@ mkdir -p tools/world/lib tools/world/scene tools/world/tests tools/world/out
 touch tools/world/lib/__init__.py tools/world/scene/__init__.py tools/world/tests/__init__.py
 python3 -m unittest discover -s tools/world/tests -t tools/world
 ```
+
 Expected: `ImportError` or `AttributeError` on `lib.palette`.
 
 - [ ] **Step 3: Write the palette module**
 
 `tools/world/lib/palette.py`:
+
 ```python
 """The card's colour tokens, as Blender wants them.
 
@@ -226,21 +231,25 @@ SEA_DEEP = shade(SEA, 0.55)
 ```bash
 python3 -m unittest discover -s tools/world/tests -t tools/world
 ```
+
 Expected: `OK` with 7 tests.
 
 - [ ] **Step 5: Add the Blender wrapper, pnpm scripts and gitignore**
 
 `tools/world/blender.sh`:
+
 ```sh
 #!/bin/sh
 # Runs Blender headless. Override the binary with BLENDER=/path/to/blender.
 exec "${BLENDER:-/Applications/Blender.app/Contents/MacOS/Blender}" "$@"
 ```
+
 ```bash
 chmod +x tools/world/blender.sh
 ```
 
 Add to `package.json` `scripts` (then run `pnpm format` so oxfmt's `sortPackageJson` settles the order):
+
 ```json
 "world:build": "tools/world/blender.sh -b --python tools/world/build_world.py -- --out tools/world/out",
 "world:preview": "tools/world/blender.sh -b --python tools/world/build_world.py -- --out tools/world/out --preview",
@@ -250,6 +259,7 @@ Add to `package.json` `scripts` (then run `pnpm format` so oxfmt's `sortPackageJ
 ```
 
 Append to `.gitignore`:
+
 ```
 # Blender world build outputs; regenerate with pnpm world:build
 tools/world/out/
@@ -265,6 +275,7 @@ git commit -m "feat(world): scaffold the Blender diorama tooling and the card pa
 Co-Authored-By: Claude Fable 5.1 <noreply@anthropic.com>
 Claude-Session: https://claude.ai/code/session_01BqTZ9aEKDsBXirEL9kgfm3"
 ```
+
 Expected: tests `OK`, `Blender 5.2.1 LTS` printed.
 
 ---
@@ -272,16 +283,19 @@ Expected: tests `OK`, `Blender 5.2.1 LTS` printed.
 ### Task 2: Noise and heightmap
 
 **Files:**
+
 - Create: `tools/world/lib/noise.py`, `tools/world/lib/heightmap.py`
 - Create: `tools/world/tests/test_noise.py`, `tools/world/tests/test_heightmap.py`
 
 **Interfaces:**
+
 - Produces: `noise.value_noise(x, y, seed=0) -> float in [0,1]`, `noise.fbm(x, y, octaves=4, lacunarity=2.0, gain=0.5, seed=0) -> float in [0,1]`.
 - Produces: `heightmap.TABLE_W = 24.0`, `TABLE_D = 16.0`, `SEA_LEVEL = 0.0`, `TERRACE_STEP = 0.35`, `TERRACE_BAND = (-1.0, 4.0)`, `VILLAGE = (3.0, 2.5)`, `heightmap.coastline(x) -> y`, `heightmap.height(x, y) -> z`, `heightmap.is_land(x, y) -> bool`, `heightmap.smoothstep(a, b, t)`.
 
 - [ ] **Step 1: Write the failing noise test**
 
 `tools/world/tests/test_noise.py`:
+
 ```python
 import unittest
 
@@ -318,6 +332,7 @@ if __name__ == "__main__":
 - [ ] **Step 2: Write the failing heightmap test**
 
 `tools/world/tests/test_heightmap.py`:
+
 ```python
 import math
 import unittest
@@ -384,11 +399,13 @@ if __name__ == "__main__":
 ```bash
 pnpm world:test
 ```
+
 Expected: import errors for `lib.noise` and `lib.heightmap`.
 
 - [ ] **Step 4: Write the noise module**
 
 `tools/world/lib/noise.py`:
+
 ```python
 """Deterministic value noise. No dependencies, so it runs identically under
 system Python and Blender's interpreter, and the same seed always gives the
@@ -434,6 +451,7 @@ def fbm(x: float, y: float, octaves: int = 4, lacunarity: float = 2.0, gain: flo
 - [ ] **Step 5: Write the heightmap module**
 
 `tools/world/lib/heightmap.py`:
+
 ```python
 """The shape of the table.
 
@@ -502,6 +520,7 @@ def is_land(x: float, y: float) -> bool:
 ```bash
 pnpm world:test
 ```
+
 Expected: `OK`, 20 tests. If `test_ridge_is_the_highest_ground` fails, raise `RIDGE_H` by 0.4; if `test_finite_everywhere` fails on the upper bound, lower `INLAND_RISE`; if `test_sea_is_below_sea_level_and_land_above` fails at `y=2.0`, lower `SHORE_Y` toward -3.5. Do not loosen the tests.
 
 - [ ] **Step 7: Commit**
@@ -519,16 +538,19 @@ Claude-Session: https://claude.ai/code/session_01BqTZ9aEKDsBXirEL9kgfm3"
 ### Task 3: Scatter and layout (pure data for flora, roads, village, places)
 
 **Files:**
+
 - Create: `tools/world/lib/placement.py`, `tools/world/lib/layout.py`
 - Create: `tools/world/tests/test_placement.py`, `tools/world/tests/test_layout.py`
 
 **Interfaces:**
+
 - Produces: `placement.scatter(bounds, spacing, density, seed, exclude=(), jitter=0.45) -> list[(x, y, scale, yaw)]`; `placement.along(polyline, step, offset, seed) -> list[(x, y, yaw)]`; `placement.resample(polyline, step) -> list[(x, y)]`.
 - Produces: `layout.COAST_ROAD`, `layout.HILL_ROAD` (lists of `(x, y)`), `layout.SQUARE_RADIUS`, `layout.village_houses(seed=3) -> list[dict(x, y, w, d, h, yaw)]`, `layout.PLACES: dict[id, dict(label, pos)]` with the nine ids `shore, hill, garden, post, hotel, harbour, cedars, steps, square`, `layout.exclusions() -> list[(x, y, radius)]`.
 
 - [ ] **Step 1: Write the failing placement test**
 
 `tools/world/tests/test_placement.py`:
+
 ```python
 import unittest
 
@@ -585,6 +607,7 @@ if __name__ == "__main__":
 - [ ] **Step 2: Write the failing layout test**
 
 `tools/world/tests/test_layout.py`:
+
 ```python
 import math
 import unittest
@@ -647,11 +670,13 @@ if __name__ == "__main__":
 ```bash
 pnpm world:test
 ```
+
 Expected: import errors for `lib.placement` and `lib.layout`.
 
 - [ ] **Step 4: Write the placement module**
 
 `tools/world/lib/placement.py`:
+
 ```python
 """Where things go. Seeded, so the groves never move between builds."""
 
@@ -718,6 +743,7 @@ def along(polyline, step, offset, seed):
 - [ ] **Step 5: Write the layout module**
 
 `tools/world/lib/layout.py`:
+
 ```python
 """Roads, the village, and the nine places from the spec.
 
@@ -816,6 +842,7 @@ def exclusions():
 ```bash
 pnpm world:test
 ```
+
 Expected: `OK`, 33 tests. If `test_places_sit_on_land_except_the_harbour` fails for `garden` or `cedars`, the terrain there is below sea level or above the table; nudge the `pos` y inland by 0.3 and rerun. If `test_village_houses_are_many_and_do_not_overlap` returns fewer than 28, raise the outer radius `3.3` to `3.6`.
 
 - [ ] **Step 7: Commit**
@@ -833,10 +860,12 @@ Claude-Session: https://claude.ai/code/session_01BqTZ9aEKDsBXirEL9kgfm3"
 ### Task 4: Blender helpers, terrain, sea, board, and the first preview render
 
 **Files:**
+
 - Create: `tools/world/scene/common.py`, `tools/world/scene/terrain.py`, `tools/world/scene/sea.py`, `tools/world/scene/cameras.py`
 - Create: `tools/world/build_world.py`
 
 **Interfaces:**
+
 - Produces (`common`): `reset_scene()`, `collection(name) -> bpy.types.Collection`, `material(name, color, roughness=0.85, emission=None, emission_strength=0.0, alpha=1.0, vertex_color=False) -> Material` (cached by name), `mesh_object(name, verts, faces, coll, materials=(), smooth_deg=None) -> Object`, `box(name, size, location, coll, mat, yaw=0.0)`, `cylinder(name, radius, depth, location, coll, mat, segments=12)`, `cone(name, radius, depth, location, coll, mat, segments=8)`, `icosphere(name, radius, location, coll, mat, subdivisions=1, scale=(1,1,1))`, `move_to(obj, coll)`, `join(objects) -> Object`, `bake_origin(obj)`, `smooth_by_angle(obj, degrees)`, `instance(name, src, location, coll, scale=1.0, yaw=0.0, scale_xyz=None) -> Object` (shared mesh data), `apply_modifiers(obj)`, `place_on_ground(x, y, lift=0.0) -> (x, y, z)`.
 - Produces (`terrain`): `build(coll)`; (`sea`): `build(coll)`; (`cameras`): `SHOTS: dict`, `add_camera(name, shot) -> Object`, `configure_render(scene, width, height, samples)`, `mean_luminance(path) -> float`.
 - Produces (`build_world`): `build(preview: bool) -> None` and CLI `--out DIR [--preview] [--time NAME]`.
@@ -844,6 +873,7 @@ Claude-Session: https://claude.ai/code/session_01BqTZ9aEKDsBXirEL9kgfm3"
 - [ ] **Step 1: Write the Blender helpers**
 
 `tools/world/scene/common.py`:
+
 ```python
 """Thin helpers over bpy so the scene modules read as geometry, not API."""
 
@@ -1009,6 +1039,7 @@ def look_at(obj, target):
 - [ ] **Step 2: Write the terrain module**
 
 `tools/world/scene/terrain.py`:
+
 ```python
 """The land: a heightmap grid with terrace risers in stone, a paper skirt down to
 the board, the board itself, and the card it all sits on."""
@@ -1108,6 +1139,7 @@ def build(coll):
 - [ ] **Step 3: Write the sea module**
 
 `tools/world/scene/sea.py`:
+
 ```python
 """A single plane at sea level. Shallow tone facing the camera, deep tone at
 grazing angles, fine ripples from a noise bump. Alpha lets the sand read
@@ -1151,6 +1183,7 @@ def build(coll):
 - [ ] **Step 4: Write the cameras module with the overview shot and the render config**
 
 `tools/world/scene/cameras.py`:
+
 ```python
 """Authored shots and render settings. Every still in the spec is a named shot
 here, so the same framing is reproducible and later reusable in the web camera."""
@@ -1218,6 +1251,7 @@ def mean_luminance(path):
 - [ ] **Step 5: Write the build entry point**
 
 `tools/world/build_world.py`:
+
 ```python
 """Build the diorama and save it. Run under Blender:
 
@@ -1297,6 +1331,7 @@ if __name__ == "__main__":
 ```bash
 pnpm world:preview 2>&1 | grep -E "^(BUILD_S|OBJECTS|SAVED|RENDER_S|LUMINANCE)|Error|Traceback"
 ```
+
 Expected: `OBJECTS 7`, `RENDER_S` under 30, `LUMINANCE` between 0.25 and 0.65, no traceback.
 
 Then Read `tools/world/out/preview.png`. Acceptance: a cream slab seen from the south-west with a landmass rising toward the back, a flat pale-teal sea across the front, visible stair-steps in the middle band (the terraces), a darker knoll to the right of centre, and a ridge along the back. No black faces, no holes, the skirt joins the land without a gap. If the terraces are invisible, the sun is too high; set `sun.rotation_euler = (1.1, 0.0, 0.6)` and re-run. If the sea is opaque white, the sea `alpha` is being ignored: confirm the material is on the sea object and re-run.
@@ -1316,16 +1351,19 @@ Claude-Session: https://claude.ai/code/session_01BqTZ9aEKDsBXirEL9kgfm3"
 ### Task 5: Flora archetypes and the scatter pass
 
 **Files:**
+
 - Create: `tools/world/scene/flora.py`
 - Modify: `tools/world/build_world.py` (call `flora.build`)
 
 **Interfaces:**
+
 - Consumes: `common.*`, `placement.scatter`, `placement.along`, `layout.exclusions`, `layout.COAST_ROAD`, `layout.HILL_ROAD`, `heightmap.*`.
 - Produces: `flora.build(coll) -> dict[str, int]` returning instance counts per archetype; archetype prototypes `flora.PROTOTYPES: dict[str, Object]` for `olive, cypress, pine, cedar, palm`.
 
 - [ ] **Step 1: Write the flora module**
 
 `tools/world/scene/flora.py`:
+
 ```python
 """Five trees, built once each, instanced hundreds of times with shared mesh
 data. Olives on the terraces, cypress along the roads, pines on the upper
@@ -1477,6 +1515,7 @@ def build(coll):
 - [ ] **Step 2: Wire it into the build**
 
 In `tools/world/build_world.py`, import `flora` alongside the other scene modules and, after `sea.build(...)`, add:
+
 ```python
     counts = flora.build(common.collection("Flora"))
     for kind, n in sorted(counts.items()):
@@ -1488,6 +1527,7 @@ In `tools/world/build_world.py`, import `flora` alongside the other scene module
 ```bash
 pnpm world:preview 2>&1 | grep -E "^(FLORA|BUILD_S|RENDER_S|LUMINANCE)|Error|Traceback"
 ```
+
 Expected: `FLORA olive` between 220 and 340, `cypress` between 45 and 80, `pine` between 25 and 60, `cedar` between 8 and 20, `palm` between 8 and 16. `BUILD_S` under 60.
 
 Read `tools/world/out/preview.png`. Acceptance: the terrace band reads as groves of small round silver-green trees in loose rows, a line of dark spindles follows the coast road and climbs toward the knoll, a few flat-tiered dark trees stand along the ridge, and palms lean along the shore. Trees stand on the ground, not floating or buried. If a whole species is buried or floating by a constant amount, `bake_origin` was not called after its `join`.
@@ -1507,16 +1547,19 @@ Claude-Session: https://claude.ai/code/session_01BqTZ9aEKDsBXirEL9kgfm3"
 ### Task 6: Houses, the village, the square and the roads
 
 **Files:**
+
 - Create: `tools/world/scene/buildings.py`
 - Modify: `tools/world/build_world.py`
 
 **Interfaces:**
+
 - Consumes: `layout.village_houses`, `layout.COAST_ROAD`, `layout.HILL_ROAD`, `layout.SQUARE_RADIUS`, `heightmap.VILLAGE`, `common.*`.
 - Produces: `buildings.house(name, x, y, w, d, h, yaw, coll, roof_mat=None, door_mat=None) -> list[Object]`, `buildings.ribbon(name, polyline, width, coll, mat, lift=0.025)`, `buildings.build(coll) -> int` (house count).
 
 - [ ] **Step 1: Write the buildings module**
 
 `tools/world/scene/buildings.py`:
+
 ```python
 """A small vocabulary of stone buildings and the roads between them. Everything
 is boxes and prisms with a footing sunk into the slope, so nothing floats."""
@@ -1616,6 +1659,7 @@ def build(coll):
 - [ ] **Step 2: Wire into the build**
 
 In `build_world.py`, import `buildings` and after the flora call add:
+
 ```python
     print(f"HOUSES {buildings.build(common.collection('Built'))}")
 ```
@@ -1625,6 +1669,7 @@ In `build_world.py`, import `buildings` and after the flora call add:
 ```bash
 pnpm world:preview 2>&1 | grep -E "^(HOUSES|FLORA|RENDER_S|LUMINANCE)|Error|Traceback"
 ```
+
 Expected: `HOUSES` 28 or more, no traceback.
 
 Read `tools/world/out/preview.png`. Acceptance: a pale road hugs the coast and a second one switchbacks up to a cluster of cream stone houses with muted terracotta roofs around a flat square on the knoll. Houses sit into the slope (footings hidden, no gap under the downhill wall). Doors face roughly toward the square. Roofs overhang the walls slightly. If a roof is inside out (dark), the face winding in `_hip_roof` is reversed for that orientation; flip the tuple order of the offending face.
@@ -1644,16 +1689,19 @@ Claude-Session: https://claude.ai/code/session_01BqTZ9aEKDsBXirEL9kgfm3"
 ### Task 7: The nine places
 
 **Files:**
+
 - Create: `tools/world/scene/places.py`
 - Modify: `tools/world/build_world.py`
 
 **Interfaces:**
+
 - Consumes: `layout.PLACES`, `buildings.house`, `common.*`, `flora.PROTOTYPES` (for the garden's olive rows), `palette.*`.
 - Produces: `places.build(coll)` and the lantern material named `"lantern"` (emission `LANTERN`, strength set by `lighting` in Task 8).
 
 - [ ] **Step 1: Write the places module**
 
 `tools/world/scene/places.py`:
+
 ```python
 """The nine places from the spec, as archetypes. Venues are unknown, so the hill
 venue is a campanile with no cross, the shore venue is a pergola, the garden a
@@ -1821,6 +1869,7 @@ The `steps` and `square` places are the campanile's steps and the village square
 - [ ] **Step 2: Wire into the build**
 
 In `build_world.py`, import `places` and after the buildings call add:
+
 ```python
     places.build(common.collection("Places"))
 ```
@@ -1830,9 +1879,11 @@ In `build_world.py`, import `places` and after the buildings call add:
 ```bash
 pnpm world:preview 2>&1 | grep -E "^(HOUSES|RENDER_S|LUMINANCE)|Error|Traceback"
 ```
+
 Expected: no traceback.
 
 Read `tools/world/out/preview.png`. Acceptance: a pergola on a stone deck at the shore left of centre; the campanile with its red roofs on the north side of the square; a walled grove with a basin left of the village; a small red-roofed house with a red flag near the road junction; a long stone hotel with an arcade to the east; a mole with a small lighthouse and three boats in the sea to the east, one hull red. Nothing floats, nothing is buried past its footing. Then also render the `hill` and `post` shots quickly by temporarily setting `scene.camera` in a Blender expression:
+
 ```bash
 tools/world/blender.sh -b tools/world/out/world.blend --python-expr "
 import bpy,sys; sys.path.insert(0,'tools/world')
@@ -1843,6 +1894,7 @@ for name in ('hill','post','shore','garden','harbour'):
     cameras.configure_render(sc, 640, 360, 32); sc.render.filepath=f'tools/world/out/shot-{name}.png'; bpy.ops.render.render(write_still=True)
 " 2>&1 | grep -E "Error|Traceback"
 ```
+
 Read each `tools/world/out/shot-*.png`. Each place should fill the frame with its subject and nothing should intersect wrongly. Adjust positions in `layout.PLACES` or `cameras.SHOTS`, never both at once, and re-run.
 
 - [ ] **Step 4: Commit**
@@ -1860,16 +1912,19 @@ Claude-Session: https://claude.ai/code/session_01BqTZ9aEKDsBXirEL9kgfm3"
 ### Task 8: Sun, sky and dusk
 
 **Files:**
+
 - Create: `tools/world/scene/lighting.py`
 - Modify: `tools/world/build_world.py` (replace the provisional light and world; accept `--time`)
 
 **Interfaces:**
+
 - Consumes: materials named `"window"` and `"lantern"` from Tasks 6 and 7.
 - Produces: `lighting.TIMES: dict[str, dict]` with keys `afternoon` and `dusk`; `lighting.setup(scene) -> None` (creates sun and sky once); `lighting.set_time(scene, name) -> None`.
 
 - [ ] **Step 1: Write the lighting module**
 
 `tools/world/scene/lighting.py`:
+
 ```python
 """One sun and a physical sky, driven by a named time of day. Dusk is the
 spec's hero light: low amber sun, windows and lanterns coming on."""
@@ -1955,9 +2010,11 @@ def set_time(scene, name):
 - [ ] **Step 2: Replace the provisional light in the build and accept `--time`**
 
 In `build_world.py`: delete the provisional `light_data`/`sun`/`world` block, import `lighting`, and in `build()` after the places call add:
+
 ```python
     lighting.setup(bpy.context.scene)
 ```
+
 Change `build()` to `build(time_of_day="afternoon")` and end it with `lighting.set_time(bpy.context.scene, time_of_day)`. Add `parser.add_argument("--time", default="afternoon", choices=sorted(lighting.TIMES))` and call `build(args.time)`.
 
 - [ ] **Step 3: Render both times and check exposure**
@@ -1966,6 +2023,7 @@ Change `build()` to `build(time_of_day="afternoon")` and end it with `lighting.s
 pnpm world:preview 2>&1 | grep -E "^(RENDER_S|LUMINANCE)|Error|Traceback"
 tools/world/blender.sh -b --python tools/world/build_world.py -- --out tools/world/out --preview --time dusk 2>&1 | grep -E "^(LUMINANCE)|Error|Traceback"
 ```
+
 Expected: afternoon `LUMINANCE` between 0.32 and 0.55, dusk between 0.18 and 0.38. Adjust `sky_strength` and `exposure` in `TIMES` until both land in range. Change one value at a time and note what you changed in the commit body.
 
 Read the afternoon `preview.png`. Acceptance: warm directional light from the south-west, terrace risers throw readable shadows, the sky is pale blue-white at the horizon, the sea has a soft highlight. The bright side of the sky and the direction the shadows point away from must agree; if the sky glows on the shadowed side, the sun lamp and the sky node disagree about azimuth. Add `math.pi / 2` to the sun's Z rotation in `set_time`, re-render, and repeat once more if needed, until they agree. Read the dusk render (rename the preview between runs, or the second run overwrites it). Acceptance: the sun is low from the west, long shadows across the groves, the sky graded from amber to blue, and every window and lantern glows amber. If windows do not glow, the `"window"` material name differs from the one created in Task 6; align the names.
@@ -1985,16 +2043,19 @@ Claude-Session: https://claude.ai/code/session_01BqTZ9aEKDsBXirEL9kgfm3"
 ### Task 9: The stills entry point and the approval renders
 
 **Files:**
+
 - Create: `tools/world/stills.py`
 - Create: `public/world/stills/*.webp` (generated)
 
 **Interfaces:**
+
 - Consumes: `build_world.build(time)`, `cameras.SHOTS`, `cameras.add_camera`, `cameras.configure_render`, `cameras.mean_luminance`, `lighting.set_time`, `common.material("paper", ...)`.
 - Produces: the still list `stills.STILLS` and files named `<name>.webp`.
 
 - [ ] **Step 1: Write the stills script**
 
 `tools/world/stills.py`:
+
 ```python
 """Render the approval stills from the spec.
 
@@ -2085,9 +2146,11 @@ if __name__ == "__main__":
 ```bash
 pnpm world:stills:preview 2>&1 | grep -E "^STILL|Error|Traceback"
 ```
+
 Expected: nine `STILL` lines, none erroring, each under 30 s.
 
 Read all nine files in `tools/world/out/stills/`. Acceptance per frame:
+
 - `overview-afternoon`: the whole table in frame with a little card visible around it, shallow depth of field softening the far ridge and the near sea so it reads as a miniature.
 - `overview-dusk`: same framing, amber light, lanterns and windows lit.
 - `overview-paper`: the same world entirely in cream with only shading; reads as a folded paper model. The sea is a flat cream sheet.
@@ -2105,6 +2168,7 @@ Fix framing in `cameras.SHOTS` only. Re-render a single frame with `--only <name
 ```bash
 pnpm world:stills 2>&1 | grep -E "^STILL|Error|Traceback"
 ```
+
 Expected: nine stills in `public/world/stills/`, each between 2 and 6 minutes, files each under 600 KB. If any exceeds 600 KB, lower `quality` to 85 and re-render that one with `--only`.
 
 Read every full still once more; denoised full renders can reveal seams the previews hid (a gap between skirt and land, a roof face inside out). Fix at the source and re-render the affected frame.
@@ -2124,12 +2188,14 @@ Claude-Session: https://claude.ai/code/session_01BqTZ9aEKDsBXirEL9kgfm3"
 ### Task 10: README, gates, and the review handoff
 
 **Files:**
+
 - Create: `tools/world/README.md`
 - Modify: `docs/awaiting.md` (add the two look questions the stills settle)
 
 - [ ] **Step 1: Write the README**
 
 `tools/world/README.md`:
+
 ```markdown
 # The world
 
@@ -2145,13 +2211,13 @@ The diorama the guest site is built around, authored as Blender scripts.
 
 ## Commands
 
-| Command | What it does |
-|---|---|
-| `pnpm world:test` | Unit tests for the pure geometry modules |
-| `pnpm world:build` | Builds `out/world.blend` |
-| `pnpm world:preview` | Builds and renders a fast overview to `out/preview.png` |
+| Command                     | What it does                                             |
+| --------------------------- | -------------------------------------------------------- |
+| `pnpm world:test`           | Unit tests for the pure geometry modules                 |
+| `pnpm world:build`          | Builds `out/world.blend`                                 |
+| `pnpm world:preview`        | Builds and renders a fast overview to `out/preview.png`  |
 | `pnpm world:stills:preview` | Fast versions of every approval still into `out/stills/` |
-| `pnpm world:stills` | Full-quality stills into `public/world/stills/` |
+| `pnpm world:stills`         | Full-quality stills into `public/world/stills/`          |
 
 `BLENDER=/path/to/blender` overrides the binary. Verified on Blender 5.2.1 LTS with Cycles on Apple Metal.
 
@@ -2173,6 +2239,7 @@ also at phone size.
 - [ ] **Step 2: Record the open look questions in the awaiting register**
 
 Append two rows to the **Open** table in `docs/awaiting.md`, numbered after the last existing row, with today's date in the Asked column:
+
 ```markdown
 | 17 | **Diorama geography**: a real Lebanese ridge and coast, or invented? | The world's terrain and the overview still | invented ridge, archetypal coast | 2026-09-10 |
 | 18 | **Diorama look approval** on the phase-one stills in `public/world/stills/` | Any web code for the immersive site | none, stills rendered | 2026-09-10 |
@@ -2188,6 +2255,7 @@ git commit -m "docs(world): how the diorama is built, and the look questions it 
 Co-Authored-By: Claude Fable 5.1 <noreply@anthropic.com>
 Claude-Session: https://claude.ai/code/session_01BqTZ9aEKDsBXirEL9kgfm3"
 ```
+
 Expected: every command exits 0. `pnpm lint:check` and `pnpm typecheck` do not touch `tools/world` and must stay green because nothing under `src/` changed.
 
 - [ ] **Step 4: Hand the stills to Lucien**

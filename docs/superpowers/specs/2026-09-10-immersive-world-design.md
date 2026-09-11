@@ -6,16 +6,16 @@ backend are untouched.
 
 ## Decisions already taken
 
-| Decision | Answer | Source |
-|---|---|---|
-| World model | Living diorama: a stylised miniature of the Lebanese coast and mountain, free orbit/pan/zoom | Lucien, 2026-09-10 |
-| Camera | Free exploration, plus tap-to-fly and a plain-HTML legend so nobody has to hunt | Lucien, 2026-09-10 |
-| Audio | None for now. Leave a seam, build nothing | Lucien, 2026-09-10 |
-| Palette | Same tonal family as the card (`src/styles.css` `@theme` tokens) | Lucien, 2026-09-10 |
-| Assets | Authored by Blender scripts in the repo. Blender 5.2.1 LTS is installed and runs headless with glTF export | verified 2026-09-10 |
-| Delivery | New branch `immersive-world`. The world replaces the current pages outright. Reviewed on the Vercel preview URL on a phone before merge | Lucien, 2026-09-10 |
-| Time | Not a constraint. The bar is "looks incredible" | Lucien, 2026-09-10 |
-| Art direction gate | Cycles stills of the world are approved before any web code is written | this spec |
+| Decision           | Answer                                                                                                                                  | Source              |
+| ------------------ | --------------------------------------------------------------------------------------------------------------------------------------- | ------------------- |
+| World model        | Living diorama: a stylised miniature of the Lebanese coast and mountain, free orbit/pan/zoom                                            | Lucien, 2026-09-10  |
+| Camera             | Free exploration, plus tap-to-fly and a plain-HTML legend so nobody has to hunt                                                         | Lucien, 2026-09-10  |
+| Audio              | None for now. Leave a seam, build nothing                                                                                               | Lucien, 2026-09-10  |
+| Palette            | Same tonal family as the card (`src/styles.css` `@theme` tokens)                                                                        | Lucien, 2026-09-10  |
+| Assets             | Authored by Blender scripts in the repo. Blender 5.2.1 LTS is installed and runs headless with glTF export                              | verified 2026-09-10 |
+| Delivery           | New branch `immersive-world`. The world replaces the current pages outright. Reviewed on the Vercel preview URL on a phone before merge | Lucien, 2026-09-10  |
+| Time               | Not a constraint. The bar is "looks incredible"                                                                                         | Lucien, 2026-09-10  |
+| Art direction gate | Cycles stills of the world are approved before any web code is written                                                                  | this spec           |
 
 ## Non-goals
 
@@ -55,17 +55,17 @@ save-the-date.
 Content lives at places. A place is a named point in the world with a framed camera
 shot and an HTML card.
 
-| Place | Content | Status |
-|---|---|---|
-| Shore | Pre-wedding, Thursday 15 July | archetype now, venue name later |
-| Hill | Wedding, Saturday 17 July | at Warde, the foot of the slopes; venue name later |
-| Garden | Brunch, Sunday 18 July | archetype now, venue name later |
-| Post house | RSVP form | built |
-| Hotel | Where to stay | geometry only, unmarked until content |
-| Harbour and road | Getting there, visas | geometry only, unmarked |
-| Landmarks | Things to do | geometry only, unmarked |
-| Chapel steps | Registry | geometry only, unmarked |
-| Village square | Questions | geometry only, unmarked |
+| Place            | Content                       | Status                                             |
+| ---------------- | ----------------------------- | -------------------------------------------------- |
+| Shore            | Pre-wedding, Thursday 15 July | archetype now, venue name later                    |
+| Hill             | Wedding, Saturday 17 July     | at Warde, the foot of the slopes; venue name later |
+| Garden           | Brunch, Sunday 18 July        | archetype now, venue name later                    |
+| Post house       | RSVP form                     | built                                              |
+| Hotel            | Where to stay                 | geometry only, unmarked until content              |
+| Harbour and road | Getting there, visas          | geometry only, unmarked                            |
+| Landmarks        | Things to do                  | geometry only, unmarked                            |
+| Chapel steps     | Registry                      | geometry only, unmarked                            |
+| Village square   | Questions                     | geometry only, unmarked                            |
 
 Tapping a place tweens the camera to its framed shot and slides its card in. A
 legend in the corner lists every marked place as plain links. The legend is the
@@ -76,13 +76,13 @@ cards.
 
 A new pathless layout owns the canvas so navigation never remounts the world.
 
-| Route | World state | Overlay |
-|---|---|---|
-| `/enter` | `paper` | gate form (existing `enterGate` server fn) |
-| `/` | `overview` after paint | monogram, date, legend |
-| `/rsvp/$token` | `focused: post-house` | RSVP form (existing components and server fns) |
-| `/rsvp` | `overview` | lost-link message (existing) |
-| `/enter?redirect=…` | `paper` | gate, then camera flies to the target place |
+| Route               | World state            | Overlay                                        |
+| ------------------- | ---------------------- | ---------------------------------------------- |
+| `/enter`            | `paper`                | gate form (existing `enterGate` server fn)     |
+| `/`                 | `overview` after paint | monogram, date, legend                         |
+| `/rsvp/$token`      | `focused: post-house`  | RSVP form (existing components and server fns) |
+| `/rsvp`             | `overview`             | lost-link message (existing)                   |
+| `/enter?redirect=…` | `paper`                | gate, then camera flies to the target place    |
 
 Guards are unchanged: `requireGuestUnlocked`, `getAdminSession`, `FEATURES.rsvp`, the
 `safeRedirect` handling, the remembered token. Only the presentation layer moves.
@@ -203,14 +203,14 @@ the same rule as `tools/monogram/`.
 
 ## Performance
 
-| Budget | Target |
-|---|---|
-| Initial download before the paper world appears | under 3 MB |
-| Painted world after password on 4G | under 2 s |
-| Steady frame rate, mid-range Android, high tier | 60 |
-| Steady frame rate, low tier | 30 or better |
-| Draw calls, overview | under 150 |
-| Device pixel ratio | clamped to 1.5 high, 1 low |
+| Budget                                          | Target                     |
+| ----------------------------------------------- | -------------------------- |
+| Initial download before the paper world appears | under 3 MB                 |
+| Painted world after password on 4G              | under 2 s                  |
+| Steady frame rate, mid-range Android, high tier | 60                         |
+| Steady frame rate, low tier                     | 30 or better               |
+| Draw calls, overview                            | under 150                  |
+| Device pixel ratio                              | clamped to 1.5 high, 1 low |
 
 Tiering uses `detect-gpu` plus a WebGL2 and memory check. Low tier: no
 postprocessing, half instance density, no real-time shadows, smaller KTX2 mips. The
@@ -286,11 +286,11 @@ Each phase ends with a review on the preview URL.
 
 ## Resolved on 2026-09-11
 
-| Question | Answer |
-|---|---|
+| Question                      | Answer                                                                                                                                                                                       |
+| ----------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | Mountain silhouette and coast | Not required to be exact, but as close to reality as possible: terrain from real elevation data, real coastline, real town positions, at a souvenir-model scale where buildings stay legible |
-| Geography in the overview | Literal: the guest should recognise the coast |
-| Sea in the paper state | Visible: the sea reads as water even unpainted, by finish rather than colour |
-| Legend | Behind a single button, not always visible |
-| Frame | Ashrafieh in Beirut at the south-west to the foot of the Warde ski slopes above Faraya at the north-east, from real elevation |
-| Wedding venue location | Warde, the foot of the slopes. The hill place is the venue |
+| Geography in the overview     | Literal: the guest should recognise the coast                                                                                                                                                |
+| Sea in the paper state        | Visible: the sea reads as water even unpainted, by finish rather than colour                                                                                                                 |
+| Legend                        | Behind a single button, not always visible                                                                                                                                                   |
+| Frame                         | Ashrafieh in Beirut at the south-west to the foot of the Warde ski slopes above Faraya at the north-east, from real elevation                                                                |
+| Wedding venue location        | Warde, the foot of the slopes. The hill place is the venue                                                                                                                                   |

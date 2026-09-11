@@ -58,15 +58,18 @@ tools/world/
 ### Task 1: The frame
 
 **Files:**
+
 - Create: `tools/world/lib/frame.py`
 - Create: `tools/world/tests/test_frame.py`
 
 **Interfaces:**
+
 - Produces: `frame.CENTRE`, `frame.BEARING`, `frame.KM_PER_UNIT`, `frame.to_table(lat, lon) -> (x, y)`, `frame.to_latlon(x, y) -> (lat, lon)`, `frame.metres_to_units(m) -> float` (no exaggeration; heightmap applies that), `frame.LANDMARKS: dict[id, (lat, lon, label)]`, `frame.landmark_xy(id) -> (x, y)`.
 
 - [ ] **Step 1: Write the failing test**
 
 `tools/world/tests/test_frame.py`:
+
 ```python
 import unittest
 
@@ -122,11 +125,13 @@ if __name__ == "__main__":
 ```bash
 pnpm world:test
 ```
+
 Expected: `ModuleNotFoundError: lib.frame`.
 
 - [ ] **Step 3: Write the frame module**
 
 `tools/world/lib/frame.py`:
+
 ```python
 """Where the table is on the Earth.
 
@@ -208,6 +213,7 @@ Co-Authored-By: Claude Fable 5.1 <noreply@anthropic.com>
 Claude-Session: https://claude.ai/code/session_01BqTZ9aEKDsBXirEL9kgfm3
 EOF
 ```
+
 Expected: `OK`, 7 new tests (some phase-one heightmap and layout tests will start failing in Task 3 and are rewritten there; they must still pass here).
 
 ---
@@ -215,17 +221,20 @@ Expected: `OK`, 7 new tests (some phase-one heightmap and layout tests will star
 ### Task 2: Fetch the real elevation
 
 **Files:**
+
 - Create: `tools/world/fetch_terrain.py`
 - Create: `tools/world/data/heightmap.json` (generated)
 - Modify: `.gitignore` (add `tools/world/data/tiles/`)
 - Modify: `package.json` (add `"world:terrain": "python3 tools/world/fetch_terrain.py"`)
 
 **Interfaces:**
+
 - Produces: `data/heightmap.json` with keys `frame` (centre, bearing, km_per_unit), `res` (0.1), `w` (241), `h` (161), `x0` (-12.0), `y0` (-8.0), `elev` (list of `h` rows of `w` integers, metres, row 0 at `y0`). Cell `(i, j)` is at `x = x0 + i * res`, `y = y0 + j * res`.
 
 - [ ] **Step 1: Write the fetch script**
 
 `tools/world/fetch_terrain.py`:
+
 ```python
 """Fetch real elevation for the table frame and resample it onto the grid the
 world is built from.
@@ -358,10 +367,13 @@ if __name__ == "__main__":
 - [ ] **Step 2: Wire the script and ignore the tiles**
 
 Append to `.gitignore`:
+
 ```
 tools/world/data/tiles/
 ```
+
 Add to `package.json` scripts, then `pnpm format`:
+
 ```json
 "world:terrain": "python3 tools/world/fetch_terrain.py",
 ```
@@ -371,6 +383,7 @@ Add to `package.json` scripts, then `pnpm format`:
 ```bash
 pnpm world:terrain 2>&1 | grep -E "^(GRID|WROTE)|Traceback"
 ```
+
 Expected: `GRID 241x161 min` between -30 and 0, `max` between 2550 and 2650, `sea_cells` between 9000 and 14000, `tiles 14`; `WROTE` under 300000 bytes.
 
 - [ ] **Step 4: Commit**
@@ -391,11 +404,13 @@ EOF
 ### Task 3: The heightmap reads the Earth
 
 **Files:**
+
 - Rewrite: `tools/world/lib/heightmap.py`
 - Rewrite: `tools/world/tests/test_heightmap.py`
 - Modify: `tools/world/lib/palette.py` (three shades)
 
 **Interfaces:**
+
 - Produces (`heightmap`): `TABLE_W, TABLE_D, SEA_LEVEL, EXAGGERATION, TERRACE_STEP, RISER_WIDTH, TERRACE_ELEV = (150.0, 1100.0)`, `PLATEAUS: dict[str, ((x, y), hw, hd)]`, `PLATEAU_APRON`, `elevation_m(x, y) -> float` (real metres, bilinear), `coast_distance(x, y) -> float` (units, 0 on land), `smooth_height(x, y)`, `gradient(x, y)`, `terrace(s, k)`, `riser_fraction(x, y)`, `terrace_weight(x, y)`, `plateau_mask(x, y)`, `plateau_level(name)`, `height(x, y)`, `slope(x, y)`, `is_land(x, y)`, `smoothstep(a, b, t)`.
 - Removed: `coastline`, `VILLAGE`, `RIDGE_*`, `INLAND_*`, `base_height`, `roughness`, `TERRACE_BAND`. Anything importing them is rewritten in Tasks 4 to 6.
 - Produces (`palette`): `ROCK = mix(STONE_DARK, FADED, 0.35)`, `SNOWFIELD = mix(PAPER, SEA, 0.25)` (the pale summer scree of the high slopes, not snow), `GLASS = shade(SEA, 0.8)`.
@@ -403,6 +418,7 @@ EOF
 - [ ] **Step 1: Write the failing tests**
 
 `tools/world/tests/test_heightmap.py`:
+
 ```python
 import math
 import unittest
@@ -478,11 +494,14 @@ if __name__ == "__main__":
 - [ ] **Step 2: Add the palette shades**
 
 Append to `tools/world/lib/palette.py` under `# Ground and stone`:
+
 ```python
 ROCK = mix(STONE_DARK, FADED, 0.35)
 SNOWFIELD = mix(PAPER, SEA, 0.25)
 ```
+
 and under `# Water`:
+
 ```python
 GLASS = shade(SEA, 0.8)
 ```
@@ -490,6 +509,7 @@ GLASS = shade(SEA, 0.8)
 - [ ] **Step 3: Rewrite the heightmap**
 
 `tools/world/lib/heightmap.py`:
+
 ```python
 """The shape of the table, read from real elevation.
 
@@ -682,6 +702,7 @@ def is_land(x: float, y: float) -> bool:
 ```bash
 python3 -m unittest tests.test_heightmap -v 2>&1 | tail -15
 ```
+
 (run from `tools/world`, or `cd tools/world && python3 -m unittest tests.test_heightmap`). Expected: all pass. `test_layout` and `test_placement` are still the phase-one versions and `test_layout` will now fail on `hm.coastline`; that is expected until Task 4. Do not run `pnpm world:test` as the gate for this task.
 
 If `test_land_at_landmarks` fails for `jounieh` or `byblos`, the landmark sits within a cell of the sea; move that landmark 0.002 degrees inland in `frame.LANDMARKS` and rerun the fetch is not needed (the grid is unchanged; only the sample point moves).
@@ -703,16 +724,19 @@ EOF
 ### Task 4: Roads, towns and places from real coordinates
 
 **Files:**
+
 - Rewrite: `tools/world/lib/layout.py`
 - Rewrite: `tools/world/tests/test_layout.py`
 
 **Interfaces:**
+
 - Produces: `layout.ROADS: dict[id, list[(x, y)]]` with ids `coast`, `faraya`, `metn`; `layout.TOWNS: dict[id, dict(pos, radius, kind, count, scale, label)]` with kinds `city`, `town`, `village`, `resort`; `layout.town_houses(seed=3) -> list[dict(x, y, w, d, h, yaw, town)]`; `layout.TOWERS: list[dict(x, y, w, d, h, label)]`; `layout.PLACES` (same nine ids as before, `pos` from real coordinates, plus `note`); `layout.PLACE_RADIUS`; `layout.SQUARE: dict(pos, radius)` (Faraya's square); `layout.exclusions()`; `layout.ski: dict(base, top, pistes: list[list[(x, y)]])`.
 - Removed: `COAST_ROAD`, `HILL_ROAD`, `village_houses`, `SQUARE_RADIUS`, `COAST_OFFSET`. Tasks 5 and 6 rewrite the callers.
 
 - [ ] **Step 1: Write the failing tests**
 
 `tools/world/tests/test_layout.py`:
+
 ```python
 import math
 import unittest
@@ -810,6 +834,7 @@ if __name__ == "__main__":
 - [ ] **Step 2: Rewrite the layout**
 
 `tools/world/lib/layout.py`:
+
 ```python
 """Roads, towns, landmarks and the nine places, from real coordinates.
 
@@ -950,6 +975,7 @@ def exclusions():
 ```bash
 pnpm world:test
 ```
+
 Expected: `OK`. If `test_roads_follow_real_waypoints_and_stay_on_land` fails for `coast` with more than one point off land, the Beirut headland waypoints sit in the sea at this resolution; nudge the offending coordinate 0.003 degrees east. If `test_houses_land_on_land_and_do_not_overlap` fails on the Beirut count, raise `attempts` to 9000.
 
 - [ ] **Step 4: Commit**
@@ -969,15 +995,18 @@ EOF
 ### Task 5: Scene modules follow the new land
 
 **Files:**
+
 - Modify: `tools/world/scene/terrain.py`, `tools/world/scene/flora.py`, `tools/world/scene/buildings.py`, `tools/world/scene/places.py`, `tools/world/scene/common.py`, `tools/world/build_world.py`
 
 **Interfaces:**
+
 - Consumes everything from Tasks 3 and 4.
 - Produces: `common.lathe(name, profile, coll, mat, segments=9, seed=0)` (moved from `flora._lathe`, same body); `buildings.build(coll) -> int` now builds every town, the towers, all three roads, Faraya's square platform and the pistes; `places.build(coll)` adds Harissa's statue, Pigeon Rocks, and the ski base lodge and lift.
 
 - [ ] **Step 1: terrain paints by elevation as well as slope**
 
 In `tools/world/scene/terrain.py`, replace the body of the land branch inside `_paint` with:
+
 ```python
                 else:
                     m = hm.elevation_m(x, y)
@@ -989,6 +1018,7 @@ In `tools/world/scene/terrain.py`, replace the body of the land branch inside `_
                     stone = hm.smoothstep(0.9, 1.9, hm.slope(x, y))
                     c = palette.mix(ground, palette.STONE_DARK, stone)
 ```
+
 Nothing else in the file changes; `hm.height` and `hm.SEA_LEVEL` keep their names.
 
 - [ ] **Step 2: move the lathe into common**
@@ -998,6 +1028,7 @@ Cut `_lathe` out of `flora.py`, paste it into `tools/world/scene/common.py` as `
 - [ ] **Step 3: flora by elevation**
 
 In `tools/world/scene/flora.py` replace the three density functions and `build` with:
+
 ```python
 def _olive_density(x, y):
     m = hm.elevation_m(x, y)
@@ -1057,6 +1088,7 @@ def build(coll):
 - [ ] **Step 4: buildings build towns, towers, roads, the square and the pistes**
 
 In `tools/world/scene/buildings.py` replace `_square` and `build` with:
+
 ```python
 def _platform(name, cx, cy, radius, coll, top_mat, side_mat, depth=0.9):
     z = hm.height(cx, cy) + 0.03
@@ -1099,12 +1131,15 @@ def build(coll):
         tower(f"tower.{i}", t["x"], t["y"], t["w"], t["d"], t["h"], coll)
     return len(houses)
 ```
+
 `house()` and `_hip_roof()` and `ribbon()` are unchanged.
 
 - [ ] **Step 5: places re-homed, plus Harissa, Pigeon Rocks and the ski base**
 
 In `tools/world/scene/places.py`:
+
 - `_hill`: Warde is the wedding venue (Lucien, 2026-09-11), so the campanile gives way to a mountain venue. Replace the whole function with:
+
 ```python
 def _hill(coll):
     """The wedding venue at the foot of the Warde slopes: a long stone hall with
@@ -1132,17 +1167,23 @@ def _hill(coll):
     for i in range(5):
         common.box(f"venue-step{i}", (0.9, 0.14, 0.05 * (5 - i)), (x, y - 0.95 - 0.14 * i - 0.07, z - 0.02), coll, stone)
 ```
+
 The `steps` place moves to Harissa (Task 4 already does this), so the venue's own steps are decorative.
+
 - `_garden`: unchanged; it reads `layout.PLACES["garden"]["pos"]`.
 - `_shore`: unchanged in body; it now lands on the Jounieh corniche.
-- `_harbour`: replace `shore_y = hm.coastline(x) + 0.2` with a search for the shore: 
+- `_harbour`: replace `shore_y = hm.coastline(x) + 0.2` with a search for the shore:
+
 ```python
     shore_y = y
     while shore_y < y + 1.5 and not hm.is_land(x, shore_y):
         shore_y += 0.05
 ```
+
 and keep the rest.
+
 - Add three functions and call them from `build`:
+
 ```python
 def _harissa(coll):
     """Our Lady of Lebanon: a white cone of steps under a small figure, on the hill above Jounieh."""
@@ -1188,6 +1229,7 @@ def _ski_base(coll):
         direction = Vector(b) - Vector(a)
         cable.rotation_euler = direction.to_track_quat("Z", "Y").to_euler()
 ```
+
 Add `from mathutils import Vector` and `from lib import frame` to the imports. In `build`, call `_harissa(coll)`, `_pigeon_rocks(coll)`, `_ski_base(coll)` after `_cedars(coll)`.
 
 - [ ] **Step 6: build_world**
@@ -1199,6 +1241,7 @@ No interface change. Make sure `build_world.py` still calls `terrain.build`, `se
 ```bash
 pnpm world:test && pnpm world:preview 2>&1 | grep -E "^(FLORA|HOUSES|BUILD_S|RENDER_S|LUMINANCE)|Traceback|Error"
 ```
+
 Expected: no traceback, `HOUSES` 180 or more, `FLORA olive` 250 to 600, `pine` 150 to 400, `cedar` 15 to 60.
 
 Read `tools/world/out/preview.png`. Acceptance: Beirut's headland at the front left dense with small blocks and four towers, the coast road curving round Jounieh bay, Harissa's white cone on the hill above it, Byblos at the right with its harbour, olives on the lower slopes, pines above, bare pale slopes and cedars high at the back right with the pistes and lift at Warde, the garden's plateau above Bikfaya, Faraya's square. The relief should read as real: valleys cutting to the sea, Sannine's mass at the back. Fix geometry or layout constants; do not adjust cameras yet (Task 7).
@@ -1220,14 +1263,17 @@ EOF
 ### Task 6: Surface and atmosphere
 
 **Files:**
+
 - Modify: `tools/world/scene/lighting.py`, `tools/world/scene/common.py`, `tools/world/scene/sea.py`, `tools/world/scene/cameras.py`, `tools/world/stills.py`
 
 **Interfaces:**
+
 - Produces: `lighting.TIMES[t]["sky_view"]` (brightness the camera sees, separate from what lights the scene), `lighting.TIMES[t]["mist"]` (haze strength 0 to 1), `lighting.setup_compositor(scene)`, `common.paper_mode(on: bool)` (swaps every object's materials to paper, glossy paper on the sea and still water), `cameras.configure_render(..., dof=True)`.
 
 - [ ] **Step 1: Camera-ray sky**
 
 In `lighting.setup`, after creating `sky`, replace the single link to the Background with:
+
 ```python
     background = nodes["Background"]
     view = nodes.new("ShaderNodeBackground")
@@ -1241,15 +1287,19 @@ In `lighting.setup`, after creating `sky`, replace the single link to the Backgr
     links.new(light_path.outputs["Is Camera Ray"], mix.inputs["Fac"])
     links.new(mix.outputs["Shader"], nodes["World Output"].inputs["Surface"])
 ```
+
 In `set_time`, after setting `Background` strength, add:
+
 ```python
     nodes["ViewBackground"].inputs["Strength"].default_value = t["sky_view"]
 ```
+
 Add to `TIMES`: afternoon `"sky_view": 0.12, "mist": 0.35`; dusk `"sky_view": 0.2, "mist": 0.5`.
 
 - [ ] **Step 2: Mist haze in the compositor**
 
 Add to `lighting.py`:
+
 ```python
 def setup_compositor(scene):
     """Distance haze from the Mist pass, tinted with the sky. Cheap, and it is
@@ -1277,18 +1327,22 @@ def setup_compositor(scene):
     tree.links.new(strength.outputs["Value"], mix.inputs["Fac"])
     tree.links.new(mix.outputs["Image"], out.inputs["Image"])
 ```
+
 In `set_time`, add:
+
 ```python
     tree = scene.node_tree
     if tree is not None and "HazeStrength" in tree.nodes:
         tree.nodes["HazeStrength"].inputs[1].default_value = t["mist"]
         tree.nodes["HazeColour"].outputs[0].default_value = t["haze"]
 ```
+
 Add to `TIMES`: afternoon `"haze": (0.78, 0.84, 0.88, 1.0)`; dusk `"haze": (0.62, 0.5, 0.48, 1.0)`. Call `lighting.setup_compositor(bpy.context.scene)` in `build_world.build` right after `lighting.setup`.
 
 - [ ] **Step 3: Paper grain and paper mode**
 
 In `common.material`, after the Base Color line, add:
+
 ```python
     if name.startswith("paper"):
         grain = nodes.new("ShaderNodeTexNoise")
@@ -1299,7 +1353,9 @@ In `common.material`, after the Base Color line, add:
         mat.node_tree.links.new(grain.outputs["Fac"], bump.inputs["Height"])
         mat.node_tree.links.new(bump.outputs["Normal"], bsdf.inputs["Normal"])
 ```
+
 Add to `common.py`:
+
 ```python
 _saved_materials: dict[str, list] = {}
 
@@ -1326,24 +1382,27 @@ def paper_mode(on: bool):
                 slot.material = mat
         _saved_materials.clear()
 ```
+
 In `stills.py`, replace the `material_override` lines with `common.paper_mode(paper)` before the render and `common.paper_mode(False)` after.
 
 - [ ] **Step 4: Miniature depth of field and an overview that shows sky**
 
 In `cameras.py`:
+
 ```python
 SHOTS["overview"] = {"loc": (-15.5, -23.0, 8.0), "target": (0.8, 1.6, 1.0), "focal": 35, "fstop": 0.7}
 SHOTS["overview_portrait"] = {"loc": (-17.5, -25.5, 9.5), "target": (0.8, 1.8, 1.0), "focal": 35, "fstop": 0.7, "portrait": True}
 ```
+
 and every place shot `fstop` becomes `1.2`. Add a `beirut` shot: `{"loc": (-9.5, -12.5, 3.2), "target": (-4.8, -5.8, 0.6), "focal": 45, "fstop": 1.2}`, and re-anchor the others to `layout.PLACES` positions: for each of `shore, hill, garden, post, harbour`, `loc = (px + dx, py + dy, hm.height(px, py) + dz)` and `target = (px, py, hm.height(px, py) + tz)` with these offsets:
 
-| shot | dx | dy | dz | tz | focal |
-|---|---|---|---|---|---|
-| shore | -2.6 | -4.0 | 1.9 | 0.4 | 40 |
-| hill | 2.6 | -5.0 | 3.4 | 1.2 | 40 |
-| garden | -2.4 | -3.4 | 3.0 | 0.2 | 40 |
-| post | 0.6 | -2.4 | 2.6 | 0.4 | 40 |
-| harbour | 2.7 | -3.5 | 1.7 | 0.2 | 50 |
+| shot    | dx   | dy   | dz  | tz  | focal |
+| ------- | ---- | ---- | --- | --- | ----- |
+| shore   | -2.6 | -4.0 | 1.9 | 0.4 | 40    |
+| hill    | 2.6  | -5.0 | 3.4 | 1.2 | 40    |
+| garden  | -2.4 | -3.4 | 3.0 | 0.2 | 40    |
+| post    | 0.6  | -2.4 | 2.6 | 0.4 | 40    |
+| harbour | 2.7  | -3.5 | 1.7 | 0.2 | 50    |
 
 In `stills.STILLS` add `("beirut", "beirut", "dusk", False)` after `harbour`.
 
@@ -1352,6 +1411,7 @@ In `stills.STILLS` add `("beirut", "beirut", "dusk", False)` after `harbour`.
 ```bash
 pnpm world:test && pnpm world:stills:preview 2>&1 | grep -E "^STILL|Traceback|Error"
 ```
+
 Read every frame in `tools/world/out/stills/`. Acceptance additions over phase one: sky visible above the ridge in both overviews, graded warm to blue at dusk; the far ridge softened by haze while the near coast is crisp; the near sea and far mountains gently out of focus in the overview so it reads as a miniature; the paper maquette shows a glossy sea; Beirut at dusk with lit windows and the towers against the bay. Tune `mist`, `sky_view`, `fstop` one at a time and record what you changed.
 
 - [ ] **Step 6: Full stills and commit**

@@ -34,6 +34,7 @@
     "node_modules",
     "src/routeTree.gen.ts",
     "**/_generated/**",
-    "convex/betterAuth/schema.ts"
+    "convex/betterAuth/schema.ts",
+    "tools/world/data/**"
   ]
 }

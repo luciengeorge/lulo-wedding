@@ -12,14 +12,14 @@ The diorama the guest site is built around, authored as Blender scripts.
 
 ## Commands
 
-| Command | What it does |
-|---|---|
-| `pnpm world:test` | Unit tests for the pure geometry modules |
-| `pnpm world:terrain` | Fetches real elevation tiles for the frame (network, once) and writes `data/heightmap.json` |
-| `pnpm world:build` | Builds `out/world.blend` |
-| `pnpm world:preview` | Builds and renders a fast overview to `out/preview.png` (`--time dusk` after `--` for the other light) |
-| `pnpm world:stills:preview` | Fast versions of every approval still into `out/stills/` |
-| `pnpm world:stills` | Full-quality stills into `public/world/stills/` |
+| Command                     | What it does                                                                                           |
+| --------------------------- | ------------------------------------------------------------------------------------------------------ |
+| `pnpm world:test`           | Unit tests for the pure geometry modules                                                               |
+| `pnpm world:terrain`        | Fetches real elevation tiles for the frame (network, once) and writes `data/heightmap.json`            |
+| `pnpm world:build`          | Builds `out/world.blend`                                                                               |
+| `pnpm world:preview`        | Builds and renders a fast overview to `out/preview.png` (`--time dusk` after `--` for the other light) |
+| `pnpm world:stills:preview` | Fast versions of every approval still into `out/stills/`                                               |
+| `pnpm world:stills`         | Full-quality stills into `public/world/stills/`                                                        |
 
 `BLENDER=/path/to/blender` overrides the binary. Verified on Blender 5.2.1 LTS with Cycles on Apple Metal.
 
