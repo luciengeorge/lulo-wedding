@@ -1,6 +1,6 @@
 import type { ReactNode } from "react";
 
-import { Body, Container, Head, Hr, Html, Img, Link, Preview, Section, Tailwind, Text } from "@react-email/components";
+import { Body, Container, Head, Hr, Html, Img, Link, Preview, Section, Tailwind, Text } from "react-email";
 
 import { siteUrl, supportEmail } from "./_components";
 

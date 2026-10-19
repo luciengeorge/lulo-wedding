@@ -14,7 +14,7 @@ launch projects on top.
 | Vector / RAG    | [`@convex-dev/rag`](https://convex.dev/components/rag) + OpenAI `text-embedding-3-small`                                  |
 | AI              | [Vercel AI SDK v6](https://sdk.vercel.ai) (`@ai-sdk/openai`, `@ai-sdk/react`)                                             |
 | Billing         | [Polar](https://polar.sh) (Merchant of Record — handles UK/EU VAT) via `@convex-dev/polar`. Stripe adapter stub included. |
-| Email           | [Resend](https://resend.com) + `@react-email/components`                                                                  |
+| Email           | [Resend](https://resend.com) + `react-email`                                                                  |
 | UI              | [shadcn/ui](https://ui.shadcn.com) Base UI variant + Tailwind v4 + [hugeicons](https://hugeicons.com)                     |
 | Forms           | TanStack Form + Zod                                                                                                       |
 | State           | TanStack Query (bridged to Convex via `@convex-dev/react-query`)                                                          |

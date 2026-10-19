@@ -1,6 +1,6 @@
 import type { ReactNode } from "react";
 
-import { Button, Section, Text } from "@react-email/components";
+import { Button, Section, Text } from "react-email";
 
 /**
  * Shared email building blocks. Keep brand-specific values in env vars so the

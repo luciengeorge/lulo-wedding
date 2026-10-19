@@ -43,7 +43,7 @@ function getClientKey(): string {
  * being rate limited.
  */
 export const enterGate = createServerFn({ method: "POST" })
-  .inputValidator(EnterGateSchema)
+  .validator(EnterGateSchema)
   .handler(async ({ data }) => {
     return Sentry.startSpan({ name: "enterGate" }, async () => {
       const result = await fetchAuthMutation(api.guests.verifyGuestPassword, {

@@ -25,6 +25,7 @@ export default defineSchema({
 ```ts
 // convex/userProfile.ts
 import { v } from "convex/values";
+
 import { mutation, query } from "./_generated/server";
 import { authComponent } from "./betterAuth/auth";
 
@@ -65,9 +66,9 @@ export const markOnboarded = mutation({
 import { useMutation, useQuery } from "convex/react";
 import { useState } from "react";
 
+import { api } from "@/../convex/_generated/api";
 import { Wizard } from "@/components/onboarding/wizard";
 import { useAnalytics, AnalyticsEvent } from "@/lib/analytics";
-import { api } from "@/../convex/_generated/api";
 
 function OnboardingGate() {
   const profile = useQuery(api.userProfile.myProfile);

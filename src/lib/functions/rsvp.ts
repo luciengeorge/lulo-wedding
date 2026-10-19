@@ -57,7 +57,7 @@ const SubmitSchema = z.object({
  * phone or a hotel computer handing the next person someone else's reply.
  */
 export const getRsvp = createServerFn({ method: "GET" })
-  .inputValidator(z.object({ token: TokenSchema }))
+  .validator(z.object({ token: TokenSchema }))
   .handler(async ({ data }) => {
     return Sentry.startSpan({ name: "getRsvp" }, async () => {
       const result = await fetchAuthQuery(api.rsvp.getByToken, { token: data.token });
@@ -80,7 +80,7 @@ export const getRememberedToken = createServerFn({ method: "GET" }).handler(asyn
 });
 
 export const submitRsvp = createServerFn({ method: "POST" })
-  .inputValidator(SubmitSchema)
+  .validator(SubmitSchema)
   .handler(async ({ data }) => {
     return Sentry.startSpan({ name: "submitRsvp" }, async () => {
       // Convex brands `Id<"guests">` as a subtype of string and Zod cannot produce

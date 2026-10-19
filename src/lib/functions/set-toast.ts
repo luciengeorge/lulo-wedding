@@ -4,7 +4,7 @@ import { ToastSchema } from "../toast";
 import { useToastSession } from "../toast-session.server";
 
 export const setToast = createServerFn({ method: "POST" })
-  .inputValidator(ToastSchema)
+  .validator(ToastSchema)
   .handler(async ({ data }) => {
     const session = await useToastSession();
     await session.update({ toast: data });
