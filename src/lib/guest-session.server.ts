@@ -1,4 +1,4 @@
-import { useSession } from "@tanstack/react-start/server";
+import { useSealedSession } from "@/lib/sealed-session.server";
 
 export const GUEST_COOKIE = "lulo_guest";
 
@@ -35,7 +35,7 @@ function getGuestSessionPassword() {
 }
 
 export function useGuestSession() {
-  return useSession<GuestSessionData>({
+  return useSealedSession<GuestSessionData>({
     name: GUEST_COOKIE,
     password: getGuestSessionPassword(),
     maxAge: GUEST_SESSION_MAX_AGE_SECONDS,

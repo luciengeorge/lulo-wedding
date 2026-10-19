@@ -1,4 +1,4 @@
-import { useSession } from "@tanstack/react-start/server";
+import { useSealedSession } from "@/lib/sealed-session.server";
 
 import { TOAST_COOKIE, type Toast } from "./toast";
 
@@ -16,7 +16,7 @@ function getToastSessionPassword() {
 }
 
 export function useToastSession() {
-  return useSession<ToastSessionData>({
+  return useSealedSession<ToastSessionData>({
     name: TOAST_COOKIE,
     password: getToastSessionPassword(),
     cookie: {

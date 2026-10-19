@@ -2,7 +2,7 @@
 
 import type { ReactElement } from "react";
 
-import { render } from "@react-email/components";
+import { render } from "react-email";
 import { v } from "convex/values";
 import { Resend } from "resend";
 

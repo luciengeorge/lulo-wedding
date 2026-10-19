@@ -1,4 +1,4 @@
-import { Heading, Hr, Link, Text } from "@react-email/components";
+import { Heading, Hr, Link, Text } from "react-email";
 
 import { Signoff } from "./_components";
 import { EmailLayout } from "./_layout";

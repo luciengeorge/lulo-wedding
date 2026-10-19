@@ -17,7 +17,7 @@ Framework:     TanStack Start (Vite + Nitro), React 19 + React Compiler
 Backend:       Convex (DB, scheduled jobs, file storage, websockets, vector search)
 Auth:          better-auth via @convex-dev/better-auth
 Billing:       Polar (MoR) via @convex-dev/polar, Stripe adapter stubbed
-Email:         Resend + @react-email/components
+Email:         Resend + react-email
 AI:            Vercel AI SDK v6 (@ai-sdk/openai, @ai-sdk/react, ai)
 Embeddings:    OpenAI text-embedding-3-small (1536d) via @convex-dev/rag
 UI:            shadcn/ui (Base UI variant), Tailwind v4, hugeicons
@@ -273,7 +273,7 @@ await sendEmail({
 });
 ```
 
-All transactional emails use `@react-email/components`. Templates live in
+All transactional emails use `react-email`. Templates live in
 `convex/email/templates/`.
 
 ## Files you should never edit
