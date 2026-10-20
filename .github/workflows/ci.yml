@@ -32,8 +32,9 @@ jobs:
       # convex/_generated is committed, so types check without a deployment.
       - run: pnpm typecheck
       - run: pnpm test
-      # The browser tests run Vite in dev mode, which never applies the production
-      # bundler's server/client import rules; only a real build does.
+      # The e2e job builds for production too (it tests that frozen build), but
+      # only after installing browsers and a backend. This fails in minutes, in
+      # parallel, on the bundler's server/client import rules alone.
       - name: Production build
         run: pnpm build
         env:
@@ -85,8 +86,10 @@ jobs:
           path: ~/.cache/convex
           key: convex-backend-${{ runner.os }}-${{ steps.versions.outputs.convex }}
 
-      # Runs against a throwaway local Convex backend in .e2e/app (see
-      # scripts/e2e/backend.mjs). No deploy key, no real deployment.
+      # A frozen production build of this commit, against a throwaway local
+      # Convex backend in .e2e/app (see scripts/e2e/backend.mjs). No deploy key,
+      # no real deployment. The run's commit and snapshot hash are printed at the
+      # start and recorded in the report's metadata.
       - run: pnpm e2e
 
       - name: Upload Playwright report

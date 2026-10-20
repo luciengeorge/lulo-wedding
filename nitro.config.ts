@@ -5,8 +5,12 @@ import { defineNitroConfig } from "nitro/config";
  * blocks and `upgrade-insecure-requests` would rewrite. Production talks to
  * Convex over wss:// and is unaffected, so the allowance is scoped to a
  * development build rather than widened for everyone.
+ *
+ * The browser tests build for production but run against a local backend, so
+ * that build opts in with E2E_PLAIN_HTTP=1 (set by scripts/e2e/backend.mjs at
+ * build time only). Ignored on Vercel, so it can never weaken a deploy.
  */
-const isProduction = process.env.NODE_ENV === "production";
+const isProduction = process.env.NODE_ENV === "production" && !(process.env.E2E_PLAIN_HTTP === "1" && !process.env.VERCEL);
 const localConvex = isProduction ? [] : ["ws://127.0.0.1:*", "http://127.0.0.1:*"];
 
 const securityHeaders = {

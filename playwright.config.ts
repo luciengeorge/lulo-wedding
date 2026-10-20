@@ -7,15 +7,20 @@ import { defineConfig, devices } from "@playwright/test";
  * rather than this working copy: the Convex CLI rewrites `.env.local` in whatever
  * directory it runs from, and doing that here would retarget your own dev setup.
  *
- * Playwright always owns the Convex backend, and never reuses one it finds. The
- * mirror is re-synced and pushed as that server starts, so reusing a running
- * backend would skip the sync and quietly run the suite against stale code. Vite
- * is safe to reuse: it reads the working tree directly.
+ * `pnpm e2e` tests a frozen snapshot: the mirror is re-synced, pushed and built
+ * for production as the backend server starts, and the app is that build. Edits
+ * made while the suite runs reach neither half. `pnpm e2e:dev` (E2E_DEV=1) serves
+ * the working tree with Vite's dev server instead, for fast iteration.
+ *
+ * Playwright always owns the backend and the built app, and never reuses either:
+ * a reused server would skip the snapshot and quietly test stale code. Only the
+ * dev server is reused, since it reads the working tree directly.
  *
  * The preview smoke tests in e2e/smoke run against a deployed URL instead; see
  * playwright.smoke.config.ts. They are excluded here.
  */
 const APP_URL = "http://127.0.0.1:3100";
+const DEV_MODE = process.env.E2E_DEV === "1";
 /** scripts/e2e/backend.mjs opens this only once the backend is pushed and serving. */
 const BACKEND_READY_URL = "http://127.0.0.1:3209";
 
@@ -28,6 +33,8 @@ const PAIRWISE_MATRIX = /\.pairwise\.spec\.ts$/;
 
 export default defineConfig({
   testDir: "./e2e",
+  // Prints and records which snapshot is under test; see the file.
+  globalSetup: "./scripts/e2e/stamp.ts",
   testIgnore: ["**/smoke/**"],
   fullyParallel: false,
   // The suite shares one backend, and fixtures reset tables between tests.
@@ -78,6 +85,7 @@ export default defineConfig({
 
   webServer: [
     {
+      // Snapshots, pushes and (unless E2E_DEV) builds, then serves the backend.
       command: "node scripts/e2e/backend.mjs",
       // Not the backend's own `/version`: that answers during the one-shot push
       // too, which would let the tests start against a server about to stop.
@@ -85,17 +93,28 @@ export default defineConfig({
       // Never reused: see the note above. A stale mirror fails silently, which is
       // far worse than this refusing to start when something else holds the port.
       reuseExistingServer: false,
-      timeout: 300_000,
+      // Includes the production build on a cold machine.
+      timeout: 600_000,
       stdout: "pipe",
       stderr: "pipe",
     },
-    {
-      command: "pnpm e2e:app",
-      url: APP_URL,
-      reuseExistingServer: !process.env.CI,
-      timeout: 120_000,
-      stdout: "pipe",
-      stderr: "pipe",
-    },
+    // Started after the backend is ready, so the build it serves is this run's.
+    DEV_MODE
+      ? {
+          command: "pnpm e2e:app",
+          url: APP_URL,
+          reuseExistingServer: !process.env.CI,
+          timeout: 120_000,
+          stdout: "pipe",
+          stderr: "pipe",
+        }
+      : {
+          command: "pnpm e2e:serve",
+          url: APP_URL,
+          reuseExistingServer: false,
+          timeout: 60_000,
+          stdout: "pipe",
+          stderr: "pipe",
+        },
   ],
 });

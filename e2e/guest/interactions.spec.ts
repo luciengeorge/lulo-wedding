@@ -1,4 +1,4 @@
-import type { Page, Route } from "@playwright/test";
+import type { Page, Request, Route } from "@playwright/test";
 
 import { backend, expect, GUEST_STATE, party, test, visit, waitForEmail } from "../fixtures";
 import { card, chip, expectStoredReply, fillCard, sendReply } from "../rsvp-form";
@@ -13,15 +13,20 @@ test.use({ storageState: GUEST_STATE });
 const TOKEN = "e2e-interact";
 const EMAIL = "rae@example.com";
 
-/** TanStack Start names a server function in its URL as base64 JSON; this finds one by name. */
-function callsServerFn(url: string, name: string): boolean {
-  const encoded = url.split("/_serverFn/")[1]?.split(/[?#]/)[0];
-  if (!encoded) return false;
-  return Buffer.from(encoded, "base64url").toString("utf8").includes(name);
+/**
+ * Server functions all share one URL prefix, and a production build names each
+ * by a hash rather than by its export, so requests are told apart by what they
+ * carry. On the reply form, the submit is the only POST with a contact email;
+ * reloading the invitation is the only GET whose payload names the party.
+ */
+const SERVER_FNS = "**/_serverFn/**";
+
+function isSubmit(request: Request): boolean {
+  return request.method() === "POST" && (request.postData() ?? "").includes("contactEmail");
 }
 
-function isSubmit(url: string): boolean {
-  return callsServerFn(url, "submitRsvp");
+function loadsInvitation(request: Request, token: string): boolean {
+  return request.method() === "GET" && decodeURIComponent(request.url()).includes(token);
 }
 
 async function openForm(page: Page) {
@@ -48,14 +53,12 @@ test.describe("sending a reply", () => {
     let release!: () => void;
     const held = new Promise<void>((resolve) => (release = resolve));
     let sent = 0;
-    await page.route(
-      (url) => isSubmit(url.toString()),
-      async (route: Route) => {
-        if (route.request().method() === "POST") sent++;
-        await held;
-        await route.continue();
-      },
-    );
+    await page.route(SERVER_FNS, async (route: Route) => {
+      if (!isSubmit(route.request())) return route.fallback();
+      sent++;
+      await held;
+      await route.continue();
+    });
 
     await page.getByRole("button", { name: "SEND OUR REPLY" }).dblclick();
     await expect(page.getByRole("button", { name: "SENDING" })).toBeDisabled();
@@ -73,9 +76,8 @@ test.describe("sending a reply", () => {
     await openForm(page);
     await fillRae(page);
 
-    await page.route(
-      (url) => isSubmit(url.toString()),
-      (route) => route.abort("internetdisconnected"),
+    await page.route(SERVER_FNS, (route) =>
+      isSubmit(route.request()) ? route.abort("internetdisconnected") : route.fallback(),
     );
     await page.getByRole("button", { name: "SEND OUR REPLY" }).click();
 
@@ -111,13 +113,12 @@ test.describe("sending a reply", () => {
     await page.getByRole("button", { name: "CHANGE OUR REPLY" }).click();
     await page.getByLabel("First name, guest 1").fill("Nour");
 
-    await page.route(
-      (url) => callsServerFn(url.toString(), "getRsvp"),
-      async (route: Route) => {
-        await new Promise((resolve) => setTimeout(resolve, 1_500));
-        await route.continue();
-      },
-    );
+    await page.route(SERVER_FNS, async (route: Route) => {
+      if (!loadsInvitation(route.request(), token)) return route.fallback();
+      // A slow reload of the stored reply: the window a stale screen would show in.
+      await new Promise((resolve) => setTimeout(resolve, 1_500));
+      await route.continue();
+    });
     await page.evaluate(() => {
       const flags = window as unknown as { sawStale: boolean };
       flags.sawStale = false;
