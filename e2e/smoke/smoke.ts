@@ -52,6 +52,9 @@ export async function go(page: Page, path: string) {
   );
 }
 
+/** Example deployment URLs that libraries ship inside their own messages, not ours. */
+const EXAMPLE_HOSTS = new Set(["https://happy-otter-123.convex.cloud"]);
+
 /**
  * The Convex deployment behind a page. A preview's Convex URL is minted per branch
  * and only baked into the build, so CI reads it out of the scripts the page loads.
@@ -71,7 +74,9 @@ export async function convexSiteUrl(page: Page, path = "/enter"): Promise<string
     const type = response.request().resourceType();
     if (type !== "script" && type !== "document") return;
     const text = await response.text().catch(() => "");
-    for (const match of text.matchAll(/https:\/\/[a-z0-9-]+(?:\.[a-z0-9-]+)*\.convex\.cloud/g)) found.add(match[0]);
+    for (const match of text.matchAll(/https:\/\/[a-z0-9-]+(?:\.[a-z0-9-]+)*\.convex\.cloud/g)) {
+      if (!EXAMPLE_HOSTS.has(match[0])) found.add(match[0]);
+    }
   };
   page.on("response", scan);
   await go(page, path);

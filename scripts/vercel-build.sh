@@ -10,7 +10,7 @@
 set -eu
 
 if [ "${VERCEL_ENV:-}" = "preview" ]; then
-  exec npx convex deploy --cmd 'pnpm build' --cmd-url-env-var-name VITE_CONVEX_URL --preview-run smoke:seed
+  exec npx convex deploy --cmd 'sh scripts/vercel-app-build.sh' --cmd-url-env-var-name VITE_CONVEX_URL --preview-run smoke:seed
 fi
 
-exec npx convex deploy --cmd 'pnpm build' --cmd-url-env-var-name VITE_CONVEX_URL
+exec npx convex deploy --cmd 'sh scripts/vercel-app-build.sh' --cmd-url-env-var-name VITE_CONVEX_URL

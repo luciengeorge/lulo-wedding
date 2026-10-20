@@ -12,7 +12,8 @@ export const Route = createFileRoute("/api/img/$storageId")({
   server: {
     handlers: {
       GET: async ({ params }) => {
-        const convexUrl = process.env.VITE_CONVEX_SITE_URL;
+        // The build's value, as in src/lib/auth-server.ts.
+        const convexUrl = import.meta.env.VITE_CONVEX_SITE_URL;
         if (!convexUrl) return new Response("Convex URL not configured", { status: 500 });
 
         const upstream = await fetch(`${convexUrl}/api/storage/${params.storageId}`);
