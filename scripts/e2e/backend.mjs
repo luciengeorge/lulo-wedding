@@ -25,6 +25,7 @@
  */
 import { spawn, spawnSync } from "node:child_process";
 import { existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { createServer } from "node:http";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
@@ -33,6 +34,13 @@ const mirror = join(repoRoot, ".e2e/app");
 const configPath = join(mirror, ".convex/local/default/config.json");
 /** The local deployment always takes 3210 for its cloud port and 3211 for its site port. */
 const CLOUD_PORT = 3210;
+/**
+ * Answers 200 only once the backend has been synced, pushed and restarted for
+ * the run. Playwright's readiness probe points here rather than at the backend's
+ * own `/version`, which also answers during the short-lived `--once` push and
+ * during a stale backend's start-up.
+ */
+export const READY_PORT = 3209;
 
 /** Everything the Convex CLI and Vite need, and nothing that is huge or personal. */
 const EXCLUDES = [
@@ -99,7 +107,11 @@ function mirrorRepo() {
  * nothing else, so reclaiming it is safe.
  */
 function stopStrayBackend() {
-  const found = spawnSync("lsof", ["-ti", `tcp:${CLOUD_PORT}`], { encoding: "utf8" });
+  // Listeners only. A bare `tcp:3210` also matches every client with a socket open
+  // to the port, which includes the Playwright runner polling for readiness.
+  const found = spawnSync("lsof", ["-t", "-i", `tcp:${CLOUD_PORT}`, "-i", `tcp:${READY_PORT}`, "-sTCP:LISTEN"], {
+    encoding: "utf8",
+  });
   const pids = found.stdout
     .split("\n")
     .map((line) => line.trim())
@@ -111,10 +123,18 @@ function stopStrayBackend() {
   spawnSync("sleep", ["1"]);
 }
 
+/**
+ * Creates the throwaway deployment on first run. Anonymous on purpose:
+ * `convex deployment create local` needs a logged-in Convex account, which CI
+ * does not have and which a test backend has no business being tied to.
+ */
 function ensureDeployment() {
   if (existsSync(configPath)) return;
   console.log("[e2e] creating the local Convex deployment (first run downloads a backend binary)");
-  run("npx", ["convex", "deployment", "create", "local", "--select"], { cwd: mirror });
+  run("npx", ["convex", "dev", "--once", "--tail-logs", "disable"], {
+    cwd: mirror,
+    env: { ...process.env, CONVEX_AGENT_MODE: "anonymous" },
+  });
 }
 
 /**
@@ -131,6 +151,9 @@ const DEPLOYMENT_ENV = {
   SITE_URL: "http://127.0.0.1:3100",
   BETTER_AUTH_SECRET: "e2e-better-auth-secret-not-used-anywhere-real",
   E2E_CAPTURE_EMAILS: "1",
+  // Svix-format signing secret for the Resend webhook. e2e/fixtures.ts signs the
+  // events it posts to /resend-webhook with the same value.
+  RESEND_WEBHOOK_SECRET: "whsec_ZTJlLXJlc2VuZC13ZWJob29rLXNlY3JldC1ub3QtcmVhbA==",
 };
 
 function syncDeploymentEnv() {
@@ -186,6 +209,23 @@ function backendUrl() {
   return `http://127.0.0.1:${config.ports.cloud}`;
 }
 
+/** Everything a run needs before the long-running backend starts. */
+function prepare() {
+  stopStrayBackend();
+  mirrorRepo();
+  ensureDeployment();
+
+  // Push once up front so `convex env` and the first test both talk to a
+  // deployment that already has the functions on it.
+  run("npx", ["convex", "dev", "--once", "--tail-logs", "disable"], { cwd: mirror });
+  syncDeploymentEnv();
+
+  const url = backendUrl();
+  writeAppEnv(url);
+  console.log(`[e2e] prepared ${url}`);
+  return url;
+}
+
 function main() {
   if (process.argv.includes("--clean")) {
     rmSync(join(repoRoot, ".e2e"), { recursive: true, force: true });
@@ -193,38 +233,37 @@ function main() {
     return;
   }
 
-  // The long-running path assumes globalSetup has already synced and pushed, so
-  // it does not repeat that work and does not briefly own the port on the way.
-  if (!process.argv.includes("--once")) {
-    const url = backendUrl();
-    console.log(`[e2e] serving ${url}`);
-    serve();
-    return;
-  }
-
-  stopStrayBackend();
-  mirrorRepo();
-  ensureDeployment();
-
-  // Push once up front so `convex env` and the first test both talk to a
-  // deployment that already has the functions on it. Playwright's globalSetup
-  // calls this path with --once before any server starts; the webServer then
-  // re-enters and falls through to the long-running branch below.
-  run("npx", ["convex", "dev", "--once", "--tail-logs", "disable"], { cwd: mirror });
-  syncDeploymentEnv();
-
-  const url = backendUrl();
-  writeAppEnv(url);
-  console.log(`[e2e] prepared ${url}`);
+  // Prepare and serve in one process, in that order. Playwright starts webServers
+  // before globalSetup, so the push cannot live in a globalSetup: the backend
+  // would already be serving the previous run's mirror by the time it ran.
+  const url = prepare();
+  if (process.argv.includes("--once")) return;
+  serve(url);
 }
 
 /** Long-running: the local backend is a child of this process and stops with it. */
-function serve() {
+function serve(url) {
   const dev = spawn("npx", ["convex", "dev", "--tail-logs", "disable"], { cwd: mirror, stdio: "inherit" });
   const stop = () => dev.kill("SIGTERM");
   process.on("SIGINT", stop);
   process.on("SIGTERM", stop);
   dev.on("exit", (code) => process.exit(code ?? 0));
+
+  void announceWhenReady(url);
+}
+
+/** Opens the readiness port once the restarted backend answers, and not before. */
+async function announceWhenReady(url) {
+  for (;;) {
+    try {
+      if ((await fetch(`${url}/version`)).ok) break;
+    } catch {
+      // Not up yet.
+    }
+    await new Promise((resolve) => setTimeout(resolve, 250));
+  }
+  createServer((_, response) => response.writeHead(200).end("ready")).listen(READY_PORT, "127.0.0.1");
+  console.log(`[e2e] serving ${url}`);
 }
 
 main();

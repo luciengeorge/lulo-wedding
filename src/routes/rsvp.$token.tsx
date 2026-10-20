@@ -99,7 +99,9 @@ function RsvpFlow({ token, data }: { token: string; data: RsvpData }) {
   const [mode, setMode] = useState<Mode | null>(hasReplied || party.earlyDecline ? null : "ask");
 
   if (deadlinePassed) return <ClosedSummary data={data} />;
-  if (mode === null) return <Confirmed data={data} onChange={() => setMode(party.declined ? "decline" : "accept")} />;
+  // Both ways out of the confirmation lead to the guest list: "change our reply"
+  // and, for a party that declined, "actually, we can come".
+  if (mode === null) return <Confirmed data={data} onChange={() => setMode("accept")} />;
   if (mode === "ask") return <Ask party={party} events={events} onChoose={setMode} />;
   if (mode === "decline") {
     return (
@@ -538,7 +540,8 @@ function formatNames(names: string[]): string {
 
 function Confirmed({ data, onChange }: { data: RsvpData; onChange: () => void }) {
   const { party, guests } = data;
-  const declined = party.declined === true || party.earlyDecline;
+  // The sheet's early "no" stands only until the party answers online.
+  const declined = party.respondedAt === undefined ? party.earlyDecline : party.declined === true;
   const seatsNamed = guests.filter((guest) => !guest.isPlusOne).length;
 
   return (

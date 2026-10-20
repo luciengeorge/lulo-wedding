@@ -1,41 +1,18 @@
 import * as Sentry from "@sentry/tanstackstart-react";
 import { redirect } from "@tanstack/react-router";
 import { createServerFn } from "@tanstack/react-start";
-import { getRequestHeader, getRequestIP } from "@tanstack/react-start/server";
 import z from "zod";
 
 import { api } from "@/../convex/_generated/api";
 import { fetchAuthMutation, fetchAuthQuery } from "@/lib/auth-server";
+import { getClientKey } from "@/lib/client-key.server";
 import { useGuestSession } from "@/lib/guest-session.server";
 import { safeRedirect } from "@/lib/safe-redirect";
 
 /** Where an un-unlocked guest gets sent. The route is owned by the UI side. */
 const GATE_ROUTE = "/enter";
 
-/** Keys are only ever IPs; cap the length so a hostile header can't bloat the limiter. */
-const MAX_CLIENT_KEY_LENGTH = 100;
-
 const EnterGateSchema = z.object({ password: z.string().min(1) });
-
-/**
- * Derives the rate-limit key from the request, never from the request body — a
- * caller who could pick their own key could sidestep the limit entirely.
- *
- * Order matters. `x-vercel-forwarded-for` is written by Vercel's edge on every
- * request and cannot be spoofed by the caller, so it wins. Plain `x-forwarded-for`
- * is only consulted after that, and only its leftmost entry, because a client can
- * prepend arbitrary values to it. Falling all the way through to a single shared
- * `"unknown"` bucket fails in the safe direction: it rate-limits harder, and it
- * never hands a caller a private bucket of their own.
- */
-export function getClientKey(): string {
-  const forwarded = getRequestHeader("x-forwarded-for")?.split(",")[0];
-  const candidate =
-    getRequestHeader("x-vercel-forwarded-for") ?? getRequestHeader("x-real-ip") ?? forwarded ?? getRequestIP();
-
-  const key = candidate?.trim();
-  return key ? key.slice(0, MAX_CLIENT_KEY_LENGTH) : "unknown";
-}
 
 /**
  * Checks the shared guest password and, on success, marks the session unlocked.

@@ -41,6 +41,7 @@ import type * as rag from "../rag.js";
 import type * as rateLimiter from "../rateLimiter.js";
 import type * as rsvp from "../rsvp.js";
 import type * as sends from "../sends.js";
+import type * as smoke from "../smoke.js";
 import type * as storage from "../storage.js";
 import type * as sync_dispatcher from "../sync/dispatcher.js";
 import type * as sync_registry from "../sync/registry.js";
@@ -89,6 +90,7 @@ declare const fullApi: ApiFromModules<{
   rateLimiter: typeof rateLimiter;
   rsvp: typeof rsvp;
   sends: typeof sends;
+  smoke: typeof smoke;
   storage: typeof storage;
   "sync/dispatcher": typeof sync_dispatcher;
   "sync/registry": typeof sync_registry;

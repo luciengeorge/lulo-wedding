@@ -6,7 +6,7 @@ import z from "zod";
 
 import { api } from "@/../convex/_generated/api";
 import { fetchAuthMutation, fetchAuthQuery } from "@/lib/auth-server";
-import { getClientKey } from "@/lib/functions/guest-gate";
+import { getClientKey } from "@/lib/client-key.server";
 import { useGuestSession } from "@/lib/guest-session.server";
 import { createLogger } from "@/lib/logger";
 
@@ -78,7 +78,17 @@ export const getRsvp = createServerFn({ method: "GET" })
 
       if (result) {
         const session = await useGuestSession();
-        await session.update({ ...session.data, token: data.token });
+        // `unlocked` as well as the token: a valid link is as good as the password
+        // (see `unlockWithToken`). On a first, server-rendered arrival that unlock
+        // and this write share one request, and each starts from the request's
+        // cookie, so writing the token alone would drop the unlock and send the
+        // guest to the password page the moment they left their invitation.
+        await session.update({
+          ...session.data,
+          token: data.token,
+          unlocked: true,
+          at: session.data.unlocked ? session.data.at : Date.now(),
+        });
 
         // Stats, not the page. A guest must never see an error because a visit
         // could not be counted.

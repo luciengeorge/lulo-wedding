@@ -4,6 +4,7 @@ import { httpAction } from "./_generated/server";
 import { authComponent, createAuth } from "./betterAuth/auth";
 import { polar } from "./billing/polar";
 import { resend } from "./email/resend";
+import { handle as smoke } from "./smoke";
 
 const http = httpRouter();
 
@@ -23,5 +24,9 @@ http.route({
   method: "POST",
   handler: httpAction((ctx, req) => resend.handleResendEventWebhook(ctx, req)),
 });
+
+// Preview smoke tests only. Answers 404 unless the deployment opts in with both
+// E2E_CAPTURE_EMAILS and SMOKE_SECRET, which production never has: see convex/smoke.ts.
+http.route({ path: "/smoke", method: "POST", handler: smoke });
 
 export default http;

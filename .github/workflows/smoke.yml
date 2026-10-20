@@ -1,0 +1,124 @@
+name: Smoke
+
+# Runs against every deployment Vercel reports as ready.
+#
+# Preview (writes only to the preview's own smoke party):
+#   secrets.SMOKE_SECRET                     same value as SMOKE_SECRET in the Convex *preview* defaults
+#   secrets.PREVIEW_GUEST_PASSWORD           GUEST_PASSWORD in the Convex preview defaults
+#   vars.SMOKE_ADMIN_EMAIL                   an address in ADMIN_EMAILS for previews, on Convex and on Vercel,
+#                                            and SMOKE_ADMIN_EMAIL in the Convex preview defaults
+#   secrets.VERCEL_AUTOMATION_BYPASS_SECRET  optional, when Vercel Deployment Protection is on
+#
+# Production (read-only): no secrets beyond the optional bypass.
+
+on:
+  deployment_status:
+
+concurrency:
+  group: smoke-${{ github.event.deployment.environment }}-${{ github.event.deployment.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  preview:
+    name: Preview smoke
+    if: >-
+      github.event.deployment_status.state == 'success' &&
+      startsWith(github.event.deployment.environment, 'Preview')
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    env:
+      CI: "1"
+      SMOKE_BASE_URL: ${{ github.event.deployment_status.environment_url }}
+      SMOKE_SECRET: ${{ secrets.SMOKE_SECRET }}
+      PREVIEW_GUEST_PASSWORD: ${{ secrets.PREVIEW_GUEST_PASSWORD }}
+      SMOKE_ADMIN_EMAIL: ${{ vars.SMOKE_ADMIN_EMAIL }}
+      VERCEL_AUTOMATION_BYPASS_SECRET: ${{ secrets.VERCEL_AUTOMATION_BYPASS_SECRET }}
+    steps:
+      # Missing configuration is a red run that says what is missing, never a green one.
+      - name: Check configuration
+        run: |
+          missing=""
+          [ -n "$SMOKE_SECRET" ] || missing="$missing secrets.SMOKE_SECRET"
+          [ -n "$PREVIEW_GUEST_PASSWORD" ] || missing="$missing secrets.PREVIEW_GUEST_PASSWORD"
+          [ -n "$SMOKE_ADMIN_EMAIL" ] || missing="$missing vars.SMOKE_ADMIN_EMAIL"
+          if [ -n "$missing" ]; then
+            echo "::error::Preview smoke cannot run. Missing:$missing (see the header of .github/workflows/smoke.yml)"
+            exit 1
+          fi
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.deployment.sha }}
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 10
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - name: Cache Playwright browsers
+        id: browsers
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/ms-playwright
+          key: playwright-smoke-${{ runner.os }}-${{ hashFiles('pnpm-lock.yaml') }}
+      - if: steps.browsers.outputs.cache-hit != 'true'
+        run: npx playwright install --with-deps chromium
+      - if: steps.browsers.outputs.cache-hit == 'true'
+        run: npx playwright install-deps chromium
+      - run: npx playwright test --config playwright.smoke.config.ts --project preview
+      - if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: smoke-preview-report
+          path: |
+            playwright-report-smoke
+            test-results
+          retention-days: 14
+
+  production:
+    name: Production smoke (read-only)
+    if: >-
+      github.event.deployment_status.state == 'success' &&
+      startsWith(github.event.deployment.environment, 'Production')
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    env:
+      CI: "1"
+      SMOKE_BASE_URL: ${{ github.event.deployment_status.environment_url }}
+      PROD_CONVEX_SITE_URL: https://impartial-horse-754.convex.site
+      VERCEL_AUTOMATION_BYPASS_SECRET: ${{ secrets.VERCEL_AUTOMATION_BYPASS_SECRET }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.deployment.sha }}
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 10
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - name: Cache Playwright browsers
+        id: browsers
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/ms-playwright
+          key: playwright-smoke-${{ runner.os }}-${{ hashFiles('pnpm-lock.yaml') }}
+      - if: steps.browsers.outputs.cache-hit != 'true'
+        run: npx playwright install --with-deps chromium
+      - if: steps.browsers.outputs.cache-hit == 'true'
+        run: npx playwright install-deps chromium
+      - run: npx playwright test --config playwright.smoke.config.ts --project production
+      - if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: smoke-production-report
+          path: |
+            playwright-report-smoke
+            test-results
+          retention-days: 14
