@@ -85,7 +85,7 @@ test("a guest gets in, finds their invitation, replies, and the couple see it", 
       { timeout: 30_000 },
     )
     .not.toBe("");
-  await adminPage.goto(linkFromEmail(signIn, "/api/auth"));
+  await adminPage.goto(linkFromEmail(signIn, "/api/auth", baseURL!));
   await expect(adminPage).toHaveURL(/\/admin/);
 
   const row = adminPage.getByRole("row").filter({ has: adminPage.getByText(party.displayName, { exact: true }) });

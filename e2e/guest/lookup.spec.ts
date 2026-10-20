@@ -123,6 +123,30 @@ test.describe("a guest finding their invitation by name", () => {
     await expect(results(page)).toHaveCount(0);
   });
 
+  /** The search is replaced by the invitation, so there is no /rsvp behind it to send Back straight forward again. */
+  test("Back from the invitation it found leaves the RSVP", async ({ page }) => {
+    await visit(page, "/");
+    await visit(page, "/rsvp");
+    await search(page, "Rae Haddad");
+    await page.getByRole("link", { name: /Rae & Cherif/ }).click();
+    await expect(page.getByRole("button", { name: "JOYFULLY ACCEPT" })).toBeVisible();
+
+    await page.goBack();
+    await expect(page).toHaveURL("/");
+  });
+
+  test("Back from a remembered invitation leaves the RSVP", async ({ page }) => {
+    await visit(page, "/rsvp/e2e-haddad");
+    await expect(page.getByRole("button", { name: "JOYFULLY ACCEPT" })).toBeVisible();
+    await visit(page, "/");
+    await visit(page, "/rsvp");
+    await expect(page).toHaveURL("/rsvp/e2e-haddad?via=remembered");
+    await expect(page.getByRole("button", { name: "JOYFULLY ACCEPT" })).toBeVisible();
+
+    await page.goBack();
+    await expect(page).toHaveURL("/");
+  });
+
   test("remembers the invitation it found, for the next time /rsvp is opened on this device", async ({ page }) => {
     await search(page, "Cherif Haddad");
     await page.getByRole("link", { name: /Rae & Cherif/ }).click();

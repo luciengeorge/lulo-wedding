@@ -204,6 +204,28 @@ describe("GuestListTable rendering", () => {
     expect(screen.getByTitle("Brunch")).toBeInTheDocument();
   });
 
+  it("flags a party invited to no events, and only that party", () => {
+    render(
+      <Harness
+        rows={[
+          party({}, "p1"),
+          party({ displayName: "Sami", invitedToWedding: false }, "p2"),
+          party(
+            {
+              displayName: "Marc",
+              invitedToWedding: false,
+              invitedTo: { preWedding: false, wedding: false, brunch: true },
+            },
+            "p3",
+          ),
+        ]}
+      />,
+    );
+    const flagged = screen.getAllByText("No events");
+    expect(flagged).toHaveLength(1);
+    expect(flagged[0]!.closest("tr")).toHaveTextContent("Sami");
+  });
+
   it("keeps the four RSVP states visually distinct", () => {
     render(
       <Harness

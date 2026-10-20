@@ -19,6 +19,15 @@ export type NameKeys = {
 /** "&", "+", "et" and "and" join people in a display name; they name nobody. */
 const CONNECTORS = new Set(["et", "and"]);
 
+/**
+ * Arabic writes "and" as a "و" joined to the next word, so "ليلى وسامي" holds
+ * "وسامي". Plenty of names start with the letter too (وليد, وسام), so the bare
+ * form is added beside the original rather than replacing it.
+ */
+function withoutWaw(word: string): string[] {
+  return word.startsWith("و") && word.length > 2 ? [word, word.slice(1)] : [word];
+}
+
 /** NFD, accents dropped, lowercased, punctuation turned into spaces, whitespace collapsed. */
 export function normaliseName(value: string): string {
   return value
@@ -42,7 +51,7 @@ function nameWords(value: string): string[] {
     words.push(...parts);
     if (parts.length > 1) words.push(parts.join(""));
   }
-  return words.filter((word) => !CONNECTORS.has(word));
+  return words.filter((word) => !CONNECTORS.has(word)).flatMap(withoutWaw);
 }
 
 export function nameKeys(
@@ -72,10 +81,12 @@ export function matches(query: string, keys: NameKeys): boolean {
   const words = normalised.split(" ").filter((word) => !CONNECTORS.has(word));
   if (words.length < 2) return false;
 
-  return words.every((word, index) => {
-    if (keys.words.has(word)) return true;
-    if (index !== words.length - 1 || word.length < 3) return false;
-    for (const key of keys.words) if (key.startsWith(word)) return true;
-    return false;
-  });
+  return words.every((typed, index) =>
+    withoutWaw(typed).some((word) => {
+      if (keys.words.has(word)) return true;
+      if (index !== words.length - 1 || word.length < 3) return false;
+      for (const key of keys.words) if (key.startsWith(word)) return true;
+      return false;
+    }),
+  );
 }

@@ -105,8 +105,14 @@ export function smokeClient(request: APIRequestContext, siteUrl: string, secret:
   };
 }
 
-export function linkFromEmail(html: string, contains: string): string {
+/**
+ * The link's path and query on `baseURL`. A preview's SITE_URL is the live site,
+ * since previews have a new hostname each build, so links in its captured emails
+ * name the wrong host. The path and token are what the preview has to honour.
+ */
+export function linkFromEmail(html: string, contains: string, baseURL: string): string {
   const found = [...html.matchAll(/href="([^"]+)"/g)].map((match) => match[1]).find((href) => href.includes(contains));
   if (!found) throw new Error(`No link containing "${contains}" in the email`);
-  return found.replaceAll("&amp;", "&");
+  const link = new URL(found.replaceAll("&amp;", "&"));
+  return new URL(link.pathname + link.search, baseURL).toString();
 }

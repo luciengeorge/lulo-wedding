@@ -106,6 +106,19 @@ beforeEach(() => {
   vi.clearAllMocks();
 });
 
+describe("listParties", () => {
+  it("lets an online reply replace the sheet's early decline", async () => {
+    const changedMind = { ...base, earlyDecline: true, respondedAt: 10, declined: false };
+    const stillNo = { ...base, _id: partyId("p2"), earlyDecline: true, headCount: 2 };
+    const { ctx } = harness([changedMind, stillNo], [guest("g1")]);
+
+    const { rows, stats } = await testQuery(listParties)._handler(ctx, {});
+
+    expect(rows.map((row) => row.rsvp.state)).toEqual(["attending", "declined"]);
+    expect(stats).toMatchObject({ declinedEarly: 1, declinedEarlyGuests: 2 });
+  });
+});
+
 describe.each([
   [
     "bulkUpdateParties",

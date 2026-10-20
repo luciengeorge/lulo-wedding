@@ -1,7 +1,7 @@
 import type { Page } from "@playwright/test";
 
 import { backend, expect, GUEST_STATE, party, test, visit, waitForEmail } from "../fixtures";
-import { card, fillCard, seatCards, sendReply } from "../rsvp-form";
+import { fillCard, seatCards, sendReply } from "../rsvp-form";
 
 test.use({ storageState: GUEST_STATE });
 
@@ -137,27 +137,29 @@ test.describe("email addresses", () => {
 test.describe("rows the sheet left incomplete", () => {
   /**
    * The couple can name a party before ticking any event, and its link already
-   * works. The rules refuse an acceptance outright; this checks the page holds
-   * together and a decline still goes through.
+   * works. There is nothing to answer yet, so the page says the details are coming
+   * and offers no buttons at all.
    */
-  test("a party invited to no events yet: says so instead of breaking", async ({ page }) => {
+  test("a party invited to no events yet: sees a holding page, with nothing to answer", async ({ page }) => {
     backend.seed([party({ token: TOKEN, headCount: 2, invitedToWedding: false })]);
     await visit(page, `/rsvp/${TOKEN}`);
-    await expect(page.getByText("Rae & Cherif")).toBeVisible();
 
-    await page.getByRole("button", { name: "JOYFULLY ACCEPT" }).click();
-    await expect(seatCards(page)).toHaveCount(2);
-    await expect(card(page, "GUEST 1").getByRole("checkbox", { name: "Wedding", exact: true })).toHaveCount(0);
-    await page.getByLabel("First name, guest 1").fill("Rae");
-    await sendReply(page, "rae@example.com");
-    await expect(page.getByRole("alert")).toContainText("This invitation has no events attached to it yet.");
-    expect(backend.replyFor(TOKEN)?.respondedAt).toBeUndefined();
+    await expect(page.getByRole("heading", { name: "Your invitation details are on their way" })).toBeVisible();
+    await expect(page.getByText("Laura and Lucien will be in touch soon.")).toBeVisible();
+    await expect(page.getByRole("button", { name: "JOYFULLY ACCEPT" })).toHaveCount(0);
+    await expect(page.getByRole("button", { name: "REGRETFULLY DECLINE" })).toHaveCount(0);
 
-    await page.getByRole("button", { name: "Actually, we cannot make it" }).click();
-    await page.getByLabel("Your email").fill("rae@example.com");
-    await page.getByRole("button", { name: "SEND OUR REGRETS" }).click();
-    await expect(page.getByRole("heading", { name: "We will miss you" })).toBeVisible();
-    expect(backend.replyFor(TOKEN)?.declined).toBe(true);
+    // One person asked to the brunch is an event to answer for.
+    backend.seedGuests(TOKEN, [
+      {
+        firstName: "Rae",
+        lastName: "Haddad",
+        addedByCouple: true,
+        invitedTo: { preWedding: false, wedding: false, brunch: true },
+      },
+    ]);
+    await visit(page, `/rsvp/${TOKEN}`);
+    await expect(page.getByRole("button", { name: "JOYFULLY ACCEPT" })).toBeVisible();
   });
 
   /**

@@ -63,6 +63,27 @@ describe("matches", () => {
     expect(matches("mir abou jaoude", aboujaoude)).toBe(false);
   });
 
+  it("finds someone after an Arabic 'and' joined to their name", () => {
+    const keys = nameKeys({ displayName: "ليلى وسامي", surname: "حداد" }, []);
+    expect(matches("سامي حداد", keys)).toBe(true);
+    expect(matches("وسامي حداد", keys)).toBe(true);
+    expect(matches("ليلى حداد", keys)).toBe(true);
+  });
+
+  it("still finds a name that starts with the letter", () => {
+    const walid = nameKeys({ displayName: "وليد", surname: "خوري" }, []);
+    expect(walid.words.has("وليد")).toBe(true);
+    expect(matches("وليد خوري", walid)).toBe(true);
+    expect(matches("وليد", walid)).toBe(true);
+  });
+
+  it("drops the letter from what was typed as well", () => {
+    const keys = nameKeys({ displayName: "Sami", surname: "Haddad" }, [{ firstName: "سامي", lastName: "حداد" }]);
+    expect(matches("وسامي حداد", keys)).toBe(true);
+    expect(matches("حداد وسام", keys)).toBe(true);
+    expect(matches("وليد حداد", keys)).toBe(false);
+  });
+
   it("finds nothing for nothing", () => {
     expect(matches("   ", aboujaoude)).toBe(false);
   });

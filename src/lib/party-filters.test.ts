@@ -124,6 +124,21 @@ describe("deriveRsvp", () => {
     expect(deriveRsvp({ ...invited, earlyDecline: true }, []).state).toBe("declined");
   });
 
+  it("lets a later online reply win over the sheet's early decline", () => {
+    const changedMind = { ...invited, earlyDecline: true, respondedAt: 10, declined: false };
+    expect(deriveRsvp(changedMind, [guest({ wedding: "yes" })])).toEqual({
+      state: "attending",
+      attending: 1,
+      guestCount: 1,
+      seatsNamed: 1,
+    });
+  });
+
+  it("declines on an online decline, even with no guest rows to carry it", () => {
+    expect(deriveRsvp({ ...invited, respondedAt: 10, declined: true }, []).state).toBe("declined");
+    expect(deriveRsvp({ ...invited, earlyDecline: true, respondedAt: 10, declined: true }, []).state).toBe("declined");
+  });
+
   it("is still awaiting when the only rows are people the couple named", () => {
     expect(deriveRsvp(invited, [guest(), guest()])).toEqual({
       state: "awaiting",

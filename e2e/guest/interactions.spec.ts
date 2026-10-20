@@ -13,11 +13,15 @@ test.use({ storageState: GUEST_STATE });
 const TOKEN = "e2e-interact";
 const EMAIL = "rae@example.com";
 
-/** TanStack Start names a server function in its URL as base64 JSON; this finds the reply submit. */
-function isSubmit(url: string): boolean {
+/** TanStack Start names a server function in its URL as base64 JSON; this finds one by name. */
+function callsServerFn(url: string, name: string): boolean {
   const encoded = url.split("/_serverFn/")[1]?.split(/[?#]/)[0];
   if (!encoded) return false;
-  return Buffer.from(encoded, "base64url").toString("utf8").includes("submitRsvp");
+  return Buffer.from(encoded, "base64url").toString("utf8").includes(name);
+}
+
+function isSubmit(url: string): boolean {
+  return callsServerFn(url, "submitRsvp");
 }
 
 async function openForm(page: Page) {
@@ -89,6 +93,44 @@ test.describe("sending a reply", () => {
     expect(backend.replyFor(TOKEN)?.guests).toEqual([expect.objectContaining({ firstName: "Rae", wedding: "yes" })]);
   });
 
+  /**
+   * The reload after a submit is held, as on a slow connection. The confirmation
+   * must wait for it rather than paint the answers the party just changed.
+   */
+  test("the confirmation never shows the previous answers, even for a moment", async ({ page }) => {
+    const token = "e2e-interact-stale";
+    backend.seed([
+      party({ token, displayName: "The Haddads", headCount: 2, respondedAt: Date.now(), contactEmail: EMAIL }),
+    ]);
+    backend.seedGuests(token, [
+      { firstName: "Rae", lastName: "Haddad", wedding: "yes" },
+      { firstName: "Cherif", lastName: "Haddad", wedding: "yes" },
+    ]);
+    await visit(page, `/rsvp/${token}`);
+    await expect(page.getByText("Rae and Cherif")).toBeVisible();
+    await page.getByRole("button", { name: "CHANGE OUR REPLY" }).click();
+    await page.getByLabel("First name, guest 1").fill("Nour");
+
+    await page.route(
+      (url) => callsServerFn(url.toString(), "getRsvp"),
+      async (route: Route) => {
+        await new Promise((resolve) => setTimeout(resolve, 1_500));
+        await route.continue();
+      },
+    );
+    await page.evaluate(() => {
+      const flags = window as unknown as { sawStale: boolean };
+      flags.sawStale = false;
+      new MutationObserver(() => {
+        if (document.body.innerText.includes("Rae and Cherif")) flags.sawStale = true;
+      }).observe(document.body, { childList: true, subtree: true, characterData: true });
+    });
+
+    await page.getByRole("button", { name: "SEND OUR REPLY" }).click();
+    await expect(page.getByText("Nour and Cherif")).toBeVisible();
+    expect(await page.evaluate(() => (window as unknown as { sawStale: boolean }).sawStale)).toBe(false);
+  });
+
   test("too many replies from one link in a row are refused, and say why", async ({ page }) => {
     await openForm(page);
     await fillRae(page);
@@ -101,7 +143,8 @@ test.describe("sending a reply", () => {
 });
 
 test.describe("moving around", () => {
-  test("back and forward after replying shows the reply, not the question", async ({ page }) => {
+  test("back after replying leaves the RSVP, and forward shows the reply, not the question", async ({ page }) => {
+    await visit(page, "/");
     await visit(page, "/rsvp");
     await page.getByLabel("Your first and last name").fill("Rae Haddad");
     await page.getByRole("button", { name: "FIND MY INVITATION" }).click();
@@ -111,15 +154,29 @@ test.describe("moving around", () => {
     await page.getByRole("button", { name: "SEND OUR REPLY" }).click();
     await expect(page.getByText("Thank you")).toBeVisible();
 
-    // Back is /rsvp, which now remembers this party and returns to it.
+    // The search was replaced by the invitation, so Back leaves rather than
+    // landing on /rsvp and being sent straight back.
     await page.goBack();
-    await expect(page).toHaveURL(`/rsvp/${TOKEN}?via=remembered`);
-    await expect(page.getByText("Thank you")).toBeVisible();
-    await expect(page.getByRole("button", { name: "JOYFULLY ACCEPT" })).toHaveCount(0);
+    await expect(page).toHaveURL("/");
     await page.goForward();
+    await expect(page).toHaveURL(`/rsvp/${TOKEN}?via=lookup`);
     await expect(page.getByText("Thank you")).toBeVisible();
     await expect(page.getByRole("button", { name: "JOYFULLY ACCEPT" })).toHaveCount(0);
     expect(backend.replyFor(TOKEN)?.guests).toHaveLength(1);
+  });
+
+  test("an email typed on one form is still there on the other", async ({ page }) => {
+    await openForm(page);
+    await page.getByLabel("Your email").fill(EMAIL);
+
+    await page.getByRole("button", { name: "Actually, we cannot make it" }).click();
+    await expect(page.getByRole("button", { name: "SEND OUR REGRETS" })).toBeVisible();
+    await expect(page.getByLabel("Your email")).toHaveValue(EMAIL);
+    await page.getByLabel("Your email").fill("cherif@example.com");
+
+    await page.getByRole("button", { name: "Actually, we can come", exact: true }).click();
+    await expect(page.getByRole("button", { name: "SEND OUR REPLY" })).toBeVisible();
+    await expect(page.getByLabel("Your email")).toHaveValue("cherif@example.com");
   });
 
   test("a reload halfway through starts over and saves nothing", async ({ page }) => {

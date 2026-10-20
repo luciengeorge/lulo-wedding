@@ -25,7 +25,10 @@ export const Route = createFileRoute("/rsvp/")({
     await requireGuestUnlocked(location.href);
 
     const token = await getRememberedToken();
-    if (token) throw redirect({ to: "/rsvp/$token", params: { token }, search: { via: "remembered" } });
+    // Replaced, not pushed: Back from the invitation would land here and bounce straight back.
+    if (token) {
+      throw redirect({ to: "/rsvp/$token", params: { token }, search: { via: "remembered" }, replace: true });
+    }
   },
   head: () => ({
     meta: seo({
@@ -137,10 +140,13 @@ function FindInvitation() {
             <ul className="flex flex-col border-y border-[#E7D9C4]">
               {matches.map((match) => (
                 <li key={match.token} className="border-b border-[#E7D9C4] last:border-b-0">
+                  {/* Replaces the search, so Back from the invitation leaves the RSVP
+                      rather than returning here to be redirected to it again. */}
                   <Link
                     to="/rsvp/$token"
                     params={{ token: match.token }}
                     search={{ via: "lookup" }}
+                    replace
                     className="flex min-h-14 items-center justify-between gap-3 px-1 py-3 font-display text-[18px] text-bark transition-colors hover:text-ink focus-visible:text-ink focus-visible:outline-none"
                   >
                     <span>{match.displayName}</span>

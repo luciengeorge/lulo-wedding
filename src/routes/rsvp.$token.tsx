@@ -69,6 +69,8 @@ type Mode = "ask" | "accept" | "decline";
 
 type SubmitPayload = Parameters<typeof submitRsvp>[0]["data"];
 type Submit = (payload: SubmitPayload) => Promise<void>;
+/** Held above both forms, so an address typed on one is still there on the other. */
+type ContactEmail = { value: string; set: (value: string) => void };
 
 /** Taken from the query itself, so the screens cannot drift from what it returns. */
 type RsvpData = NonNullable<FunctionReturnType<typeof api.rsvp.getByToken>>;
@@ -87,17 +89,25 @@ function RsvpFlow({ token, data }: { token: string; data: RsvpData }) {
   const { party, deadlinePassed } = data;
   const events = invitedEvents(party);
 
-  /** Re-runs the loader, so the confirmation shows what was actually stored. */
+  /**
+   * Re-runs the loader, so the confirmation shows what was actually stored.
+   * `sync` waits for the fresh data; without it the reload runs in the background
+   * and the confirmation paints the previous answers first.
+   */
   const submit = async (payload: SubmitPayload) => {
     await submitRsvp({ data: payload });
-    await router.invalidate();
+    await router.invalidate({ sync: true });
   };
 
   const hasReplied = party.respondedAt !== undefined;
   // A party who already answered opens on what they said, not on the question
   // again. `earlyDecline` came from the spreadsheet, so treat it as an answer too.
   const [mode, setMode] = useState<Mode | null>(hasReplied || party.earlyDecline ? null : "ask");
+  const [email, setEmail] = useState(party.contactEmail ?? "");
+  const contactEmail = { value: email, set: setEmail };
 
+  // Nothing to answer yet: the couple have not chosen this party's events.
+  if (events.length === 0) return <NoEventsYet />;
   if (deadlinePassed) return <ClosedSummary data={data} />;
   // Both ways out of the confirmation lead to the guest list: "change our reply"
   // and, for a party that declined, "actually, we can come".
@@ -108,6 +118,7 @@ function RsvpFlow({ token, data }: { token: string; data: RsvpData }) {
       <DeclineForm
         token={token}
         data={data}
+        contactEmail={contactEmail}
         submit={submit}
         onBack={() => setMode("accept")}
         onDone={() => setMode(null)}
@@ -118,6 +129,7 @@ function RsvpFlow({ token, data }: { token: string; data: RsvpData }) {
     <AcceptForm
       token={token}
       data={data}
+      contactEmail={contactEmail}
       submit={submit}
       onDecline={() => setMode("decline")}
       onDone={() => setMode(null)}
@@ -228,12 +240,14 @@ function issuesByGuest(issues: ReplyIssue[]) {
 function AcceptForm({
   token,
   data,
+  contactEmail: { value: contactEmail, set: setContactEmail },
   submit,
   onDecline,
   onDone,
 }: {
   token: string;
   data: RsvpData;
+  contactEmail: ContactEmail;
   submit: Submit;
   onDecline: () => void;
   onDone: () => void;
@@ -256,7 +270,6 @@ function AcceptForm({
 
   const [drafts, setDrafts] = useState<GuestDraft[]>(initial);
   const [plusOne, setPlusOne] = useState<GuestDraft | null>(initialPlusOne);
-  const [contactEmail, setContactEmail] = useState(party.contactEmail ?? "");
   const [issues, setIssues] = useState<ReplyIssue[]>([]);
   const [formError, setFormError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
@@ -415,19 +428,20 @@ function AcceptForm({
 function DeclineForm({
   token,
   data,
+  contactEmail: { value: contactEmail, set: setContactEmail },
   submit,
   onBack,
   onDone,
 }: {
   token: string;
   data: RsvpData;
+  contactEmail: ContactEmail;
   submit: Submit;
   onBack: () => void;
   onDone: () => void;
 }) {
   const { party } = data;
   const [note, setNote] = useState(party.guestNote ?? "");
-  const [contactEmail, setContactEmail] = useState(party.contactEmail ?? "");
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
 
@@ -603,6 +617,14 @@ function ClosedSummary({ data }: { data: RsvpData }) {
         }
       />
       {replied ? <ReplySummary data={data} /> : null}
+    </RsvpShell>
+  );
+}
+
+function NoEventsYet() {
+  return (
+    <RsvpShell>
+      <RsvpHeader title="Your invitation details are on their way" subtitle="Laura and Lucien will be in touch soon." />
     </RsvpShell>
   );
 }

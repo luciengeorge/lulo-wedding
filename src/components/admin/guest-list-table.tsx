@@ -232,19 +232,32 @@ const columns = helper.columns([
     enableSorting: false,
     filterFn: filterByInvitedTo,
     enableGlobalFilter: false,
-    cell: ({ row }) => (
-      <div className="flex items-center gap-1">
-        {INVITE_EVENTS.filter((event) => row.original.invitedTo[event.key]).map((event) => (
-          <span
-            key={event.flag}
-            title={event.label}
-            className="flex h-[21px] items-center rounded-[5px] bg-[#F4F4F5] px-1.5 text-[10.5px] font-medium text-[#52525B]"
-          >
-            {event.chip}
-          </span>
-        ))}
-      </div>
-    ),
+    // A party invited to nothing gets a holding page instead of the RSVP, so it
+    // is flagged here for the couple to catch before the link goes out.
+    cell: ({ row }) => {
+      const events = INVITE_EVENTS.filter((event) => row.original.invitedTo[event.key]);
+      return (
+        <div className="flex items-center gap-1">
+          {events.map((event) => (
+            <span
+              key={event.flag}
+              title={event.label}
+              className="flex h-[21px] items-center rounded-[5px] bg-[#F4F4F5] px-1.5 text-[10.5px] font-medium text-[#52525B]"
+            >
+              {event.chip}
+            </span>
+          ))}
+          {events.length === 0 ? (
+            <span
+              title="Invited to no events yet. Their link shows a holding page, not the RSVP."
+              className="flex h-[21px] items-center rounded-[5px] bg-[#FEF3C7] px-1.5 text-[10.5px] font-medium text-[#92400E]"
+            >
+              No events
+            </span>
+          ) : null}
+        </div>
+      );
+    },
   }),
 
   helper.accessor((party) => party.rsvp.state, {

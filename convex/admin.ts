@@ -186,6 +186,8 @@ function engagementOf(sends: readonly Doc<"sends">[], visits: readonly Doc<"visi
   };
 }
 
+const stillDeclinedEarly = (party: PartyRow) => party.earlyDecline && party.respondedAt === undefined;
+
 /** Loads every party with its RSVP summary and engagement attached. */
 async function loadParties(ctx: QueryCtx): Promise<PartyRow[]> {
   const { parties, guestsByParty, sendsByParty, visitsByParty } = await loadAll(ctx);
@@ -251,9 +253,10 @@ export const listParties = query({
           .filter((party) => party.saveTheDateSent)
           .reduce((sum, party) => sum + party.headCount + (party.plusOneAllowed ? 1 : 0), 0),
         responded: rows.filter((party) => party.rsvp.guestCount > 0).length,
-        declinedEarly: rows.filter((party) => party.earlyDecline).length,
+        // An early "No" the party has since replaced online no longer counts.
+        declinedEarly: rows.filter(stillDeclinedEarly).length,
         declinedEarlyGuests: rows
-          .filter((party) => party.earlyDecline)
+          .filter(stillDeclinedEarly)
           .reduce((sum, party) => sum + party.headCount + (party.plusOneAllowed ? 1 : 0), 0),
       },
     };

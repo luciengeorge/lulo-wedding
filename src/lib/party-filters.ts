@@ -163,6 +163,9 @@ type RsvpStatus = "pending" | "yes" | "no";
 
 export type RsvpParty = {
   earlyDecline: boolean;
+  respondedAt?: number;
+  /** Set by the online form; a decline there leaves no guest rows to read it from. */
+  declined?: boolean;
   invitedToPreWedding: boolean;
   invitedToWedding: boolean;
   invitedToBrunch: boolean;
@@ -183,8 +186,9 @@ export type RsvpGuest = {
  *
  * Only events a guest is actually invited to are consulted: a `yes` on the
  * brunch from someone who was never invited to it is stale data, not an RSVP.
- * `earlyDecline` wins over everything — the sheet already recorded a "No", and
- * that is a real answer even though no guest row exists to carry it.
+ * `earlyDecline` stands until the party replies online — the sheet already
+ * recorded a "No", and that is a real answer even though no guest row exists to
+ * carry it. Once they reply online, that reply wins, as it does on their own page.
  *
  * Rows still all `pending` are left out. The couple can name a guest before the
  * party replies, and that row is an invitation, not an answer.
@@ -194,7 +198,8 @@ export function deriveRsvp(party: RsvpParty, guests: readonly RsvpGuest[]): Rsvp
   const guestCount = answered.length;
   const seatsNamed = answered.filter((guest) => !guest.isPlusOne).length;
 
-  if (party.earlyDecline) {
+  const declined = party.respondedAt === undefined ? party.earlyDecline : party.declined === true;
+  if (declined) {
     return { state: "declined", attending: 0, guestCount, seatsNamed };
   }
 
