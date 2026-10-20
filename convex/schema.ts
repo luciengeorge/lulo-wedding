@@ -8,6 +8,9 @@ import { v } from "convex/values";
 /** Per-event RSVP state. `pending` is the pre-reply default, not a "maybe". */
 const rsvpStatus = v.union(v.literal("pending"), v.literal("yes"), v.literal("no"));
 
+/** Which of the three events a seat is asked about. */
+const eventFlags = v.object({ preWedding: v.boolean(), wedding: v.boolean(), brunch: v.boolean() });
+
 export default defineSchema({
   /**
    * One row per invitation. The invite unit is a party, not a person: the couple's
@@ -45,6 +48,8 @@ export default defineSchema({
     editedInAdminAt: v.optional(v.number()),
     note: v.optional(v.string()),
     contactEmail: v.optional(v.string()),
+    /** Free text: the couple send WhatsApp invites by hand, so this is never dialled by the app. */
+    contactPhone: v.optional(v.string()),
     /**
      * When the party last submitted the RSVP form. `earlyDecline` is the sheet
      * recording a no before anyone was asked; this is the form being used.
@@ -66,7 +71,9 @@ export default defineSchema({
 
   /**
    * Individual attendees. Not created by the import — the sheet mostly does not name
-   * people, only parties. A guest row appears when a party RSVPs and says who is coming.
+   * people, only parties. A guest row appears when a party RSVPs and says who is coming,
+   * or when the couple name someone in /admin to invite them to different events from
+   * the rest of their party.
    */
   guests: defineTable({
     partyId: v.id("parties"),
@@ -81,7 +88,66 @@ export default defineSchema({
     weddingAt: v.optional(v.number()),
     brunch: rsvpStatus,
     brunchAt: v.optional(v.number()),
+    /**
+     * This person's own invite, set only by the couple. Absent means the party's
+     * flags apply, which is every seat the couple did not single out.
+     */
+    invitedTo: v.optional(eventFlags),
+    /**
+     * Named by the couple rather than by the party. Such a row is never deleted by
+     * a reply: clearing the card marks the person as not coming instead.
+     */
+    addedByCouple: v.optional(v.boolean()),
   }).index("by_party", ["partyId"]),
+
+  /**
+   * One row per message sent to a party, on any channel. Email rows are queued
+   * through the Resend component and updated by its webhook; WhatsApp is sent by
+   * hand, so those rows are the couple stamping it in /admin and stay "sent".
+   */
+  sends: defineTable({
+    partyId: v.id("parties"),
+    channel: v.union(v.literal("email"), v.literal("whatsapp")),
+    kind: v.union(v.literal("invite"), v.literal("update"), v.literal("receipt"), v.literal("reminder")),
+    /** The address mailed. Absent for WhatsApp. */
+    to: v.optional(v.string()),
+    /** The Resend component's EmailId, which is how webhook events find this row. */
+    emailId: v.optional(v.string()),
+    status: v.union(
+      v.literal("queued"),
+      v.literal("sent"),
+      v.literal("delivered"),
+      v.literal("delivery_delayed"),
+      v.literal("bounced"),
+      v.literal("complained"),
+      v.literal("failed"),
+    ),
+    sentAt: v.number(),
+    deliveredAt: v.optional(v.number()),
+    firstOpenedAt: v.optional(v.number()),
+    lastOpenedAt: v.optional(v.number()),
+    openCount: v.number(),
+    firstClickedAt: v.optional(v.number()),
+    lastClickedAt: v.optional(v.number()),
+    clickCount: v.number(),
+    bouncedAt: v.optional(v.number()),
+    bounceReason: v.optional(v.string()),
+    complainedAt: v.optional(v.number()),
+    failedAt: v.optional(v.number()),
+    error: v.optional(v.string()),
+  })
+    .index("by_party", ["partyId", "sentAt"])
+    .index("by_email_id", ["emailId"])
+    .index("by_channel", ["channel", "sentAt"]),
+
+  /** A party's link being opened. The receiving end of every channel, WhatsApp included. */
+  visits: defineTable({
+    partyId: v.id("parties"),
+    at: v.number(),
+    source: v.union(v.literal("link"), v.literal("email"), v.literal("lookup"), v.literal("remembered")),
+    /** The email the visit came from, when the link carried one. */
+    sendId: v.optional(v.id("sends")),
+  }).index("by_party", ["partyId", "at"]),
 
   /**
    * Outbound email, captured instead of sent.

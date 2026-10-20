@@ -77,7 +77,11 @@ function harness(rows: Doc<"parties">[] = [base], replies: Doc<"guests">[] = [])
       guests.delete(id as Doc<"guests">["_id"]);
     }),
     query: vi.fn((table: string) => {
-      expect(["parties", "guests"]).toContain(table);
+      expect(["parties", "guests", "sends", "visits"]).toContain(table);
+      // No tracking rows in these fixtures; convex/tracking.test.ts covers them.
+      if (table === "sends" || table === "visits") {
+        return { collect: async () => [], withIndex: () => ({ collect: async () => [] }) };
+      }
       return {
         collect: async () => [...(table === "parties" ? parties.values() : guests.values())],
         withIndex: (index: string, range: (q: { eq: (field: string, id: Doc<"parties">["_id"]) => void }) => void) => {

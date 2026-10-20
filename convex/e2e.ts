@@ -69,6 +69,12 @@ export const reset = internalMutation({
       await rateLimiter.reset(ctx, "rsvpSubmit", { key: party.token });
     }
 
+    // Tracking rows hang off parties and would outlive them otherwise. Not counted:
+    // the specs only assert on the three tables below.
+    for (const table of ["sends", "visits"] as const) {
+      for (const row of await ctx.db.query(table).collect()) await ctx.db.delete(row._id);
+    }
+
     for (const table of ["guests", "parties", "capturedEmails"] as const) {
       // Bounded by construction: the fixtures below insert a handful of rows.
       const rows = await ctx.db.query(table).collect();

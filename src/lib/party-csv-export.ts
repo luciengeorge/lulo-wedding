@@ -28,6 +28,7 @@ export type ExportableParty = {
   saveTheDateSent: boolean;
   note?: string;
   contactEmail?: string;
+  contactPhone?: string;
   rsvp: { state: RsvpState; attending: number; guestCount: number };
 };
 
@@ -48,6 +49,7 @@ const COLUMNS = [
   "Attending",
   "Magic link",
   "Email(s)",
+  "Phone(s)",
   "Note",
 ] as const;
 
@@ -88,6 +90,7 @@ export function partiesToCsv(rows: readonly ExportableParty[], siteUrl: string):
         String(party.rsvp.attending),
         `${base}/rsvp/${party.token}`,
         party.contactEmail ?? "",
+        party.contactPhone ?? "",
         party.note ?? "",
       ]
         .map(escapeCsvField)

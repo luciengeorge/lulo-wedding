@@ -51,6 +51,13 @@ describe("partiesToCsv", () => {
     expect(csv).not.toContain("undefined");
   });
 
+  it("puts the phone number in its own column, next to the email", () => {
+    const [header, line] = rows(partiesToCsv([{ ...party, contactPhone: "+961 3 123 456" }], "https://x.test"));
+    const columns = header?.split(",") ?? [];
+    expect(line?.split(",")[columns.indexOf("Phone(s)")]).toBe("+961 3 123 456");
+    expect(columns.indexOf("Phone(s)")).toBe(columns.indexOf("Email(s)") + 1);
+  });
+
   it("renders the enums and flags as words, not codes", () => {
     const line = rows(partiesToCsv([party], "https://x.test"))[1] ?? "";
     expect(line).toContain("Laura");

@@ -114,6 +114,22 @@ describe("buildImportKey", () => {
 });
 
 describe("parseGuestCsv", () => {
+  it("reads a Phone column added after the fixed ones, wherever it sits", () => {
+    const text = [
+      BANNER,
+      `${HEADER},Extra,Phone(s)`,
+      `${row()},x,+44 7700 900123`,
+      `${row({ surname: "Other" })},x,`,
+    ].join("\n");
+    const { rows } = parseGuestCsv(text);
+    expect(rows[0]?.contactPhone).toBe("+44 7700 900123");
+    expect(rows[1]).not.toHaveProperty("contactPhone");
+  });
+
+  it("leaves the phone absent when the sheet has no Phone column", () => {
+    expect(parseGuestCsv(sheet(row())).rows[0]).not.toHaveProperty("contactPhone");
+  });
+
   it("skips the banner and header and reads from row 3", () => {
     const { rows, warnings } = parseGuestCsv(sheet(row()));
     expect(warnings).toEqual([]);

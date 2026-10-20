@@ -2,12 +2,12 @@
 
 import type { ReactElement } from "react";
 
-import { render } from "react-email";
 import { v } from "convex/values";
-import { Resend } from "resend";
+import { render } from "react-email";
 
 import { internal } from "../_generated/api";
 import { internalAction } from "../_generated/server";
+import { resend } from "./resend";
 import AccountDeletedEmail from "./templates/accountDeleted";
 import ChangeEmail from "./templates/changeEmail";
 import DeleteAccount from "./templates/deleteAccount";
@@ -36,10 +36,15 @@ function buildTemplate(name: TemplateName, props: Record<string, unknown>): Reac
 }
 
 /**
- * Internal action: render a React Email template and send via Resend.
+ * Internal action: render a React Email template and queue it with the Resend
+ * component.
  *
  * Called from auth flows, billing webhooks, scheduled jobs, etc. Use the
  * `"use node"` directive (above) so React Email's render runs in Node, not V8.
+ *
+ * `sendId` ties the message to a row in `sends`, so the webhook's delivery and
+ * open events can be matched back to the party it went to. Auth email passes
+ * none and is not tracked.
  */
 export const sendEmail = internalAction({
   args: {
@@ -56,8 +61,9 @@ export const sendEmail = internalAction({
       v.literal("rsvpConfirmation"),
     ),
     props: v.any(),
+    sendId: v.optional(v.id("sends")),
   },
-  handler: async (ctx, { to, subject, template, props }) => {
+  handler: async (ctx, { to, subject, template, props, sendId }) => {
     const apiKey = process.env.RESEND_API_KEY;
     const from = process.env.RESEND_FROM_EMAIL;
     const capture = process.env.E2E_CAPTURE_EMAILS === "1";
@@ -76,24 +82,22 @@ export const sendEmail = internalAction({
       return { id: null };
     }
 
-    if (!apiKey || !from) {
-      throw new Error("RESEND_API_KEY and RESEND_FROM_EMAIL must be set");
+    let emailId;
+    try {
+      if (!apiKey || !from) {
+        throw new Error("RESEND_API_KEY and RESEND_FROM_EMAIL must be set");
+      }
+      emailId = await resend.sendEmail(ctx, { from, to, subject, html, text });
+    } catch (error) {
+      // Otherwise the row sits at "queued" forever and /admin reads it as in flight.
+      if (sendId) {
+        await ctx.runMutation(internal.sends.markFailed, { sendId, error: String(error) });
+      }
+      throw error;
     }
 
-    const resend = new Resend(apiKey);
+    if (sendId) await ctx.runMutation(internal.sends.attachEmailId, { sendId, emailId });
 
-    const result = await resend.emails.send({
-      from,
-      to,
-      subject,
-      html,
-      text,
-    });
-
-    if (result.error) {
-      throw new Error(`Resend error: ${result.error.message}`);
-    }
-
-    return { id: result.data?.id ?? null };
+    return { id: emailId };
   },
 });

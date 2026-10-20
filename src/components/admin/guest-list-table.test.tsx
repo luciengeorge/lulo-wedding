@@ -38,10 +38,23 @@ const base: PartyRow = {
   saveTheDateSent: true,
   earlyDecline: false,
   rsvp: { state: "awaiting", attending: 0, guestCount: 0, seatsNamed: 0 },
+  invitedTo: { preWedding: false, wedding: true, brunch: false },
+  visitCount: 0,
+  emailBounced: false,
 };
 
+/** `invitedTo` follows the overridden flags, as it does for a party with no couple-named guests. */
 function party(overrides: Partial<PartyRow>, id: string): PartyRow {
-  return { ...base, ...overrides, _id: id as PartyRow["_id"] };
+  const row = { ...base, ...overrides };
+  return {
+    ...row,
+    invitedTo: overrides.invitedTo ?? {
+      preWedding: row.invitedToPreWedding,
+      wedding: row.invitedToWedding,
+      brunch: row.invitedToBrunch,
+    },
+    _id: id as PartyRow["_id"],
+  };
 }
 
 /**

@@ -3,9 +3,12 @@ import { describe, expect, it } from "vitest";
 import type { ReplyGuest, ReplyParty } from "./rsvp-rules";
 
 import {
+  effectiveInvite,
+  guestInvitedEvents,
   invitedEvents,
   isBlankCard,
   isEffectiveDecline,
+  partyInvitedTo,
   seatsAccountedFor,
   statusFor,
   validateReply,
@@ -190,5 +193,46 @@ describe("seatsAccountedFor", () => {
 
   it("does not count blank cards", () => {
     expect(seatsAccountedFor([guest(), guest({ firstName: "", lastName: "" })])).toBe(1);
+  });
+});
+
+describe("per-guest invites", () => {
+  const brunch = { preWedding: false, wedding: true, brunch: true };
+
+  it("falls back to the party's flags for anyone the couple did not single out", () => {
+    expect(effectiveInvite(party, {})).toEqual({ preWedding: false, wedding: true, brunch: false });
+    expect(effectiveInvite(party, { invitedTo: brunch })).toEqual(brunch);
+    expect(guestInvitedEvents(party, { invitedTo: brunch })).toEqual(["wedding", "brunch"]);
+  });
+
+  it("invites the party to an event when any one person is", () => {
+    expect(partyInvitedTo(party, [{}, { invitedTo: brunch }])).toEqual(brunch);
+    expect(partyInvitedTo(party, [{}])).toEqual({ preWedding: false, wedding: true, brunch: false });
+  });
+
+  it("accepts a reply where only the person asked to the brunch ticks it", () => {
+    const reply = [guest({ invitedTo: brunch, attending: { brunch: true } }), guest({ firstName: "Nour" })];
+    expect(validateReply(party, reply)).toEqual([]);
+  });
+
+  it("does not count a tick on an event this person was not asked about", () => {
+    const reply = [guest({ attending: { brunch: true } })];
+    expect(messages(validateReply(party, reply))).toEqual([
+      "Which days is Rae coming? Leave the card blank if that seat is not being used.",
+    ]);
+    expect(isEffectiveDecline(party, reply)).toBe(true);
+  });
+
+  it("is not a decline while someone is coming to their own event", () => {
+    const reply = [
+      guest({ invitedTo: brunch, attending: { wedding: false, brunch: true } }),
+      guest({ attending: { wedding: false } }),
+    ];
+    expect(isEffectiveDecline(party, reply)).toBe(false);
+  });
+
+  it("is satisfied by a party invited to nothing but one person's event", () => {
+    const none = { ...party, invitedToWedding: false };
+    expect(validateReply(none, [guest({ invitedTo: brunch, attending: { brunch: true } })])).toEqual([]);
   });
 });

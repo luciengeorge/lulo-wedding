@@ -115,4 +115,27 @@ describe("deriveRsvp", () => {
   it("lets an early decline from the sheet win, with no guest rows to carry it", () => {
     expect(deriveRsvp({ ...invited, earlyDecline: true }, []).state).toBe("declined");
   });
+
+  it("is still awaiting when the only rows are people the couple named", () => {
+    expect(deriveRsvp(invited, [guest(), guest()])).toEqual({
+      state: "awaiting",
+      attending: 0,
+      guestCount: 0,
+      seatsNamed: 0,
+    });
+  });
+
+  it("counts a brunch yes from someone the couple asked to the brunch", () => {
+    const own = { preWedding: false, wedding: false, brunch: true };
+    expect(deriveRsvp(invited, [guest({ brunch: "yes", invitedTo: own })]).attending).toBe(1);
+    expect(deriveRsvp({ ...invited, invitedToWedding: false }, [guest({ invitedTo: own })]).state).toBe("awaiting");
+  });
+});
+
+describe("matchesInvitedTo with per-guest invites", () => {
+  it("filters on the effective invite when the row carries one", () => {
+    const row = { ...party, invitedTo: { preWedding: false, wedding: true, brunch: true } };
+    expect(matchesInvitedTo(row, ["brunch"])).toBe(true);
+    expect(matchesInvitedTo(party, ["brunch"])).toBe(false);
+  });
 });

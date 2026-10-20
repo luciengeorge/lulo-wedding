@@ -23,6 +23,7 @@ const partyCsvFields = v.object({
   earlyDecline: v.boolean(),
   note: v.optional(v.string()),
   contactEmail: v.optional(v.string()),
+  contactPhone: v.optional(v.string()),
 });
 
 export type PartyCsvFields = Infer<typeof partyCsvFields>;
@@ -45,6 +46,7 @@ const SHEET_OWNED_FIELDS = [
   "earlyDecline",
   "note",
   "contactEmail",
+  "contactPhone",
 ] as const satisfies readonly (keyof PartyCsvFields)[];
 
 const TOKEN_ALPHABET = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-_";

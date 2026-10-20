@@ -2,6 +2,7 @@ import type { FunctionReturnType } from "convex/server";
 
 import { createFileRoute, notFound, useRouter } from "@tanstack/react-router";
 import { useMemo, useState } from "react";
+import z from "zod";
 
 import type { GuestDraft } from "@/components/rsvp/guest-card";
 import type { ReplyGuest, ReplyIssue, RsvpEventKey } from "@/lib/rsvp-rules";
@@ -13,8 +14,8 @@ import { emptyGuest, GuestCard } from "@/components/rsvp/guest-card";
 import { CardLabel, RsvpCard, RsvpHeader, RsvpShell } from "@/components/rsvp/rsvp-shell";
 import { convexErrorMessage } from "@/lib/convex-error";
 import { FEATURES } from "@/lib/flags";
-import { requireGuestUnlocked } from "@/lib/functions/guest-gate";
-import { getRsvp, submitRsvp } from "@/lib/functions/rsvp";
+import { isGuestUnlocked, requireGuestUnlocked, unlockWithToken } from "@/lib/functions/guest-gate";
+import { getRsvp, submitRsvp, VisitViaSchema } from "@/lib/functions/rsvp";
 import { invitedEvents, isBlankCard, RSVP_EVENTS, validateReply } from "@/lib/rsvp-rules";
 import { seo } from "@/lib/seo";
 
@@ -25,17 +26,31 @@ const EVENT_DATE: Record<RsvpEventKey, string> = {
   brunch: "Sun 18 July",
 };
 
+/**
+ * `s` is the send an email link came from; `via` is how a guest without a link
+ * got here. Both only label the visit, so junk in either is dropped, not refused.
+ */
+const RsvpSearchSchema = z.object({
+  s: z.string().max(64).optional().catch(undefined),
+  via: VisitViaSchema.optional().catch(undefined),
+});
+
 export const Route = createFileRoute("/rsvp/$token")({
-  beforeLoad: ({ location }) => {
+  validateSearch: RsvpSearchSchema,
+  beforeLoad: async ({ location, params }) => {
     // Unfinished work must be unreachable, not merely unlinked. A guest who
     // guessed the path should get the 404 the rest of the site gives.
     if (!FEATURES.rsvp) throw notFound();
+    if (await isGuestUnlocked()) return;
+    // A valid link is its own way past the gate. Only a dead one gets the password page.
+    if (await unlockWithToken({ data: { token: params.token } })) return;
     return requireGuestUnlocked(location.href);
   },
+  loaderDeps: ({ search }) => ({ s: search.s, via: search.via }),
   // Loaded on the server, so the invitation is in the first response rather than
   // a round trip later, and so the page does not depend on the browser's Convex
   // client, which holds queries until an auth token a guest will never have.
-  loader: ({ params }) => getRsvp({ data: { token: params.token } }),
+  loader: ({ params, deps }) => getRsvp({ data: { token: params.token, ...deps } }),
   head: () => ({
     meta: seo({
       title: "RSVP",

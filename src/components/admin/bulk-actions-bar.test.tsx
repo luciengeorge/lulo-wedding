@@ -34,6 +34,9 @@ const rows: PartyRow[] = Array.from({ length: 240 }, (_, index) => ({
     guestCount: index < 2 ? 2 : 0,
     seatsNamed: index < 2 ? 2 : 0,
   },
+  invitedTo: { preWedding: false, wedding: true, brunch: false },
+  visitCount: 0,
+  emailBounced: false,
 }));
 
 const updateParties =

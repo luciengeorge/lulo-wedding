@@ -5,7 +5,7 @@ import { getRequestHeader, getRequestIP } from "@tanstack/react-start/server";
 import z from "zod";
 
 import { api } from "@/../convex/_generated/api";
-import { fetchAuthMutation } from "@/lib/auth-server";
+import { fetchAuthMutation, fetchAuthQuery } from "@/lib/auth-server";
 import { useGuestSession } from "@/lib/guest-session.server";
 import { safeRedirect } from "@/lib/safe-redirect";
 
@@ -28,7 +28,7 @@ const EnterGateSchema = z.object({ password: z.string().min(1) });
  * `"unknown"` bucket fails in the safe direction: it rate-limits harder, and it
  * never hands a caller a private bucket of their own.
  */
-function getClientKey(): string {
+export function getClientKey(): string {
   const forwarded = getRequestHeader("x-forwarded-for")?.split(",")[0];
   const candidate =
     getRequestHeader("x-vercel-forwarded-for") ?? getRequestHeader("x-real-ip") ?? forwarded ?? getRequestIP();
@@ -57,6 +57,23 @@ export const enterGate = createServerFn({ method: "POST" })
       }
 
       return result;
+    });
+  });
+
+/**
+ * Unlocks the gate for someone holding a valid party link. The link is already
+ * a better credential than the shared password, which every guest knows, so
+ * asking for both would only stop the people the link was sent to.
+ */
+export const unlockWithToken = createServerFn({ method: "POST" })
+  .validator(z.object({ token: z.string().trim().min(1).max(64) }))
+  .handler(async ({ data }) => {
+    return Sentry.startSpan({ name: "unlockWithToken" }, async () => {
+      if (!(await fetchAuthQuery(api.rsvp.tokenIsValid, { token: data.token }))) return false;
+
+      const session = await useGuestSession();
+      await session.update({ ...session.data, unlocked: true, at: Date.now() });
+      return true;
     });
   });
 

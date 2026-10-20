@@ -155,6 +155,7 @@ describe("getByToken", () => {
       [
         "contactEmail",
         "declined",
+        "defaultInvitedTo",
         "displayName",
         "earlyDecline",
         "guestNote",

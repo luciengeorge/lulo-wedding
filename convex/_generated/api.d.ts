@@ -19,6 +19,7 @@ import type * as billing_userInfo from "../billing/userInfo.js";
 import type * as crons from "../crons.js";
 import type * as e2e from "../e2e.js";
 import type * as email_captured from "../email/captured.js";
+import type * as email_resend from "../email/resend.js";
 import type * as email_send from "../email/send.js";
 import type * as email_templates__components from "../email/templates/_components.js";
 import type * as email_templates__layout from "../email/templates/_layout.js";
@@ -39,6 +40,7 @@ import type * as parties from "../parties.js";
 import type * as rag from "../rag.js";
 import type * as rateLimiter from "../rateLimiter.js";
 import type * as rsvp from "../rsvp.js";
+import type * as sends from "../sends.js";
 import type * as storage from "../storage.js";
 import type * as sync_dispatcher from "../sync/dispatcher.js";
 import type * as sync_registry from "../sync/registry.js";
@@ -65,6 +67,7 @@ declare const fullApi: ApiFromModules<{
   crons: typeof crons;
   e2e: typeof e2e;
   "email/captured": typeof email_captured;
+  "email/resend": typeof email_resend;
   "email/send": typeof email_send;
   "email/templates/_components": typeof email_templates__components;
   "email/templates/_layout": typeof email_templates__layout;
@@ -85,6 +88,7 @@ declare const fullApi: ApiFromModules<{
   rag: typeof rag;
   rateLimiter: typeof rateLimiter;
   rsvp: typeof rsvp;
+  sends: typeof sends;
   storage: typeof storage;
   "sync/dispatcher": typeof sync_dispatcher;
   "sync/registry": typeof sync_registry;
@@ -126,4 +130,5 @@ export declare const components: {
   polar: import("@convex-dev/polar/_generated/component.js").ComponentApi<"polar">;
   rag: import("@convex-dev/rag/_generated/component.js").ComponentApi<"rag">;
   rateLimiter: import("@convex-dev/rate-limiter/_generated/component.js").ComponentApi<"rateLimiter">;
+  resend: import("@convex-dev/resend/_generated/component.js").ComponentApi<"resend">;
 };

@@ -36,6 +36,13 @@ export const rateLimiter = new RateLimiter(components.rateLimiter, {
   //   their reply several times in one sitting, and the point is only to stop one
   //   link being used to fire confirmation emails in a loop.
   rsvpSubmit: { kind: "token bucket", rate: 20, period: HOUR, capacity: 8 },
+  // RSVP: name lookups per client IP. A match hands out a party's link, so this
+  //   caps how fast anyone can guess names, on the same terms as the password gate.
+  nameLookup: { kind: "fixed window", rate: 20, period: 15 * MINUTE },
+  // RSVP: name lookups across everyone. The mutation is public and `clientKey` is
+  //   only honest when it comes through our server, so a caller hitting Convex
+  //   directly could rotate keys. This caps the whole site regardless.
+  nameLookupGlobal: { kind: "fixed window", rate: 200, period: HOUR },
   // Generic: per-second hot-loop guard
   hotPath: { kind: "token bucket", rate: 1, period: SECOND, capacity: 5 },
 });

@@ -24,7 +24,7 @@ export const Route = createFileRoute("/rsvp/")({
     await requireGuestUnlocked(location.href);
 
     const token = await getRememberedToken();
-    if (token) throw redirect({ to: "/rsvp/$token", params: { token } });
+    if (token) throw redirect({ to: "/rsvp/$token", params: { token }, search: { via: "remembered" } });
   },
   head: () => ({
     meta: seo({
