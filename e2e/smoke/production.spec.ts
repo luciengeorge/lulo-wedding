@@ -7,7 +7,10 @@ import { passProtection } from "./smoke";
  * the guest list is live and these run on every production deploy.
  */
 
-const CONVEX_SITE = (process.env.PROD_CONVEX_SITE_URL ?? "https://impartial-horse-754.convex.site").replace(/\/+$/, "");
+const CONVEX_SITE = (process.env.PROD_CONVEX_SITE_URL ?? "https://impartial-horse-754.eu-west-1.convex.site").replace(
+  /\/+$/,
+  "",
+);
 
 test.beforeEach(async ({ context, baseURL }) => {
   await passProtection(context, baseURL!);

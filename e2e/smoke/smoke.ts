@@ -71,7 +71,7 @@ export async function convexSiteUrl(page: Page, path = "/enter"): Promise<string
     const type = response.request().resourceType();
     if (type !== "script" && type !== "document") return;
     const text = await response.text().catch(() => "");
-    for (const match of text.matchAll(/https:\/\/[a-z0-9-]+\.convex\.cloud/g)) found.add(match[0]);
+    for (const match of text.matchAll(/https:\/\/[a-z0-9-]+(?:\.[a-z0-9-]+)*\.convex\.cloud/g)) found.add(match[0]);
   };
   page.on("response", scan);
   await go(page, path);
@@ -79,6 +79,8 @@ export async function convexSiteUrl(page: Page, path = "/enter"): Promise<string
   page.off("response", scan);
 
   if (found.size > 1) throw new Error(`More than one Convex URL in the page: ${[...found].join(", ")}`);
+  // Region-qualified hosts (first-ocelot-339.eu-west-1.convex.cloud) keep their
+  // region on the .site side too; the bare name answers 404 for everything.
   return [...found][0].replace(/\.convex\.cloud$/, ".convex.site");
 }
 

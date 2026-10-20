@@ -1,6 +1,7 @@
 import { test as base, expect, type APIRequestContext, type Page } from "@playwright/test";
 import { execFileSync } from "node:child_process";
 import { createHmac, randomUUID } from "node:crypto";
+import { readFileSync } from "node:fs";
 import { readFile } from "node:fs/promises";
 
 /**
@@ -21,8 +22,8 @@ export const GUEST_STATE = ".e2e/guest-state.json";
 export const ADMIN_STATE = ".e2e/admin-state.json";
 /** The local deployment's HTTP actions, where Resend's webhook is routed. */
 export const CONVEX_SITE_URL = "http://127.0.0.1:3211";
-/** Matches RESEND_WEBHOOK_SECRET in scripts/e2e/backend.mjs. */
-const RESEND_WEBHOOK_SECRET = "whsec_ZTJlLXJlc2VuZC13ZWJob29rLXNlY3JldC1ub3QtcmVhbA==";
+/** RESEND_WEBHOOK_SECRET for this run, written by scripts/e2e/backend.mjs before the tests start. */
+const webhookSecret = () => readFileSync(".e2e/webhook-secret", "utf8");
 
 function convexRun<T>(name: string, args: Record<string, unknown> = {}, attempt = 0): T {
   let stdout: string;
@@ -346,7 +347,7 @@ export const test = base.extend<{ resetPerTest: boolean; cleanDatabase: void; de
  * Signs one Resend webhook event the way Svix does: HMAC-SHA256 over
  * `id.timestamp.body`, keyed by the base64 part of the `whsec_` secret.
  */
-export function signedWebhook(body: string, secret = RESEND_WEBHOOK_SECRET) {
+export function signedWebhook(body: string, secret = webhookSecret()) {
   const id = `msg_${randomUUID()}`;
   const timestamp = Math.floor(Date.now() / 1000).toString();
   const key = Buffer.from(secret.replace(/^whsec_/, ""), "base64");

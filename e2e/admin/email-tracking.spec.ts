@@ -1,5 +1,6 @@
 import type { Page } from "@playwright/test";
 
+import { randomBytes } from "node:crypto";
 import { randomUUID } from "node:crypto";
 
 import {
@@ -121,7 +122,11 @@ test.describe("an emailed invitation", () => {
     await openAdmin(page, "/admin/insights");
 
     const forged = resendEvent("email.opened", resendId, EMAIL);
-    const wrongKey = await postResendEvent(request, forged, signedWebhook(forged, "whsec_bm90LXRoZS1zZWNyZXQ="));
+    const wrongKey = await postResendEvent(
+      request,
+      forged,
+      signedWebhook(forged, `whsec_${randomBytes(24).toString("base64")}`),
+    );
     expect(wrongKey.ok()).toBe(false);
     const unsigned = await postResendEvent(request, forged, { "content-type": "application/json" } as never);
     expect(unsigned.ok()).toBe(false);

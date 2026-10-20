@@ -89,7 +89,7 @@ jobs:
     env:
       CI: "1"
       SMOKE_BASE_URL: ${{ github.event.deployment_status.environment_url }}
-      PROD_CONVEX_SITE_URL: https://impartial-horse-754.convex.site
+      PROD_CONVEX_SITE_URL: https://impartial-horse-754.eu-west-1.convex.site
       VERCEL_AUTOMATION_BYPASS_SECRET: ${{ secrets.VERCEL_AUTOMATION_BYPASS_SECRET }}
     steps:
       - uses: actions/checkout@v4

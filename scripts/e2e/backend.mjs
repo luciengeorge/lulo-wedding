@@ -31,7 +31,7 @@
  * a webServer and kills it at the end.
  */
 import { spawn, spawnSync } from "node:child_process";
-import { createHash } from "node:crypto";
+import { createHash, randomBytes } from "node:crypto";
 import { existsSync, mkdirSync, readdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { createServer } from "node:http";
 import { dirname, join, resolve } from "node:path";
@@ -42,6 +42,12 @@ const mirror = join(repoRoot, ".e2e/app");
 const configPath = join(mirror, ".convex/local/default/config.json");
 /** Which code this run tests. Read by scripts/e2e/stamp.ts into the report. */
 const RUN_STAMP = join(repoRoot, ".e2e/run.json");
+const WEBHOOK_SECRET_FILE = join(repoRoot, ".e2e/webhook-secret");
+
+function writeWebhookSecret(secret) {
+  mkdirSync(dirname(WEBHOOK_SECRET_FILE), { recursive: true });
+  writeFileSync(WEBHOOK_SECRET_FILE, secret);
+}
 const DEV_MODE = process.env.E2E_DEV === "1";
 /** The local deployment always takes 3210 for its cloud port and 3211 for its site port. */
 const CLOUD_PORT = 3210;
@@ -162,10 +168,12 @@ const DEPLOYMENT_ENV = {
   SITE_URL: "http://127.0.0.1:3100",
   BETTER_AUTH_SECRET: "e2e-better-auth-secret-not-used-anywhere-real",
   E2E_CAPTURE_EMAILS: "1",
-  // Svix-format signing secret for the Resend webhook. e2e/fixtures.ts signs the
-  // events it posts to /resend-webhook with the same value.
-  RESEND_WEBHOOK_SECRET: "whsec_ZTJlLXJlc2VuZC13ZWJob29rLXNlY3JldC1ub3QtcmVhbA==",
+  // Svix-format signing secret for the Resend webhook, fresh each run so nothing
+  // secret-shaped lives in the repo. e2e/fixtures.ts reads it from WEBHOOK_SECRET_FILE
+  // to sign the events it posts to /resend-webhook.
+  RESEND_WEBHOOK_SECRET: `whsec_${randomBytes(24).toString("base64")}`,
 };
+writeWebhookSecret(DEPLOYMENT_ENV.RESEND_WEBHOOK_SECRET);
 
 function syncDeploymentEnv() {
   const existing = capture("npx", ["convex", "env", "list"], { cwd: mirror });
