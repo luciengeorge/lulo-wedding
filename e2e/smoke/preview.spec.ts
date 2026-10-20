@@ -86,7 +86,10 @@ test("a guest gets in, finds their invitation, replies, and the couple see it", 
     )
     .not.toBe("");
   await adminPage.goto(linkFromEmail(signIn, "/api/auth", baseURL!));
-  await expect(adminPage).toHaveURL(/\/admin/);
+  // The sign-in happens here, on the preview, but better-auth builds its redirect
+  // from SITE_URL, which on a preview is the live site. Come back to the preview.
+  await go(adminPage, "/admin");
+  await expect(adminPage).toHaveURL(new URL("/admin", baseURL).toString());
 
   const row = adminPage.getByRole("row").filter({ has: adminPage.getByText(party.displayName, { exact: true }) });
   await expect(row).toContainText("1 coming");
