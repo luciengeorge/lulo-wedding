@@ -40,6 +40,11 @@ export const Route = createFileRoute("/admin")({
   component: AdminLayout,
 });
 
+const NAV = [
+  { to: "/admin", label: "Guest list" },
+  { to: "/admin/insights", label: "Insights" },
+] as const;
+
 function AdminLayout() {
   const { admin } = Route.useRouteContext();
   const navigate = useNavigate();
@@ -60,8 +65,8 @@ function AdminLayout() {
 
   return (
     <div className="flex min-h-svh flex-col bg-white text-[#18181B]">
-      {/* Nothing wraps: on a phone the breadcrumb and the address are the first
-          things to go, because the name and the way out are what matter. */}
+      {/* Nothing wraps: on a phone the address is the first thing to go and the
+          name truncates, because the pages and the way out are what matter. */}
       <header className="flex h-[60px] shrink-0 items-center justify-between gap-3 border-b border-[#E4E4E7] px-4 sm:px-6">
         <div className="flex min-w-0 items-baseline gap-2.5">
           <Link to="/" className="flex min-w-0 items-baseline gap-2.5 rounded-sm hover:opacity-80">
@@ -79,7 +84,20 @@ function AdminLayout() {
             <span className="truncate text-[13.5px] font-semibold">Laura &amp; Lucien</span>
           </Link>
           <span className="hidden text-[13.5px] text-[#D4D4D8] sm:inline">/</span>
-          <span className="hidden text-[13.5px] whitespace-nowrap text-[#52525B] sm:inline">Guest list</span>
+          {/* Kept on a phone, unlike the breadcrumb it replaced: with two pages it
+              is navigation now, not decoration. */}
+          <nav aria-label="Admin" className="flex shrink-0 items-baseline gap-3">
+            {NAV.map((item) => (
+              <Link
+                key={item.to}
+                to={item.to}
+                activeOptions={{ exact: true }}
+                className="text-[13.5px] whitespace-nowrap text-[#71717A] underline-offset-4 hover:underline data-[status=active]:font-medium data-[status=active]:text-[#18181B]"
+              >
+                {item.label}
+              </Link>
+            ))}
+          </nav>
         </div>
         <div className="flex shrink-0 items-center gap-4">
           <span className="hidden max-w-[220px] truncate text-[12.5px] text-[#71717A] md:inline">

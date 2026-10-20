@@ -1,6 +1,8 @@
 import { useId, useState } from "react";
 
-import type { RsvpEventKey } from "@/lib/rsvp-rules";
+import type { EventFlags } from "@/lib/rsvp-rules";
+
+import { RSVP_EVENTS } from "@/lib/rsvp-rules";
 
 import { EventChips } from "./event-chips";
 import { FieldError, TextField } from "./fields";
@@ -15,10 +17,17 @@ export type GuestDraft = {
   noEmail: boolean;
   dietaryNotes: string;
   isPlusOne: boolean;
-  attending: Partial<Record<RsvpEventKey, boolean>>;
+  attending: Partial<Record<keyof EventFlags, boolean>>;
+  /** Which events this one person is asked about. A card never shows any other. */
+  invitedTo: EventFlags;
+  /** Named by the couple: the card stays, and can only be marked not coming. */
+  addedByCouple: boolean;
+  /** Set by the "cannot make it" tick on a couple-named card. */
+  notComing: boolean;
 };
 
-export function emptyGuest(isPlusOne = false): GuestDraft {
+/** A seat the couple did not name, asked about the party's own events. */
+export function emptyGuest(invitedTo: EventFlags, isPlusOne = false): GuestDraft {
   return {
     firstName: "",
     lastName: "",
@@ -27,6 +36,9 @@ export function emptyGuest(isPlusOne = false): GuestDraft {
     dietaryNotes: "",
     isPlusOne,
     attending: {},
+    invitedTo,
+    addedByCouple: false,
+    notComing: false,
   };
 }
 
@@ -40,7 +52,6 @@ export function GuestCard({
   guest,
   index,
   label,
-  events,
   errors,
   disabled,
   onChange,
@@ -49,7 +60,6 @@ export function GuestCard({
   guest: GuestDraft;
   index: number;
   label: string;
-  events: readonly RsvpEventKey[];
   errors: Record<string, string>;
   disabled?: boolean;
   onChange: (next: GuestDraft) => void;
@@ -59,6 +69,8 @@ export function GuestCard({
   const [showNote, setShowNote] = useState(guest.dietaryNotes !== "");
 
   const set = <K extends keyof GuestDraft>(key: K, value: GuestDraft[K]) => onChange({ ...guest, [key]: value });
+  const events = RSVP_EVENTS.filter((event) => guest.invitedTo[event.key]).map((event) => event.key);
+  const name = guest.firstName.trim() || `Guest ${index + 1}`;
 
   return (
     <RsvpCard legend={label}>
@@ -99,6 +111,62 @@ export function GuestCard({
       </div>
       {errors.firstName ? <FieldError>{errors.firstName}</FieldError> : null}
 
+      {guest.addedByCouple ? (
+        <label className="flex items-center gap-2 font-display text-[14px] text-faded">
+          <input
+            type="checkbox"
+            checked={guest.notComing}
+            disabled={disabled}
+            onChange={(event) => set("notComing", event.target.checked)}
+            className="size-[15px] accent-[#9B0D17]"
+          />
+          {name} cannot make it
+        </label>
+      ) : null}
+
+      {guest.notComing ? null : (
+        <GuestDetails
+          id={id}
+          guest={guest}
+          index={index}
+          events={events}
+          errors={errors}
+          disabled={disabled}
+          showNote={showNote}
+          onShowNote={() => setShowNote(true)}
+          onChange={onChange}
+        />
+      )}
+    </RsvpCard>
+  );
+}
+
+/** Everything below the name, which a guest marked not coming does not need. */
+function GuestDetails({
+  id,
+  guest,
+  index,
+  events,
+  errors,
+  disabled,
+  showNote,
+  onShowNote,
+  onChange,
+}: {
+  id: string;
+  guest: GuestDraft;
+  index: number;
+  events: readonly (keyof EventFlags)[];
+  errors: Record<string, string>;
+  disabled?: boolean;
+  showNote: boolean;
+  onShowNote: () => void;
+  onChange: (next: GuestDraft) => void;
+}) {
+  const set = <K extends keyof GuestDraft>(key: K, value: GuestDraft[K]) => onChange({ ...guest, [key]: value });
+
+  return (
+    <>
       <div className="flex flex-col gap-1.5">
         <TextField
           id={`${id}-email`}
@@ -152,13 +220,13 @@ export function GuestCard({
       ) : (
         <button
           type="button"
-          onClick={() => setShowNote(true)}
+          onClick={onShowNote}
           disabled={disabled}
           className="self-start font-display text-[14px] text-ink italic underline underline-offset-4"
         >
           + Add a dietary note
         </button>
       )}
-    </RsvpCard>
+    </>
   );
 }

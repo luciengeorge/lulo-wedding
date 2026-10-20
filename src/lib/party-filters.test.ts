@@ -1,8 +1,16 @@
 import { describe, expect, it } from "vitest";
 
-import type { FilterableParty, RsvpGuest, RsvpParty } from "./party-filters";
+import type { FilterableParty, RsvpGuest, RsvpParty, TrackedParty } from "./party-filters";
 
-import { deriveRsvp, foldForSearch, matchesAny, matchesInvitedTo, partySearchText } from "./party-filters";
+import {
+  deriveRsvp,
+  foldForSearch,
+  matchesAny,
+  matchesInvitedTo,
+  matchesInvitedVia,
+  matchesSeen,
+  partySearchText,
+} from "./party-filters";
 
 const party: FilterableParty = {
   displayName: "Rae & Cherif",
@@ -137,5 +145,34 @@ describe("matchesInvitedTo with per-guest invites", () => {
     const row = { ...party, invitedTo: { preWedding: false, wedding: true, brunch: true } };
     expect(matchesInvitedTo(row, ["brunch"])).toBe(true);
     expect(matchesInvitedTo(party, ["brunch"])).toBe(false);
+  });
+});
+
+describe("tracking filters", () => {
+  const unseen: TrackedParty = { earlyDecline: false, emailBounced: false };
+  const seenWaiting: TrackedParty = { ...unseen, lastVisitAt: 10, invitedVia: "whatsapp" };
+  const seenReplied: TrackedParty = { ...seenWaiting, respondedAt: 20, invitedVia: "both" };
+  const earlyNo: TrackedParty = { ...seenWaiting, earlyDecline: true };
+  const bounced: TrackedParty = { ...unseen, invitedVia: "email", emailBounced: true };
+
+  it("finds the people who opened their link but have not answered", () => {
+    const rows = [unseen, seenWaiting, seenReplied, earlyNo];
+    expect(rows.filter((row) => matchesSeen(row, ["seenNotReplied"]))).toEqual([seenWaiting]);
+    expect(rows.filter((row) => matchesSeen(row, ["seen"]))).toHaveLength(3);
+    expect(rows.filter((row) => matchesSeen(row, ["notSeen"]))).toEqual([unseen]);
+    expect(rows.filter((row) => matchesSeen(row, []))).toHaveLength(4);
+  });
+
+  it("counts a party invited both ways under either channel", () => {
+    expect(matchesInvitedVia(seenReplied, ["email"])).toBe(true);
+    expect(matchesInvitedVia(seenReplied, ["whatsapp"])).toBe(true);
+    expect(matchesInvitedVia(seenWaiting, ["email"])).toBe(false);
+  });
+
+  it("finds the uninvited and the bounced", () => {
+    const rows = [unseen, seenWaiting, bounced];
+    expect(rows.filter((row) => matchesInvitedVia(row, ["none"]))).toEqual([unseen]);
+    expect(rows.filter((row) => matchesInvitedVia(row, ["bounced"]))).toEqual([bounced]);
+    expect(rows.filter((row) => matchesInvitedVia(row, ["none", "bounced"]))).toEqual([unseen, bounced]);
   });
 });

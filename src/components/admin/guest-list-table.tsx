@@ -14,14 +14,24 @@ import {
 import { useCallback, useEffect, useRef, useState } from "react";
 import { toast } from "sonner";
 
-import type { InvitedToFilter, RsvpState } from "@/lib/party-filters";
+import type { InvitedToFilter, InvitedViaFilter, RsvpState, SeenFilter } from "@/lib/party-filters";
 
 import { Checkbox } from "@/components/ui/checkbox";
 import { Skeleton } from "@/components/ui/skeleton";
-import { foldForSearch, matchesAny, matchesInvitedTo, partySearchText, RSVP_LABEL } from "@/lib/party-filters";
-import { INVITE_EVENTS, LINK_LABEL, WAVE_LABEL, WHO_LABEL } from "@/lib/party-labels";
+import {
+  foldForSearch,
+  matchesAny,
+  matchesInvitedTo,
+  matchesInvitedVia,
+  matchesSeen,
+  partySearchText,
+  RSVP_LABEL,
+} from "@/lib/party-filters";
+import { INVITE_EVENTS, INVITED_VIA_LABEL, LINK_LABEL, WAVE_LABEL, WHO_LABEL } from "@/lib/party-labels";
 
 import type { PartyRow } from "./party-row";
+
+import { RelativeTime } from "./relative-time";
 
 /**
  * The guest list itself, on TanStack Table.
@@ -79,6 +89,12 @@ const filterByWave: FilterFn<GuestListFeatures, PartyRow> = (row, _columnId, val
 
 const filterByInvitedTo: FilterFn<GuestListFeatures, PartyRow> = (row, _columnId, value) =>
   matchesInvitedTo(row.original, selectedValues(value) as InvitedToFilter[]);
+
+const filterBySeen: FilterFn<GuestListFeatures, PartyRow> = (row, _columnId, value) =>
+  matchesSeen(row.original, selectedValues(value) as SeenFilter[]);
+
+const filterByInvitedVia: FilterFn<GuestListFeatures, PartyRow> = (row, _columnId, value) =>
+  matchesInvitedVia(row.original, selectedValues(value) as InvitedViaFilter[]);
 
 /** One string per row, matched as a substring. Accents are folded on both sides. */
 const filterBySearch: FilterFn<GuestListFeatures, PartyRow> = (row, _columnId, value) => {
@@ -140,7 +156,7 @@ const columns = helper.columns([
   helper.accessor((party) => foldForSearch(`${party.surname} ${party.displayName}`), {
     id: "party",
     header: "Party",
-    meta: { width: 280 },
+    meta: { width: 230 },
     sortDescFirst: false,
     enableColumnFilter: false,
     enableGlobalFilter: true,
@@ -199,7 +215,7 @@ const columns = helper.columns([
     {
       id: "whereFrom",
       header: "Where from",
-      meta: { width: 150 },
+      meta: { width: 140 },
       enableSorting: false,
       filterFn: filterByLink,
       enableGlobalFilter: false,
@@ -207,7 +223,9 @@ const columns = helper.columns([
     },
   ),
 
-  helper.accessor((party) => INVITE_EVENTS.filter((event) => party[event.flag]).length, {
+  // The effective invite, so a party where the couple asked two of five to the
+  // brunch shows the brunch chip even though the party's own flag is off.
+  helper.accessor((party) => INVITE_EVENTS.filter((event) => party.invitedTo[event.key]).length, {
     id: "invitedTo",
     header: "Invited to",
     meta: { width: 190 },
@@ -216,7 +234,7 @@ const columns = helper.columns([
     enableGlobalFilter: false,
     cell: ({ row }) => (
       <div className="flex items-center gap-1">
-        {INVITE_EVENTS.filter((event) => row.original[event.flag]).map((event) => (
+        {INVITE_EVENTS.filter((event) => row.original.invitedTo[event.key]).map((event) => (
           <span
             key={event.flag}
             title={event.label}
@@ -232,12 +250,54 @@ const columns = helper.columns([
   helper.accessor((party) => party.rsvp.state, {
     id: "rsvp",
     header: "RSVP",
-    meta: { width: 180 },
+    meta: { width: 170 },
     sortDescFirst: false,
     sortFn: sortByRsvpState,
     enableColumnFilter: false,
     enableGlobalFilter: false,
     cell: ({ row }) => <span className={RSVP_CLASS[row.original.rsvp.state]}>{rsvpText(row.original)}</span>,
+  }),
+
+  // A bounce sits under the channel rather than in a lane of its own: it is
+  // rare, and a column blank on 395 rows is width the table cannot spare.
+  helper.accessor((party) => (party.invitedVia ? INVITED_VIA_LABEL[party.invitedVia] : ""), {
+    id: "invitedVia",
+    header: "Invited via",
+    meta: { width: 140 },
+    enableSorting: false,
+    filterFn: filterByInvitedVia,
+    enableGlobalFilter: false,
+    cell: ({ row }) => (
+      <div className="flex flex-col gap-px">
+        {row.original.invitedVia ? (
+          <span className="truncate text-[#52525B]">{INVITED_VIA_LABEL[row.original.invitedVia]}</span>
+        ) : (
+          <span className="text-[#C4C4C8]">Not yet</span>
+        )}
+        {row.original.emailBounced ? (
+          <span title="An email to this party bounced. Check the address." className="text-[12px] text-[#9F1239]">
+            Email bounced
+          </span>
+        ) : null}
+      </div>
+    ),
+  }),
+
+  // Never-seen sorts as the oldest possible visit, so "most recent first" puts
+  // the people who have looked at the top and the silent ones at the bottom.
+  helper.accessor((party) => party.lastVisitAt ?? 0, {
+    id: "lastSeen",
+    header: "Last seen",
+    meta: { width: 120 },
+    sortDescFirst: true,
+    filterFn: filterBySeen,
+    enableGlobalFilter: false,
+    cell: ({ row }) =>
+      row.original.lastVisitAt === undefined ? (
+        <span className="text-[#C4C4C8]">Never</span>
+      ) : (
+        <RelativeTime at={row.original.lastVisitAt} className="text-[#52525B]" />
+      ),
   }),
 
   helper.display({
@@ -498,8 +558,8 @@ export function GuestListTable({ table, rowWindow }: { table: GuestListTableInst
   }, [hasMore, showMore, visibleCount]);
 
   return (
-    // The lanes are fixed and total ~1060px, so on a phone this scrolls sideways.
-    // That is the honest behaviour for a table of this shape: squeezing nine
+    // The lanes are fixed and total ~1440px, so on a phone this scrolls sideways.
+    // That is the honest behaviour for a table of this shape: squeezing eleven
     // columns into 390px would make every one of them unreadable.
     <div className="overflow-x-auto rounded-[9px] border border-[#E4E4E7]">
       <table className="w-full table-fixed border-collapse" style={{ minWidth: TABLE_WIDTH }}>

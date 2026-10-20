@@ -162,14 +162,47 @@ function Ask({
 
 /* --------------------------------------------------------------- screen two */
 
+/**
+ * A card marked not coming is sent as blank, which is how the server reads "this
+ * person is not coming": a guest's own card is removed, and someone the couple
+ * named stays on the list as a "no". Blank here also keeps it out of the checks,
+ * so nobody is asked which days a person who is not coming will attend.
+ */
 function toReplyGuests(drafts: GuestDraft[]): ReplyGuest[] {
-  return drafts.map((draft) => ({
-    firstName: draft.firstName,
-    lastName: draft.lastName,
-    email: draft.noEmail || draft.email.trim() === "" ? undefined : draft.email,
-    isPlusOne: draft.isPlusOne,
-    attending: draft.attending,
-  }));
+  return drafts.map((draft) =>
+    draft.notComing
+      ? { firstName: "", lastName: "", isPlusOne: draft.isPlusOne, attending: {}, invitedTo: draft.invitedTo }
+      : {
+          firstName: draft.firstName,
+          lastName: draft.lastName,
+          email: draft.noEmail || draft.email.trim() === "" ? undefined : draft.email,
+          isPlusOne: draft.isPlusOne,
+          attending: draft.attending,
+          invitedTo: draft.invitedTo,
+        },
+  );
+}
+
+type StoredGuest = RsvpData["guests"][number];
+
+/** Invited events only: an answer to an event this person is not asked about is not theirs to see. */
+function storedDraft(guest: StoredGuest): GuestDraft {
+  const events = RSVP_EVENTS.filter((event) => guest.invitedTo[event.key]);
+  return {
+    guestId: guest._id,
+    firstName: guest.firstName,
+    lastName: guest.lastName,
+    email: guest.email ?? "",
+    noEmail: guest.email === undefined,
+    dietaryNotes: guest.dietaryNotes ?? "",
+    isPlusOne: guest.isPlusOne,
+    attending: Object.fromEntries(events.map((event) => [event.key, guest[event.key] === "yes"])),
+    invitedTo: guest.invitedTo,
+    addedByCouple: guest.addedByCouple,
+    // A couple-named guest who said no to everything they were asked opens as
+    // "cannot make it", the state the server stored when the card was cleared.
+    notComing: guest.addedByCouple && events.length > 0 && events.every((event) => guest[event.key] === "no"),
+  };
 }
 
 /** Issues keyed by card index, so each message can sit against its own field. */
@@ -204,43 +237,19 @@ function AcceptForm({
   onDone: () => void;
 }) {
   const { party, guests: stored } = data;
-  const events = invitedEvents(party);
 
   const initial = useMemo(() => {
-    const named = stored
-      .filter((guest) => !guest.isPlusOne)
-      .map<GuestDraft>((guest) => ({
-        guestId: guest._id,
-        firstName: guest.firstName,
-        lastName: guest.lastName,
-        email: guest.email ?? "",
-        noEmail: guest.email === undefined,
-        dietaryNotes: guest.dietaryNotes ?? "",
-        isPlusOne: false,
-        attending: Object.fromEntries(events.map((event) => [event, guest[event] === "yes"])),
-      }));
+    const named = stored.filter((guest) => !guest.isPlusOne).map(storedDraft);
 
     // Always as many cards as seats, so a party of four sees four.
-    while (named.length < party.headCount) named.push(emptyGuest());
+    while (named.length < party.headCount) named.push(emptyGuest(party.defaultInvitedTo));
     return named;
-  }, [stored, party.headCount, events]);
+  }, [stored, party.headCount, party.defaultInvitedTo]);
 
   const storedPlusOne = stored.find((guest) => guest.isPlusOne);
   const initialPlusOne = useMemo<GuestDraft | null>(
-    () =>
-      storedPlusOne
-        ? {
-            guestId: storedPlusOne._id,
-            firstName: storedPlusOne.firstName,
-            lastName: storedPlusOne.lastName,
-            email: storedPlusOne.email ?? "",
-            noEmail: storedPlusOne.email === undefined,
-            dietaryNotes: storedPlusOne.dietaryNotes ?? "",
-            isPlusOne: true,
-            attending: Object.fromEntries(events.map((event) => [event, storedPlusOne[event] === "yes"])),
-          }
-        : null,
-    [storedPlusOne, events],
+    () => (storedPlusOne ? storedDraft(storedPlusOne) : null),
+    [storedPlusOne],
   );
 
   const [drafts, setDrafts] = useState<GuestDraft[]>(initial);
@@ -307,7 +316,6 @@ function AcceptForm({
             guest={guest}
             index={index}
             label={`GUEST ${index + 1}`}
-            events={events}
             disabled={busy}
             errors={byGuest.get(index) ?? {}}
             onChange={(next) => setDrafts(drafts.map((current, i) => (i === index ? next : current)))}
@@ -331,7 +339,6 @@ function AcceptForm({
                 guest={plusOne}
                 index={drafts.length}
                 label="PLUS ONE"
-                events={events}
                 disabled={busy}
                 errors={byGuest.get(drafts.length) ?? {}}
                 onChange={setPlusOne}
@@ -341,7 +348,7 @@ function AcceptForm({
               <button
                 type="button"
                 disabled={busy}
-                onClick={() => setPlusOne(emptyGuest(true))}
+                onClick={() => setPlusOne(emptyGuest(party.defaultInvitedTo, true))}
                 className="flex h-11 w-full items-center justify-center rounded-[3px] border border-[#E7D9C4] bg-[#FFFCF7] font-display text-[15px] text-ink"
               >
                 + Add a plus one

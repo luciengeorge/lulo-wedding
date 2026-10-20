@@ -87,6 +87,52 @@ export function matchesInvitedTo(party: FilterableParty, selected: readonly Invi
   return selected.length === 0 || selected.some((option) => isInvitedTo(party, option));
 }
 
+/** The tracking dropdowns. "seenNotReplied" is the one the couple chase people from. */
+export type SeenFilter = "seenNotReplied" | "seen" | "notSeen";
+export type InvitedViaFilter = "email" | "whatsapp" | "none" | "bounced";
+
+export type TrackedParty = {
+  lastVisitAt?: number;
+  respondedAt?: number;
+  earlyDecline: boolean;
+  invitedVia?: "email" | "whatsapp" | "both";
+  emailBounced: boolean;
+};
+
+/** The sheet's early "No" is an answer too, the same as `admin.funnel` counts it. */
+export function hasReplied(party: Pick<TrackedParty, "respondedAt" | "earlyDecline">): boolean {
+  return party.respondedAt !== undefined || party.earlyDecline;
+}
+
+function isSeen(party: TrackedParty, option: SeenFilter): boolean {
+  const seen = party.lastVisitAt !== undefined;
+  if (option === "notSeen") return !seen;
+  if (option === "seen") return seen;
+  return seen && !hasReplied(party);
+}
+
+export function matchesSeen(party: TrackedParty, selected: readonly SeenFilter[]): boolean {
+  return selected.length === 0 || selected.some((option) => isSeen(party, option));
+}
+
+/** "both" counts as email and as WhatsApp, so either option finds it. */
+function isInvitedVia(party: TrackedParty, option: InvitedViaFilter): boolean {
+  switch (option) {
+    case "email":
+      return party.invitedVia === "email" || party.invitedVia === "both";
+    case "whatsapp":
+      return party.invitedVia === "whatsapp" || party.invitedVia === "both";
+    case "none":
+      return party.invitedVia === undefined;
+    case "bounced":
+      return party.emailBounced;
+  }
+}
+
+export function matchesInvitedVia(party: TrackedParty, selected: readonly InvitedViaFilter[]): boolean {
+  return selected.length === 0 || selected.some((option) => isInvitedVia(party, option));
+}
+
 export type RsvpState = "attending" | "declined" | "awaiting" | "notInvited";
 
 export const RSVP_LABEL: Record<RsvpState, string> = {

@@ -145,6 +145,12 @@ function Harness({
       <button type="button" onClick={() => table.getColumn("invitedTo")?.setFilterValue(["brunch", "none"])}>
         Brunch or uninvited
       </button>
+      <button type="button" onClick={() => table.getColumn("lastSeen")?.setFilterValue(["seenNotReplied"])}>
+        Seen, not replied
+      </button>
+      <button type="button" onClick={() => table.getColumn("invitedVia")?.setFilterValue(["bounced"])}>
+        Bounced
+      </button>
       <output aria-label="Filtered count">{table.getFilteredRowModel().rows.length}</output>
       <output aria-label="Rendered count">{rowWindow.visibleCount}</output>
       <output aria-label="Selected ids">
@@ -246,6 +252,36 @@ describe("GuestListTable rendering", () => {
     expect(within(row!).getByRole("button", { name: "Copy link" })).toBeInTheDocument();
     fireEvent.click(within(row!).getByRole("button", { name: "Edit" }));
     expect(onEdit).toHaveBeenCalledWith(base);
+  });
+
+  it("shows the brunch chip for a party whose brunch invite is per person", () => {
+    render(<Harness rows={[party({ invitedTo: { preWedding: false, wedding: true, brunch: true } }, "p1")]} />);
+    expect(screen.getByTitle("Brunch")).toBeInTheDocument();
+  });
+
+  it("says how a party was invited, and flags a bounce beside it", () => {
+    render(
+      <Harness
+        rows={[
+          party({ invitedVia: "both", emailBounced: true }, "p1"),
+          party({ displayName: "Marc", invitedVia: "whatsapp" }, "p2"),
+          party({ displayName: "Sami" }, "p3"),
+        ]}
+      />,
+    );
+    expect(screen.getByText("Email + WhatsApp")).toBeInTheDocument();
+    expect(screen.getByText("WhatsApp")).toBeInTheDocument();
+    expect(screen.getByText("Not yet")).toBeInTheDocument();
+    expect(screen.getAllByTitle(/bounced/)).toHaveLength(1);
+  });
+
+  it("shows when a party last opened their link, exact time on hover", () => {
+    const threeDaysAgo = Date.now() - 3 * 24 * 60 * 60 * 1000 - 60_000;
+    render(<Harness rows={[party({ lastVisitAt: threeDaysAgo, visitCount: 2 }, "p1"), party({}, "p2")]} />);
+    const seen = screen.getByText("3 days ago");
+    expect(seen.tagName).toBe("TIME");
+    expect(seen.getAttribute("title")).toMatch(/\d{4}/);
+    expect(screen.getByText("Never")).toBeInTheDocument();
   });
 
   it("says so when the filters match nothing", () => {
@@ -359,6 +395,40 @@ describe("GuestListTable search, filter and sort", () => {
     fireEvent.click(screen.getByRole("button", { name: "Only friends" }));
     expect(partyNames()).toHaveLength(1);
     expect(partyNames()[0]).toContain("Marc");
+  });
+
+  it("narrows to parties who opened their link but have not replied", () => {
+    render(
+      <Harness
+        rows={[
+          party({ displayName: "Seen", lastVisitAt: 10 }, "p1"),
+          party({ displayName: "Replied", lastVisitAt: 10, respondedAt: 20 }, "p2"),
+          party({ displayName: "Silent" }, "p3"),
+        ]}
+      />,
+    );
+    fireEvent.click(screen.getByRole("button", { name: "Seen, not replied" }));
+    expect(partyNames()).toEqual([expect.stringContaining("Seen")]);
+  });
+
+  it("narrows to parties whose email bounced", () => {
+    render(<Harness rows={[party({ emailBounced: true, invitedVia: "email" }, "p1"), party({}, "p2")]} />);
+    fireEvent.click(screen.getByRole("button", { name: "Bounced" }));
+    expect(filteredCount()).toBe(1);
+  });
+
+  it("sorts LAST SEEN most recent first, with the never-seen last", () => {
+    render(
+      <Harness
+        rows={[
+          party({ displayName: "Old", surname: "A", lastVisitAt: 1_000 }, "p1"),
+          party({ displayName: "Never", surname: "B" }, "p2"),
+          party({ displayName: "New", surname: "C", lastVisitAt: 5_000 }, "p3"),
+        ]}
+      />,
+    );
+    fireEvent.click(screen.getByRole("button", { name: /Last seen/ }));
+    expect(partyNames().map((name) => name.split(/[ABC]$/)[0])).toEqual(["New", "Old", "Never"]);
   });
 
   it("filters on a single invited event", () => {

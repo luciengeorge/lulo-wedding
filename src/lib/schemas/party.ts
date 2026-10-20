@@ -53,6 +53,8 @@ export const PartyFormSchema = z.object({
   saveTheDateSent: z.boolean(),
   note: z.string().trim().max(2000, { error: "Note is too long" }),
   contactEmail: PartyContactEmailSchema,
+  /** Free text: the sheet holds numbers in every format, and some parties have two. */
+  contactPhone: z.string().trim().max(100, { error: "That is too long for a phone number" }),
 });
 
 export type PartyFormValues = z.infer<typeof PartyFormSchema>;
@@ -74,26 +76,29 @@ export const EMPTY_PARTY_FORM: PartyFormValues = {
   saveTheDateSent: false,
   note: "",
   contactEmail: "",
+  contactPhone: "",
 };
 
-export type PartyMutationFields = Omit<PartyFormValues, "whereFrom" | "note" | "contactEmail"> & {
+export type PartyMutationFields = Omit<PartyFormValues, "whereFrom" | "note" | "contactEmail" | "contactPhone"> & {
   whereFrom?: string;
   note?: string;
   contactEmail?: string;
+  contactPhone?: string;
 };
 
 /**
- * Maps validated form values onto the mutation's arguments. The three optional
+ * Maps validated form values onto the mutation's arguments. The four optional
  * text fields drop out entirely when blank rather than being stored as `""` —
  * Convex removes an optional field when it is patched with `undefined`, and
  * `whereFrom: ""` would otherwise render as a stray "· Family" in the table.
  */
 export function toPartyMutationFields(values: PartyFormValues): PartyMutationFields {
-  const { whereFrom, note, contactEmail, ...rest } = values;
+  const { whereFrom, note, contactEmail, contactPhone, ...rest } = values;
   return {
     ...rest,
     ...(whereFrom === "" ? {} : { whereFrom }),
     ...(note === "" ? {} : { note }),
     ...(contactEmail === "" ? {} : { contactEmail }),
+    ...(contactPhone === "" ? {} : { contactPhone }),
   };
 }
