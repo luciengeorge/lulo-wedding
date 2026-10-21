@@ -39,9 +39,13 @@ jobs:
     steps:
       # The repo is public. This job checks out the deployed commit and runs its
       # code with secrets in the environment, so it must only ever run for our
-      # own branches: the deployed SHA has to be the tip of a branch in this
-      # repo. A fork's preview (Vercel builds one only if someone approves it)
-      # fails here before any secret is used.
+      # own branches: the deployed SHA has to be the tip of a branch in this repo.
+      #
+      # Know its limit: a deployment_status run reads this file from the deployed
+      # commit, so a hostile fork could simply delete this step. The real gate is
+      # Vercel's fork protection (on for this project): a fork's preview is never
+      # built, so this job never fires, unless someone approves it in Vercel.
+      # Never approve a fork deployment. This step only stops an unedited fork.
       - name: Only our own branches
         env:
           GH_TOKEN: ${{ github.token }}
