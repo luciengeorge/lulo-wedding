@@ -19,6 +19,7 @@ import type * as billing_userInfo from "../billing/userInfo.js";
 import type * as crons from "../crons.js";
 import type * as e2e from "../e2e.js";
 import type * as email_captured from "../email/captured.js";
+import type * as email_monogram from "../email/monogram.js";
 import type * as email_resend from "../email/resend.js";
 import type * as email_send from "../email/send.js";
 import type * as email_templates__components from "../email/templates/_components.js";
@@ -69,6 +70,7 @@ declare const fullApi: ApiFromModules<{
   crons: typeof crons;
   e2e: typeof e2e;
   "email/captured": typeof email_captured;
+  "email/monogram": typeof email_monogram;
   "email/resend": typeof email_resend;
   "email/send": typeof email_send;
   "email/templates/_components": typeof email_templates__components;

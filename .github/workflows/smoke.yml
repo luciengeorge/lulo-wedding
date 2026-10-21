@@ -37,6 +37,27 @@ jobs:
       SMOKE_ADMIN_EMAIL: ${{ vars.SMOKE_ADMIN_EMAIL }}
       VERCEL_AUTOMATION_BYPASS_SECRET: ${{ secrets.VERCEL_AUTOMATION_BYPASS_SECRET }}
     steps:
+      # The repo is public. This job checks out the deployed commit and runs its
+      # code with secrets in the environment, so it must only ever run for our
+      # own branches: the deployed SHA has to be the tip of a branch in this repo.
+      #
+      # Know its limit: a deployment_status run reads this file from the deployed
+      # commit, so a hostile fork could simply delete this step. The real gate is
+      # Vercel's fork protection (on for this project): a fork's preview is never
+      # built, so this job never fires, unless someone approves it in Vercel.
+      # Never approve a fork deployment. This step only stops an unedited fork.
+      - name: Only our own branches
+        env:
+          GH_TOKEN: ${{ github.token }}
+          SHA: ${{ github.event.deployment.sha }}
+        run: |
+          # Vercel reports the SHA as the deployment's ref, so ask which of our
+          # branches have it as their head. A fork's commit heads none of them.
+          heads="$(gh api "repos/${GITHUB_REPOSITORY}/commits/${SHA}/branches-where-head" --jq 'length' 2>/dev/null || echo 0)"
+          if [ "${heads:-0}" -lt 1 ]; then
+            echo "::error::Deployment ${SHA} is not the head of any branch in ${GITHUB_REPOSITORY}. Refusing to run with secrets."
+            exit 1
+          fi
       # Missing configuration is a red run that says what is missing, never a green one.
       - name: Check configuration
         run: |
