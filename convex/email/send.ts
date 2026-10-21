@@ -52,15 +52,21 @@ type SendOptions = Parameters<ResendSdk["emails"]["send"]>[0];
 
 /**
  * One send, retried briefly when Resend says we are going too fast. The
- * Idempotency-Key makes a retry safe: Resend sends a given key once.
+ * idempotency key (a request option, not an email header) makes a retry safe:
+ * Resend sends a given key once.
  */
-async function sendWithRetry(sdk: ResendSdk, options: SendOptions, attempt = 0): Promise<string> {
-  const { data, error } = await sdk.emails.send(options);
+async function sendWithRetry(
+  sdk: ResendSdk,
+  options: SendOptions,
+  idempotencyKey: string,
+  attempt = 0,
+): Promise<string> {
+  const { data, error } = await sdk.emails.send(options, { idempotencyKey });
   if (data?.id) return data.id;
 
   if (error?.name === "rate_limit_exceeded" && attempt < 3) {
     await new Promise((resolve) => setTimeout(resolve, 1000 * 2 ** attempt));
-    return sendWithRetry(sdk, options, attempt + 1);
+    return sendWithRetry(sdk, options, idempotencyKey, attempt + 1);
   }
   throw new Error(`Resend error: ${error?.message ?? "no id returned"}`);
 }
@@ -114,17 +120,20 @@ export const sendEmail = internalAction({
       // component still records the email, so status and webhooks work as before.
       const sdk = new ResendSdk(apiKey);
       emailId = await resend.sendEmailManually(ctx, { from, to, subject }, (id) =>
-        sendWithRetry(sdk, {
-          from,
-          to,
-          subject,
-          html,
-          text,
-          attachments: html.includes(`cid:${MONOGRAM_CID}`)
-            ? [{ filename: "monogram.png", content: MONOGRAM_PNG_BASE64, contentId: MONOGRAM_CID }]
-            : undefined,
-          headers: { "Idempotency-Key": id },
-        }),
+        sendWithRetry(
+          sdk,
+          {
+            from,
+            to,
+            subject,
+            html,
+            text,
+            attachments: html.includes(`cid:${MONOGRAM_CID}`)
+              ? [{ filename: "monogram.png", content: MONOGRAM_PNG_BASE64, contentId: MONOGRAM_CID }]
+              : undefined,
+          },
+          id,
+        ),
       );
     } catch (error) {
       // Otherwise the row sits at "queued" forever and /admin reads it as in flight.
