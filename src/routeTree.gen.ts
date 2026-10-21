@@ -20,6 +20,7 @@ import { Route as AuthLoginRouteImport } from './routes/_auth/login'
 import { Route as AuthResetPasswordRouteImport } from './routes/_auth/reset-password'
 import { Route as AuthVerifyEmailRouteImport } from './routes/_auth/verify-email'
 import { Route as AdminIndexRouteImport } from './routes/admin/index'
+import { Route as AdminInsightsRouteImport } from './routes/admin/insights'
 import { Route as AppIndexRouteImport } from './routes/app/index'
 import { Route as AppAdminRouteImport } from './routes/app/admin'
 import { Route as AppSettingsRouteImport } from './routes/app/settings'
@@ -87,6 +88,11 @@ const AuthVerifyEmailRoute = AuthVerifyEmailRouteImport.update({
 const AdminIndexRoute = AdminIndexRouteImport.update({
   id: '/',
   path: '/',
+  getParentRoute: () => AdminRoute,
+} as any)
+const AdminInsightsRoute = AdminInsightsRouteImport.update({
+  id: '/insights',
+  path: '/insights',
   getParentRoute: () => AdminRoute,
 } as any)
 const AppIndexRoute = AppIndexRouteImport.update({
@@ -174,6 +180,7 @@ export interface FileRoutesByFullPath {
   '/login': typeof AuthLoginRoute
   '/reset-password': typeof AuthResetPasswordRoute
   '/verify-email': typeof AuthVerifyEmailRoute
+  '/admin/insights': typeof AdminInsightsRoute
   '/app/admin': typeof AppAdminRoute
   '/app/settings': typeof AppSettingsRouteWithChildren
   '/rsvp/$token': typeof RsvpTokenRoute
@@ -198,6 +205,7 @@ export interface FileRoutesByTo {
   '/login': typeof AuthLoginRoute
   '/reset-password': typeof AuthResetPasswordRoute
   '/verify-email': typeof AuthVerifyEmailRoute
+  '/admin/insights': typeof AdminInsightsRoute
   '/app/admin': typeof AppAdminRoute
   '/rsvp/$token': typeof RsvpTokenRoute
   '/admin': typeof AdminIndexRoute
@@ -226,6 +234,7 @@ export interface FileRoutesById {
   '/_auth/login': typeof AuthLoginRoute
   '/_auth/reset-password': typeof AuthResetPasswordRoute
   '/_auth/verify-email': typeof AuthVerifyEmailRoute
+  '/admin/insights': typeof AdminInsightsRoute
   '/app/admin': typeof AppAdminRoute
   '/app/settings': typeof AppSettingsRouteWithChildren
   '/rsvp/$token': typeof RsvpTokenRoute
@@ -254,6 +263,7 @@ export interface FileRouteTypes {
     | '/login'
     | '/reset-password'
     | '/verify-email'
+    | '/admin/insights'
     | '/app/admin'
     | '/app/settings'
     | '/rsvp/$token'
@@ -278,6 +288,7 @@ export interface FileRouteTypes {
     | '/login'
     | '/reset-password'
     | '/verify-email'
+    | '/admin/insights'
     | '/app/admin'
     | '/rsvp/$token'
     | '/admin'
@@ -305,6 +316,7 @@ export interface FileRouteTypes {
     | '/_auth/login'
     | '/_auth/reset-password'
     | '/_auth/verify-email'
+    | '/admin/insights'
     | '/app/admin'
     | '/app/settings'
     | '/rsvp/$token'
@@ -413,6 +425,13 @@ declare module '@tanstack/react-router' {
       path: '/'
       fullPath: '/admin/'
       preLoaderRoute: typeof AdminIndexRouteImport
+      parentRoute: typeof AdminRoute
+    }
+    '/admin/insights': {
+      id: '/admin/insights'
+      path: '/insights'
+      fullPath: '/admin/insights'
+      preLoaderRoute: typeof AdminInsightsRouteImport
       parentRoute: typeof AdminRoute
     }
     '/app/': {
@@ -540,10 +559,12 @@ const AuthRouteChildren: AuthRouteChildren = {
 const AuthRouteWithChildren = AuthRoute._addFileChildren(AuthRouteChildren)
 
 interface AdminRouteChildren {
+  AdminInsightsRoute: typeof AdminInsightsRoute
   AdminIndexRoute: typeof AdminIndexRoute
 }
 
 const AdminRouteChildren: AdminRouteChildren = {
+  AdminInsightsRoute: AdminInsightsRoute,
   AdminIndexRoute: AdminIndexRoute,
 }
 

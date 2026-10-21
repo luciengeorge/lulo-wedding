@@ -34,6 +34,9 @@ const rows: PartyRow[] = Array.from({ length: 240 }, (_, index) => ({
     guestCount: index < 2 ? 2 : 0,
     seatsNamed: index < 2 ? 2 : 0,
   },
+  invitedTo: { preWedding: false, wedding: true, brunch: false },
+  visitCount: 0,
+  emailBounced: false,
 }));
 
 const updateParties =
@@ -49,6 +52,12 @@ const deleteParties =
       partyIds: PartyRow["_id"][];
     }) => Promise<{ deletedParties: number; deletedGuests: number; missing: number }>
   >();
+
+const markWhatsApp =
+  vi.fn<
+    (args: { partyIds: PartyRow["_id"][] }) => Promise<{ marked: number; alreadyMarked: number; missing: number }>
+  >();
+const unmarkWhatsApp = vi.fn<(args: { partyIds: PartyRow["_id"][] }) => Promise<{ unmarked: number }>>();
 
 function Harness({ data = rows }: { data?: PartyRow[] }) {
   const [busy, setBusy] = useState(false);
@@ -68,6 +77,8 @@ function Harness({ data = rows }: { data?: PartyRow[] }) {
         onBusyChange={setBusy}
         updateParties={updateParties}
         deleteParties={deleteParties}
+        markWhatsApp={markWhatsApp}
+        unmarkWhatsApp={unmarkWhatsApp}
       />
     </>
   );
@@ -92,6 +103,10 @@ beforeEach(() => {
   deleteParties
     .mockReset()
     .mockImplementation(async ({ partyIds }) => ({ deletedParties: partyIds.length, deletedGuests: 0, missing: 0 }));
+  markWhatsApp
+    .mockReset()
+    .mockImplementation(async ({ partyIds }) => ({ marked: partyIds.length, alreadyMarked: 0, missing: 0 }));
+  unmarkWhatsApp.mockReset().mockImplementation(async ({ partyIds }) => ({ unmarked: partyIds.length }));
 });
 
 describe("BulkActionsBar", () => {
@@ -163,7 +178,7 @@ describe("BulkActionsBar", () => {
       .mockRejectedValueOnce(new Error("Connection lost"));
     selectRows();
     await inviteToBrunch();
-    for (const name of ["Invite to", "Set", "Delete", "Clear selection"]) {
+    for (const name of ["Invite to", "Set", "Mark invited on WhatsApp", "Delete", "Clear selection"]) {
       expect(screen.getByRole("button", { name })).toBeDisabled();
     }
     expect(updateParties).toHaveBeenCalledTimes(1);
@@ -280,5 +295,54 @@ describe("BulkActionsBar", () => {
     expect(deleteParties).toHaveBeenCalledTimes(2);
     expect(toast.error).toHaveBeenCalledTimes(1);
     expect(toast.success).not.toHaveBeenCalled();
+  });
+
+  it("stamps the selection as invited on WhatsApp in chunks, and says who already was", async () => {
+    markWhatsApp
+      .mockResolvedValueOnce({ marked: 97, alreadyMarked: 3, missing: 0 })
+      .mockResolvedValueOnce({ marked: 100, alreadyMarked: 0, missing: 0 })
+      .mockResolvedValueOnce({ marked: 40, alreadyMarked: 0, missing: 0 });
+    selectRows();
+    fireEvent.click(screen.getByRole("button", { name: "Mark invited on WhatsApp" }));
+    await waitFor(() =>
+      expect(toast.success).toHaveBeenCalledWith("Marked 237 parties as invited on WhatsApp", {
+        description: "3 parties already were.",
+        action: expect.objectContaining({ label: "Undo" }),
+      }),
+    );
+    expect(markWhatsApp.mock.calls.map(([args]) => args.partyIds.length)).toEqual([100, 100, 40]);
+    expect(screen.getByLabelText("Selected count")).toHaveTextContent("240");
+  });
+
+  /** An earlier evening's stamps are real sends; undoing today's click must leave them. */
+  it("undoes only the stamps this click added", async () => {
+    const data = rows
+      .slice(0, 3)
+      .map((row, index) => (index === 0 ? { ...row, invitedVia: "whatsapp" as const } : row));
+    markWhatsApp.mockResolvedValueOnce({ marked: 2, alreadyMarked: 1, missing: 0 });
+    selectRows(data);
+    fireEvent.click(screen.getByRole("button", { name: "Mark invited on WhatsApp" }));
+    await waitFor(() => expect(toast.success).toHaveBeenCalledTimes(1));
+
+    const [, options] = vi.mocked(toast.success).mock.calls[0]!;
+    const action = (options as unknown as { action: { onClick: () => void } }).action;
+    await act(async () => action.onClick());
+
+    expect(unmarkWhatsApp).toHaveBeenCalledWith({ partyIds: [data[1]!._id, data[2]!._id] });
+    await waitFor(() =>
+      expect(toast.success).toHaveBeenLastCalledWith("Undone: 2 parties no longer marked as invited on WhatsApp"),
+    );
+  });
+
+  it("offers no undo when nothing new was stamped", async () => {
+    markWhatsApp.mockResolvedValueOnce({ marked: 0, alreadyMarked: 1, missing: 0 });
+    selectRows(rows.slice(0, 1));
+    fireEvent.click(screen.getByRole("button", { name: "Mark invited on WhatsApp" }));
+    await waitFor(() =>
+      expect(toast.success).toHaveBeenCalledWith("Marked 0 parties as invited on WhatsApp", {
+        description: "1 party already was.",
+        action: undefined,
+      }),
+    );
   });
 });

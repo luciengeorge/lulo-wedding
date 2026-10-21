@@ -1,41 +1,19 @@
 import * as Sentry from "@sentry/tanstackstart-react";
 import { redirect } from "@tanstack/react-router";
 import { createServerFn } from "@tanstack/react-start";
-import { getRequestHeader, getRequestIP } from "@tanstack/react-start/server";
 import z from "zod";
 
 import { api } from "@/../convex/_generated/api";
-import { fetchAuthMutation } from "@/lib/auth-server";
+import { getAppServerSecret } from "@/lib/app-server-secret.server";
+import { fetchAuthMutation, fetchAuthQuery } from "@/lib/auth-server";
+import { getClientKey } from "@/lib/client-key.server";
 import { useGuestSession } from "@/lib/guest-session.server";
 import { safeRedirect } from "@/lib/safe-redirect";
 
 /** Where an un-unlocked guest gets sent. The route is owned by the UI side. */
 const GATE_ROUTE = "/enter";
 
-/** Keys are only ever IPs; cap the length so a hostile header can't bloat the limiter. */
-const MAX_CLIENT_KEY_LENGTH = 100;
-
 const EnterGateSchema = z.object({ password: z.string().min(1) });
-
-/**
- * Derives the rate-limit key from the request, never from the request body — a
- * caller who could pick their own key could sidestep the limit entirely.
- *
- * Order matters. `x-vercel-forwarded-for` is written by Vercel's edge on every
- * request and cannot be spoofed by the caller, so it wins. Plain `x-forwarded-for`
- * is only consulted after that, and only its leftmost entry, because a client can
- * prepend arbitrary values to it. Falling all the way through to a single shared
- * `"unknown"` bucket fails in the safe direction: it rate-limits harder, and it
- * never hands a caller a private bucket of their own.
- */
-function getClientKey(): string {
-  const forwarded = getRequestHeader("x-forwarded-for")?.split(",")[0];
-  const candidate =
-    getRequestHeader("x-vercel-forwarded-for") ?? getRequestHeader("x-real-ip") ?? forwarded ?? getRequestIP();
-
-  const key = candidate?.trim();
-  return key ? key.slice(0, MAX_CLIENT_KEY_LENGTH) : "unknown";
-}
 
 /**
  * Checks the shared guest password and, on success, marks the session unlocked.
@@ -49,6 +27,7 @@ export const enterGate = createServerFn({ method: "POST" })
       const result = await fetchAuthMutation(api.guests.verifyGuestPassword, {
         password: data.password,
         clientKey: getClientKey(),
+        serverSecret: getAppServerSecret(),
       });
 
       if (result.ok) {
@@ -57,6 +36,23 @@ export const enterGate = createServerFn({ method: "POST" })
       }
 
       return result;
+    });
+  });
+
+/**
+ * Unlocks the gate for someone holding a valid party link. The link is already
+ * a better credential than the shared password, which every guest knows, so
+ * asking for both would only stop the people the link was sent to.
+ */
+export const unlockWithToken = createServerFn({ method: "POST" })
+  .validator(z.object({ token: z.string().trim().min(1).max(64) }))
+  .handler(async ({ data }) => {
+    return Sentry.startSpan({ name: "unlockWithToken" }, async () => {
+      if (!(await fetchAuthQuery(api.rsvp.tokenIsValid, { token: data.token }))) return false;
+
+      const session = await useGuestSession();
+      await session.update({ ...session.data, unlocked: true, at: Date.now() });
+      return true;
     });
   });
 

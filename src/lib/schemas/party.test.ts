@@ -81,12 +81,21 @@ describe("toPartyMutationFields", () => {
     expect(fields).not.toHaveProperty("whereFrom");
     expect(fields).not.toHaveProperty("note");
     expect(fields).not.toHaveProperty("contactEmail");
+    expect(fields).not.toHaveProperty("contactPhone");
   });
 
   it("keeps the optional fields that were filled in", () => {
     const fields = toPartyMutationFields(
-      PartyFormSchema.parse(form({ whereFrom: "Childhood", note: "vegetarian", contactEmail: "rae@example.com" })),
+      PartyFormSchema.parse(
+        form({
+          whereFrom: "Childhood",
+          note: "vegetarian",
+          contactEmail: "rae@example.com",
+          contactPhone: " +961 3 123 456 ",
+        }),
+      ),
     );
+    expect(fields.contactPhone).toBe("+961 3 123 456");
     expect(fields.whereFrom).toBe("Childhood");
     expect(fields.note).toBe("vegetarian");
     expect(fields.contactEmail).toBe("rae@example.com");

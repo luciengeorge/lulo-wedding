@@ -1,5 +1,7 @@
-import { test as base, expect, type Page } from "@playwright/test";
+import { test as base, expect, type APIRequestContext, type Page } from "@playwright/test";
 import { execFileSync } from "node:child_process";
+import { createHmac, randomUUID } from "node:crypto";
+import { readFileSync } from "node:fs";
 import { readFile } from "node:fs/promises";
 
 /**
@@ -16,6 +18,12 @@ export const GUEST_PASSWORD = "e2e-guest-password";
 export const ADMIN_EMAIL = "admin@e2e.test";
 /** Where the unlocked guest cookie is parked between the setup project and the specs. */
 export const GUEST_STATE = ".e2e/guest-state.json";
+/** The signed-in admin's cookies, parked the same way. */
+export const ADMIN_STATE = ".e2e/admin-state.json";
+/** The local deployment's HTTP actions, where Resend's webhook is routed. */
+export const CONVEX_SITE_URL = "http://127.0.0.1:3211";
+/** RESEND_WEBHOOK_SECRET for this run, written by scripts/e2e/backend.mjs before the tests start. */
+const webhookSecret = () => readFileSync(".e2e/webhook-secret", "utf8");
 
 function convexRun<T>(name: string, args: Record<string, unknown> = {}, attempt = 0): T {
   let stdout: string;
@@ -24,6 +32,8 @@ function convexRun<T>(name: string, args: Record<string, unknown> = {}, attempt 
       cwd: MIRROR,
       encoding: "utf8",
       stdio: ["ignore", "pipe", "pipe"],
+      // A wedged CLI call should fail the one test loudly, not stall the run.
+      timeout: 60_000,
     });
   } catch (error) {
     // `convex dev` reloads the local backend when it notices a file change, and a
@@ -35,13 +45,25 @@ function convexRun<T>(name: string, args: Record<string, unknown> = {}, attempt 
     return convexRun<T>(name, args, attempt + 1);
   }
 
-  // The CLI prints progress lines before the JSON, so skip to wherever the value
-  // starts. Whichever of "[" or "{" comes first: preferring "{" outright parses an
-  // array result from inside its first element and then trips over the closing "]".
-  const brace = stdout.indexOf("{");
-  const bracket = stdout.indexOf("[");
-  const start = brace === -1 ? bracket : bracket === -1 ? brace : Math.min(brace, bracket);
-  return start === -1 ? (null as T) : (JSON.parse(stdout.slice(start)) as T);
+  // The value is the whole of stdout; progress goes to stderr. A function that
+  // returns null prints nothing at all.
+  const text = stdout.trim();
+  if (text === "") return null as T;
+  try {
+    return JSON.parse(text) as T;
+  } catch {
+    // Older CLIs printed progress lines first: skip to wherever the value starts.
+    // Whichever of "[" or "{" comes first, or an array result parses from inside
+    // its first element and trips over the closing "]".
+    const brace = text.indexOf("{");
+    const bracket = text.indexOf("[");
+    const start = brace === -1 ? bracket : bracket === -1 ? brace : Math.min(brace, bracket);
+    return start === -1 ? (null as T) : (JSON.parse(text.slice(start)) as T);
+  }
+}
+
+function convexCli(args: string[]): void {
+  execFileSync("npx", ["convex", ...args], { cwd: MIRROR, stdio: ["ignore", "pipe", "pipe"], timeout: 60_000 });
 }
 
 export type SeedParty = {
@@ -58,6 +80,42 @@ export type SeedParty = {
   who: "lucien" | "laura" | "mutual" | "zeina" | "nayla";
   link: "family" | "friends";
   whereFrom?: string;
+  contactEmail?: string;
+  contactPhone?: string;
+  respondedAt?: number;
+};
+
+type EventFlags = { preWedding: boolean; wedding: boolean; brunch: boolean };
+type RsvpStatus = "pending" | "yes" | "no";
+
+export type SeedGuest = {
+  firstName: string;
+  lastName: string;
+  email?: string;
+  isPlusOne?: boolean;
+  invitedTo?: EventFlags;
+  addedByCouple?: boolean;
+  preWedding?: RsvpStatus;
+  wedding?: RsvpStatus;
+  brunch?: RsvpStatus;
+};
+
+export type SendStatus = "queued" | "sent" | "delivered" | "delivery_delayed" | "bounced" | "complained" | "failed";
+
+export type Activity = {
+  visits: { source: "link" | "email" | "lookup" | "remembered"; sendId?: string }[];
+  sends: {
+    _id: string;
+    channel: "email" | "whatsapp";
+    kind: "invite" | "update" | "receipt" | "reminder";
+    to?: string;
+    status: SendStatus;
+    emailId?: string;
+    deliveredAt?: number;
+    openCount: number;
+    clickCount: number;
+    error?: string;
+  }[];
 };
 
 /** A plain party with one seat, invited to the wedding only. Override what a test cares about. */
@@ -88,6 +146,24 @@ export const backend = {
   seed: (parties: SeedParty[]) => convexRun<{ displayName: string; token: string }[]>("e2e:seedParties", { parties }),
   latestEmail: (to: string) => convexRun<CapturedEmail | null>("e2e:latestEmail", { to }),
   replyFor: (token: string) => convexRun<ReplyForToken | null>("e2e:replyFor", { token }),
+  seedGuests: (token: string, guests: SeedGuest[]) => convexRun<null>("e2e:seedGuests", { token, guests }),
+  seedSend: (args: {
+    token: string;
+    channel: "email" | "whatsapp";
+    kind: "invite" | "update" | "receipt" | "reminder";
+    to?: string;
+    status?: SendStatus;
+    sentAt?: number;
+  }) => convexRun<string>("e2e:seedSend", args),
+  seedVisit: (args: { token: string; source: "link" | "email" | "lookup" | "remembered"; at: number }) =>
+    convexRun<null>("e2e:seedVisit", args),
+  linkSendToResend: (sendId: string, resendId: string) => convexRun<null>("e2e:linkSendToResend", { sendId, resendId }),
+  activity: (token: string) => convexRun<Activity>("e2e:activityFor", { token }),
+  partyFields: (token: string) =>
+    convexRun<{ contactPhone?: string; contactEmail?: string }>("e2e:partyFieldsFor", { token }),
+  exhaustNameLookup: () => convexRun<null>("e2e:exhaustNameLookup"),
+  exhaustSubmit: (token: string) => convexRun<null>("e2e:exhaustSubmit", { token }),
+  emailCount: (to: string) => convexRun<number>("e2e:emailCount", { to }),
 };
 
 /**
@@ -126,6 +202,8 @@ export type ReplyForToken = {
     preWedding: string;
     wedding: string;
     brunch: string;
+    invitedTo?: EventFlags;
+    addedByCouple?: boolean;
   }[];
 };
 
@@ -180,19 +258,172 @@ export async function visit(page: Page, path: string): Promise<void> {
   await waitForHydration(page);
 }
 
+/**
+ * Types into the guest gate and submits. The form can hydrate a beat after
+ * <main>; a value typed before then sits in the DOM while React's state stays
+ * empty and ENTER stays disabled. So: type until the button agrees, then press.
+ */
+export async function enterPassword(page: Page, password: string) {
+  const field = page.getByLabel(/password from your invitation/i);
+  const enter = page.getByRole("button", { name: "ENTER" });
+  await expect(async () => {
+    await field.fill(password);
+    await expect(enter).toBeEnabled({ timeout: 1_000 });
+  }).toPass({ timeout: 30_000 });
+  await enter.click();
+}
+
+/** Opens an admin page and waits for its data, so the first click lands on a settled layout. */
+export async function openAdmin(page: Page, path: "/admin" | "/admin/insights" = "/admin"): Promise<void> {
+  await visit(page, path);
+  if (path === "/admin") await expect(page.getByText(/^No parties$|^Showing all/)).toBeVisible();
+  else await expect(page.getByRole("region", { name: "Engagement" }).getByRole("table")).toBeVisible();
+}
+
+/**
+ * Sets deployment env vars on the throwaway backend for one test, and puts every
+ * one of them back afterwards, pass or fail. The deadline and the email-outage
+ * tests change how the whole backend behaves; one left set would fail every test
+ * after it for a reason nowhere near the failure.
+ */
+type DeploymentEnv = {
+  get: (name: string) => string | null;
+  set: (name: string, value: string) => void;
+  remove: (name: string) => void;
+};
+
 /** Every spec starts from an empty database; the signed-in admin is shared. */
-export const test = base.extend<{ cleanDatabase: void }>({
+export const test = base.extend<{ resetPerTest: boolean; cleanDatabase: void; deploymentEnv: DeploymentEnv }>({
+  /**
+   * The matrix files turn this off and seed every party once in `beforeAll`:
+   * dozens of parties, each replied to by exactly one test, so a reset per test
+   * would only cost time. Every other file starts each test from empty.
+   */
+  resetPerTest: [true, { option: true }],
   cleanDatabase: [
-    // Playwright requires the first parameter to be an object destructuring
-    // pattern; it reads the names to work out which fixtures to build. An empty
-    // one is the documented way to say "none", so the lint rule is wrong here.
-    // oxlint-disable-next-line no-empty-pattern
-    async ({}, use) => {
-      backend.reset();
+    async ({ resetPerTest }, use) => {
+      if (resetPerTest) backend.reset();
       await use();
     },
     { auto: true },
   ],
+  // Playwright reads the destructured names to work out which fixtures to build,
+  // and an empty pattern is its documented way to say "none".
+  // oxlint-disable-next-line no-empty-pattern
+  deploymentEnv: async ({}, provide) => {
+    const restore = new Map<string, string | null>();
+    const remember = (name: string, previous: string | null) => {
+      if (!restore.has(name)) restore.set(name, previous);
+    };
+    const current = (name: string): string | null => {
+      const listed = execFileSync("npx", ["convex", "env", "get", name], {
+        cwd: MIRROR,
+        encoding: "utf8",
+        stdio: ["ignore", "pipe", "pipe"],
+      }).trim();
+      return listed === "" ? null : listed;
+    };
+
+    await provide({
+      get: current,
+      set: (name, value) => {
+        remember(name, current(name));
+        convexCli(["env", "set", name, value]);
+      },
+      remove: (name) => {
+        remember(name, current(name));
+        convexCli(["env", "remove", name]);
+      },
+    });
+
+    for (const [name, previous] of restore) {
+      if (previous === null) convexCli(["env", "remove", name]);
+      else convexCli(["env", "set", name, previous]);
+    }
+  },
 });
+
+/**
+ * Signs one Resend webhook event the way Svix does: HMAC-SHA256 over
+ * `id.timestamp.body`, keyed by the base64 part of the `whsec_` secret.
+ */
+export function signedWebhook(body: string, secret = webhookSecret()) {
+  const id = `msg_${randomUUID()}`;
+  const timestamp = Math.floor(Date.now() / 1000).toString();
+  const key = Buffer.from(secret.replace(/^whsec_/, ""), "base64");
+  const signature = createHmac("sha256", key).update(`${id}.${timestamp}.${body}`).digest("base64");
+  return {
+    "svix-id": id,
+    "svix-timestamp": timestamp,
+    "svix-signature": `v1,${signature}`,
+    "content-type": "application/json",
+  };
+}
+
+export type ResendEventType =
+  | "email.sent"
+  | "email.delivered"
+  | "email.opened"
+  | "email.clicked"
+  | "email.bounced"
+  | "email.complained";
+
+/** A Resend event body in the shape the component validates. */
+export function resendEvent(type: ResendEventType, resendId: string, to: string): string {
+  const at = new Date().toISOString();
+  const data: Record<string, unknown> = {
+    created_at: at,
+    email_id: resendId,
+    from: "Laura & Lucien <hello@example.test>",
+    to: [to],
+    subject: "Your invitation",
+  };
+  const client = { ipAddress: "203.0.113.7", timestamp: at, userAgent: "e2e" };
+  if (type === "email.opened") data.open = client;
+  // A real click carries the party's link. The app must not keep it.
+  if (type === "email.clicked") data.click = { ...client, link: "https://example.test/rsvp/secret-token" };
+  if (type === "email.bounced") {
+    data.bounce = { message: "Mailbox does not exist", subType: "General", type: "Permanent" };
+  }
+  return JSON.stringify({ type, created_at: at, data });
+}
+
+export async function postResendEvent(request: APIRequestContext, body: string, headers = signedWebhook(body)) {
+  return await request.post(`${CONVEX_SITE_URL}/resend-webhook`, { data: body, headers });
+}
+
+/**
+ * Signs in through the real magic-link flow.
+ *
+ * The throwaway deployment captures outbound email instead of sending it, and
+ * this reads the link out of the rendered template. So it covers better-auth, the
+ * allowlist, the email template and the redirect in one pass, and there is no
+ * session-minting mutation living in the shipped bundle.
+ */
+export async function requestSignInLink(page: Page, email: string) {
+  await visit(page, "/login");
+  // The login form can hydrate after <main> does, and a value typed before then
+  // is wiped. Retry until the form actually holds the address and has answered.
+  await expect(async () => {
+    await page.getByLabel("Email").fill(email);
+    await expect(page.getByLabel("Email")).toHaveValue(email, { timeout: 1_000 });
+    await page.getByRole("button", { name: /Email me a sign-in link/i }).click();
+    await expect(page.getByText(/Check your inbox/i)).toBeVisible({ timeout: 5_000 });
+  }).toPass({ timeout: 30_000 });
+}
+
+export async function signIn(page: Page, email = ADMIN_EMAIL) {
+  await requestSignInLink(page, email);
+
+  const captured = await waitForEmail(email);
+  await page.goto(linkFromEmail(captured.html, "/api/auth"));
+  // The link lands on /admin through a server redirect, so the page still has to
+  // hydrate before anything on it will respond to a click.
+  await waitForHydration(page);
+  // Wait for the guest list itself, not just the header. The query resolving
+  // swaps the skeleton for the table and reflows the page, and a click fired into
+  // that reflow hits a button that is detached or still moving.
+  await expect(page.getByText(/^No parties$|^Showing all/)).toBeVisible();
+}
 
 export { expect };

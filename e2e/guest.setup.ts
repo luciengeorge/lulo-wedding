@@ -1,4 +1,4 @@
-import { backend, expect, GUEST_PASSWORD, GUEST_STATE, test as setup, visit } from "./fixtures";
+import { backend, expect, GUEST_PASSWORD, GUEST_STATE, test as setup, visit, enterPassword } from "./fixtures";
 
 /**
  * Unlocks the guest gate once and saves the cookie for the specs that need to be
@@ -15,8 +15,7 @@ setup("unlock the guest gate", async ({ page }) => {
   backend.resetRateLimits();
 
   await visit(page, "/enter");
-  await page.getByLabel(/password from your invitation/i).fill(GUEST_PASSWORD);
-  await page.getByRole("button", { name: "ENTER" }).click();
+  await enterPassword(page, GUEST_PASSWORD);
   await expect(page).toHaveURL("/");
 
   await page.context().storageState({ path: GUEST_STATE });

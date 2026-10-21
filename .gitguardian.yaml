@@ -1,0 +1,8 @@
+version: 2
+secret:
+  ignored_matches:
+    # A fake Resend webhook signing secret ("e2e-resend-webhook-secret-not-real"),
+    # committed in 38588ca for the browser tests. Never used anywhere real; the
+    # tests now generate a fresh one per run (scripts/e2e/backend.mjs).
+    - name: e2e fake Resend webhook secret
+      match: 31c8d18b9637b7ee35bd18df1cc8ef30afa8ec448f1e972e6a2c979f7438e2ff

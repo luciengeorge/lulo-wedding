@@ -1,4 +1,5 @@
 import type { PartyLink, PartyWave, PartyWho } from "./guest-csv";
+import type { RsvpEventKey } from "./rsvp-rules";
 
 /**
  * Human labels for the party enums. The stored values are the sheet's codes
@@ -40,8 +41,30 @@ export type InviteFlag = "invitedToPreWedding" | "invitedToWedding" | "invitedTo
  * 190px INVITED TO lane; `label` is the full name used in the form and as the
  * chip's tooltip.
  */
-export const INVITE_EVENTS: readonly { flag: InviteFlag; label: string; chip: string }[] = [
-  { flag: "invitedToPreWedding", label: "Pre-wedding", chip: "Pre-wed" },
-  { flag: "invitedToWedding", label: "Wedding", chip: "Wedding" },
-  { flag: "invitedToBrunch", label: "Brunch", chip: "Brunch" },
+export const INVITE_EVENTS: readonly { flag: InviteFlag; key: RsvpEventKey; label: string; chip: string }[] = [
+  { flag: "invitedToPreWedding", key: "preWedding", label: "Pre-wedding", chip: "Pre-wed" },
+  { flag: "invitedToWedding", key: "wedding", label: "Wedding", chip: "Wedding" },
+  { flag: "invitedToBrunch", key: "brunch", label: "Brunch", chip: "Brunch" },
 ];
+
+export const INVITED_VIA_LABEL: Record<"email" | "whatsapp" | "both", string> = {
+  email: "Email",
+  whatsapp: "WhatsApp",
+  both: "Email + WhatsApp",
+};
+
+export type SendStatus = "queued" | "sent" | "delivered" | "delivery_delayed" | "bounced" | "complained" | "failed";
+
+/** Resend's statuses in the couple's words. "complained" is someone pressing "spam". */
+export const SEND_STATUS_LABEL: Record<SendStatus, string> = {
+  queued: "Queued",
+  sent: "Sent",
+  delivered: "Delivered",
+  delivery_delayed: "Delayed",
+  bounced: "Bounced",
+  complained: "Marked as spam",
+  failed: "Failed",
+};
+
+/** The statuses that mean the email did not land and the address needs a look. */
+export const SEND_STATUS_PROBLEM: ReadonlySet<SendStatus> = new Set(["bounced", "complained", "failed"]);

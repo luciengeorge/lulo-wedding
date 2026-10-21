@@ -8,6 +8,9 @@
  */
 
 import type { PartyLink, PartyWave, PartyWho } from "./guest-csv";
+import type { EventFlags } from "./rsvp-rules";
+
+import { effectiveInvite, RSVP_EVENTS } from "./rsvp-rules";
 
 /**
  * Toolbar dropdown values. Each dropdown holds a *set*: an empty set is "no
@@ -25,6 +28,11 @@ export type FilterableParty = {
   invitedToPreWedding: boolean;
   invitedToWedding: boolean;
   invitedToBrunch: boolean;
+  /**
+   * The party's flags OR any couple-named guest's own invite. Present on rows from
+   * `admin.listParties`; absent means the flags are the whole story.
+   */
+  invitedTo?: EventFlags;
 };
 
 /**
@@ -61,16 +69,13 @@ export function matchesAny<T>(value: T, selected: readonly T[]): boolean {
 }
 
 function isInvitedTo(party: FilterableParty, invitedTo: InvitedToFilter): boolean {
-  switch (invitedTo) {
-    case "preWedding":
-      return party.invitedToPreWedding;
-    case "wedding":
-      return party.invitedToWedding;
-    case "brunch":
-      return party.invitedToBrunch;
-    case "none":
-      return !party.invitedToPreWedding && !party.invitedToWedding && !party.invitedToBrunch;
-  }
+  const flags = party.invitedTo ?? {
+    preWedding: party.invitedToPreWedding,
+    wedding: party.invitedToWedding,
+    brunch: party.invitedToBrunch,
+  };
+  if (invitedTo === "none") return !flags.preWedding && !flags.wedding && !flags.brunch;
+  return flags[invitedTo];
 }
 
 /**
@@ -80,6 +85,52 @@ function isInvitedTo(party: FilterableParty, invitedTo: InvitedToFilter): boolea
  */
 export function matchesInvitedTo(party: FilterableParty, selected: readonly InvitedToFilter[]): boolean {
   return selected.length === 0 || selected.some((option) => isInvitedTo(party, option));
+}
+
+/** The tracking dropdowns. "seenNotReplied" is the one the couple chase people from. */
+export type SeenFilter = "seenNotReplied" | "seen" | "notSeen";
+export type InvitedViaFilter = "email" | "whatsapp" | "none" | "bounced";
+
+export type TrackedParty = {
+  lastVisitAt?: number;
+  respondedAt?: number;
+  earlyDecline: boolean;
+  invitedVia?: "email" | "whatsapp" | "both";
+  emailBounced: boolean;
+};
+
+/** The sheet's early "No" is an answer too, the same as `admin.funnel` counts it. */
+export function hasReplied(party: Pick<TrackedParty, "respondedAt" | "earlyDecline">): boolean {
+  return party.respondedAt !== undefined || party.earlyDecline;
+}
+
+function isSeen(party: TrackedParty, option: SeenFilter): boolean {
+  const seen = party.lastVisitAt !== undefined;
+  if (option === "notSeen") return !seen;
+  if (option === "seen") return seen;
+  return seen && !hasReplied(party);
+}
+
+export function matchesSeen(party: TrackedParty, selected: readonly SeenFilter[]): boolean {
+  return selected.length === 0 || selected.some((option) => isSeen(party, option));
+}
+
+/** "both" counts as email and as WhatsApp, so either option finds it. */
+function isInvitedVia(party: TrackedParty, option: InvitedViaFilter): boolean {
+  switch (option) {
+    case "email":
+      return party.invitedVia === "email" || party.invitedVia === "both";
+    case "whatsapp":
+      return party.invitedVia === "whatsapp" || party.invitedVia === "both";
+    case "none":
+      return party.invitedVia === undefined;
+    case "bounced":
+      return party.emailBounced;
+  }
+}
+
+export function matchesInvitedVia(party: TrackedParty, selected: readonly InvitedViaFilter[]): boolean {
+  return selected.length === 0 || selected.some((option) => isInvitedVia(party, option));
 }
 
 export type RsvpState = "attending" | "declined" | "awaiting" | "notInvited";
@@ -93,8 +144,9 @@ export const RSVP_LABEL: Record<RsvpState, string> = {
 
 export type RsvpSummary = {
   state: RsvpState;
-  /** Guests who said yes to at least one event this party is invited to. */
+  /** Guests who said yes to at least one event they are invited to. */
   attending: number;
+  /** Guest rows holding an answer. A couple-named guest who has not replied is not one. */
   guestCount: number;
   /**
    * Named seats the party has actually spoken for, excluding any plus one.
@@ -111,6 +163,9 @@ type RsvpStatus = "pending" | "yes" | "no";
 
 export type RsvpParty = {
   earlyDecline: boolean;
+  respondedAt?: number;
+  /** Set by the online form; a decline there leaves no guest rows to read it from. */
+  declined?: boolean;
   invitedToPreWedding: boolean;
   invitedToWedding: boolean;
   invitedToBrunch: boolean;
@@ -122,39 +177,49 @@ export type RsvpGuest = {
   brunch: RsvpStatus;
   /** A plus one occupies no seat of the party's own, so they are counted separately. */
   isPlusOne: boolean;
+  /** The couple's per-person invite; absent means the party's flags. */
+  invitedTo?: EventFlags;
 };
 
 /**
  * Collapses a party plus its guest rows into the one state the table shows.
  *
- * Only events the party is actually invited to are consulted: a `yes` on the
+ * Only events a guest is actually invited to are consulted: a `yes` on the
  * brunch from someone who was never invited to it is stale data, not an RSVP.
- * `earlyDecline` wins over everything — the sheet already recorded a "No", and
- * that is a real answer even though no guest row exists to carry it.
+ * `earlyDecline` stands until the party replies online — the sheet already
+ * recorded a "No", and that is a real answer even though no guest row exists to
+ * carry it. Once they reply online, that reply wins, as it does on their own page.
+ *
+ * Rows still all `pending` are left out. The couple can name a guest before the
+ * party replies, and that row is an invitation, not an answer.
  */
 export function deriveRsvp(party: RsvpParty, guests: readonly RsvpGuest[]): RsvpSummary {
-  const seatsNamed = guests.filter((guest) => !guest.isPlusOne).length;
+  const answered = guests.filter((guest) => RSVP_EVENTS.some((event) => guest[event.key] !== "pending"));
+  const guestCount = answered.length;
+  const seatsNamed = answered.filter((guest) => !guest.isPlusOne).length;
 
-  if (party.earlyDecline) {
-    return { state: "declined", attending: 0, guestCount: guests.length, seatsNamed };
+  const declined = party.respondedAt === undefined ? party.earlyDecline : party.declined === true;
+  if (declined) {
+    return { state: "declined", attending: 0, guestCount, seatsNamed };
   }
 
-  const invitedToAnything = party.invitedToPreWedding || party.invitedToWedding || party.invitedToBrunch;
+  const attending = answered.filter((guest) => {
+    const invite = effectiveInvite(party, guest);
+    return RSVP_EVENTS.some((event) => invite[event.key] && guest[event.key] === "yes");
+  }).length;
 
-  const attending = guests.filter(
-    (guest) =>
-      (party.invitedToPreWedding && guest.preWedding === "yes") ||
-      (party.invitedToWedding && guest.wedding === "yes") ||
-      (party.invitedToBrunch && guest.brunch === "yes"),
-  ).length;
+  if (attending > 0) return { state: "attending", attending, guestCount, seatsNamed };
 
-  if (attending > 0) return { state: "attending", attending, guestCount: guests.length, seatsNamed };
+  // Answers with nobody attending mean the whole party declined.
+  if (guestCount > 0) return { state: "declined", attending: 0, guestCount, seatsNamed };
 
-  // Guest rows only exist once a party has replied, so rows with nobody
-  // attending mean the whole party declined.
-  if (guests.length > 0) return { state: "declined", attending: 0, guestCount: guests.length, seatsNamed };
+  const invitedToAnything =
+    party.invitedToPreWedding ||
+    party.invitedToWedding ||
+    party.invitedToBrunch ||
+    guests.some((guest) => guest.invitedTo && RSVP_EVENTS.some((event) => guest.invitedTo?.[event.key]));
 
-  if (!invitedToAnything) return { state: "notInvited", attending: 0, guestCount: 0, seatsNamed };
+  if (!invitedToAnything) return { state: "notInvited", attending: 0, guestCount, seatsNamed };
 
-  return { state: "awaiting", attending: 0, guestCount: 0, seatsNamed };
+  return { state: "awaiting", attending: 0, guestCount, seatsNamed };
 }

@@ -19,4 +19,8 @@ const crons = cronJobs();
 // out runner actions. See convex/sync/README.md for the full pattern.
 crons.interval("sync-dispatcher", { minutes: 5 }, internal.sync.dispatcher.tick);
 
+// Email rows the Resend component failed or cancelled without telling us. See
+// `reconcileQueued` in convex/sends.ts.
+crons.interval("reconcile-email-sends", { minutes: 5 }, internal.sends.reconcileQueued);
+
 export default crons;

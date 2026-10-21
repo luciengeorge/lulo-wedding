@@ -25,6 +25,11 @@ export type ReplyParty = {
   invitedToBrunch: boolean;
 };
 
+type InviteFlags = Pick<ReplyParty, "invitedToPreWedding" | "invitedToWedding" | "invitedToBrunch">;
+
+/** Which events one seat is asked about. */
+export type EventFlags = Record<RsvpEventKey, boolean>;
+
 /** One card on the form. `attending` only carries the events the party was asked about. */
 export type ReplyGuest = {
   firstName: string;
@@ -33,12 +38,49 @@ export type ReplyGuest = {
   email?: string;
   isPlusOne: boolean;
   attending: Partial<Record<RsvpEventKey, boolean>>;
+  /** The couple's per-person invite, when they set one. Absent means the party's flags. */
+  invitedTo?: EventFlags;
 };
 
 export type ReplyIssue = { guestIndex?: number; field?: string; message: string };
 
-export function invitedEvents(party: ReplyParty): readonly RsvpEventKey[] {
+export function invitedEvents(party: InviteFlags): readonly RsvpEventKey[] {
   return RSVP_EVENTS.filter((event) => party[event.invitedFlag]).map((event) => event.key);
+}
+
+export function partyFlags(party: InviteFlags): EventFlags {
+  return {
+    preWedding: party.invitedToPreWedding,
+    wedding: party.invitedToWedding,
+    brunch: party.invitedToBrunch,
+  };
+}
+
+/**
+ * What one person is asked about. The party's flags are the default for every
+ * seat the couple did not single out: unnamed seats, cards a guest adds, plus-ones.
+ */
+export function effectiveInvite(party: InviteFlags, guest: { invitedTo?: EventFlags }): EventFlags {
+  return guest.invitedTo ?? partyFlags(party);
+}
+
+export function guestInvitedEvents(party: InviteFlags, guest: { invitedTo?: EventFlags }): readonly RsvpEventKey[] {
+  const invite = effectiveInvite(party, guest);
+  return RSVP_EVENTS.filter((event) => invite[event.key]).map((event) => event.key);
+}
+
+/**
+ * Whether the party as a whole is asked about each event: its own flag, or any
+ * one person the couple invited to it. Two of five asked to the brunch makes the
+ * party a brunch party for counts and filters, without asking the other three.
+ */
+export function partyInvitedTo(party: InviteFlags, guests: readonly { invitedTo?: EventFlags }[]): EventFlags {
+  const flags = partyFlags(party);
+  for (const guest of guests) {
+    if (!guest.invitedTo) continue;
+    for (const event of RSVP_EVENTS) flags[event.key] ||= guest.invitedTo[event.key];
+  }
+  return flags;
 }
 
 /**
@@ -79,9 +121,9 @@ export function validateReply(
   options: { existingPlusOne?: boolean } = {},
 ): ReplyIssue[] {
   const issues: ReplyIssue[] = [];
-  const events = invitedEvents(party);
+  const invited = partyInvitedTo(party, guests);
 
-  if (events.length === 0) {
+  if (!RSVP_EVENTS.some((event) => invited[event.key])) {
     return [{ message: "This invitation has no events attached to it yet." }];
   }
 
@@ -120,7 +162,7 @@ export function validateReply(
     // A name with no day ticked is the one genuinely ambiguous state: it reads
     // equally as "coming, forgot to say when" and as "not coming". Guessing
     // either way costs a seat, so ask.
-    if (!events.some((event) => guest.attending[event] === true)) {
+    if (!guestInvitedEvents(party, guest).some((event) => guest.attending[event] === true)) {
       issues.push({
         guestIndex,
         field: "attending",
@@ -134,10 +176,9 @@ export function validateReply(
 
 /** True when every named guest said no to everything they were asked about. */
 export function isEffectiveDecline(party: ReplyParty, guests: readonly ReplyGuest[]): boolean {
-  const events = invitedEvents(party);
   return guests
     .filter((guest) => !isBlankCard(guest))
-    .every((guest) => !events.some((event) => guest.attending[event] === true));
+    .every((guest) => !guestInvitedEvents(party, guest).some((event) => guest.attending[event] === true));
 }
 
 /**

@@ -1,6 +1,6 @@
 import type { Page } from "@playwright/test";
 
-import { backend, expect, guestCookieHeader, GUEST_STATE, party, test, visit, waitForEmail } from "./fixtures";
+import { backend, expect, guestCookieHeader, GUEST_STATE, party, test, visit, waitForEmail } from "../fixtures";
 
 // Already past the gate: these specs are about the RSVP, not the password.
 test.use({ storageState: GUEST_STATE });
@@ -88,6 +88,26 @@ test.describe("a party replying for the first time", () => {
 
     const email = await waitForEmail("rae@example.com");
     expect(email.template).toBe("rsvpConfirmation");
+  });
+
+  test("accepts every event for everyone in one go", async ({ page }) => {
+    backend.seed([party({ token: TOKEN, headCount: 2, invitedToPreWedding: true, invitedToBrunch: true })]);
+    await visit(page, `/rsvp/${TOKEN}`);
+    await page.getByRole("button", { name: "JOYFULLY ACCEPT" }).click();
+
+    const all = ["Pre-wedding", "Wedding", "Brunch"];
+    await fillGuest(page, 0, { first: "Rae", last: "Haddad", email: "rae@example.com", days: all });
+    await fillGuest(page, 1, { first: "Cherif", last: "Haddad", email: "cherif@example.com", days: all });
+    await page.getByLabel("Your email").fill("rae@example.com");
+    await page.getByRole("button", { name: "SEND OUR REPLY" }).click();
+
+    await expect(page.getByText("Thank you")).toBeVisible();
+    // Every day lists both names on the summary the guest reads back.
+    await expect(page.getByText("Rae and Cherif")).toHaveCount(3);
+    expect(backend.replyFor(TOKEN)?.guests).toEqual([
+      expect.objectContaining({ firstName: "Rae", preWedding: "yes", wedding: "yes", brunch: "yes" }),
+      expect.objectContaining({ firstName: "Cherif", preWedding: "yes", wedding: "yes", brunch: "yes" }),
+    ]);
   });
 
   /** A name with no day ticked is the one genuinely ambiguous state on the form. */
@@ -201,6 +221,89 @@ test.describe("a party coming back to change their reply", () => {
     const guests = backend.replyFor(TOKEN)?.guests ?? [];
     expect(guests).toHaveLength(1);
     expect(guests[0].lastName).toBe("Haddad-Sahyoun");
+    // Changing a name must not touch the answer given with it.
+    expect(guests[0].wedding).toBe("yes");
+  });
+
+  test("keeps the days they picked when they come back to add someone", async ({ page }) => {
+    backend.seed([party({ token: TOKEN, headCount: 2, invitedToBrunch: true })]);
+    await visit(page, `/rsvp/${TOKEN}`);
+    await page.getByRole("button", { name: "JOYFULLY ACCEPT" }).click();
+    await fillGuest(page, 0, { first: "Rae", last: "Haddad", email: "rae@example.com", days: ["Brunch"] });
+    await page.getByLabel("Your email").fill("rae@example.com");
+    await page.getByRole("button", { name: "SEND OUR REPLY" }).click();
+    await expect(page.getByText(/told us about 1 of your 2 places/i)).toBeVisible();
+
+    await page.getByRole("button", { name: "CHANGE OUR REPLY" }).click();
+    // The form reopens on the stored answer: Brunch ticked, Wedding not.
+    await expect(card(page, "GUEST 1").getByRole("checkbox", { name: "Brunch", exact: true })).toBeChecked();
+    await expect(card(page, "GUEST 1").getByRole("checkbox", { name: "Wedding", exact: true })).not.toBeChecked();
+    await fillGuest(page, 1, { first: "Cherif", last: "Haddad", email: "cherif@example.com", days: ["Wedding"] });
+    await page.getByRole("button", { name: "SEND OUR REPLY" }).click();
+    await expect(page.getByText("Thank you")).toBeVisible();
+
+    expect(backend.replyFor(TOKEN)?.guests).toEqual([
+      expect.objectContaining({ firstName: "Rae", wedding: "no", brunch: "yes" }),
+      expect.objectContaining({ firstName: "Cherif", wedding: "yes", brunch: "no" }),
+    ]);
+  });
+});
+
+/**
+ * RSVP_DEADLINE is read from the deployment's env at request time, so these set
+ * it on the throwaway backend for one test each; `deploymentEnv` puts it back.
+ */
+test.describe("after the reply date", () => {
+  const PAST = "2001-01-01T00:00:00Z";
+
+  test("tells a party who never replied that replies have closed, and offers no form", async ({
+    page,
+    deploymentEnv,
+  }) => {
+    backend.seed([party({ token: TOKEN, headCount: 2 })]);
+    deploymentEnv.set("RSVP_DEADLINE", PAST);
+
+    await visit(page, `/rsvp/${TOKEN}`);
+    await expect(page.getByText(/Replies have closed. Please get in touch/)).toBeVisible();
+    await expect(page.getByRole("button", { name: "JOYFULLY ACCEPT" })).toHaveCount(0);
+    await expect(page.getByRole("button", { name: "REGRETFULLY DECLINE" })).toHaveCount(0);
+  });
+
+  test("shows a party what they said, without a way to change it", async ({ page, deploymentEnv }) => {
+    backend.seed([party({ token: TOKEN, headCount: 1 })]);
+    await visit(page, `/rsvp/${TOKEN}`);
+    await page.getByRole("button", { name: "JOYFULLY ACCEPT" }).click();
+    await fillGuest(page, 0, { first: "Rae", last: "Haddad", email: "rae@example.com", days: ["Wedding"] });
+    await page.getByLabel("Your email").fill("rae@example.com");
+    await page.getByRole("button", { name: "SEND OUR REPLY" }).click();
+    await expect(page.getByText("Thank you")).toBeVisible();
+
+    deploymentEnv.set("RSVP_DEADLINE", PAST);
+    await visit(page, `/rsvp/${TOKEN}`);
+    await expect(page.getByText(/Replies have closed. Here is what we have written down/)).toBeVisible();
+    await expect(page.getByText("YOUR REPLY")).toBeVisible();
+    await expect(page.getByRole("button", { name: "CHANGE OUR REPLY" })).toHaveCount(0);
+  });
+
+  /**
+   * The race that matters: a form opened before the cutoff and sent after it.
+   * The server decides, and the guest is told why nothing was saved.
+   */
+  test("refuses a reply sent after the cutoff from a form opened before it", async ({ page, deploymentEnv }) => {
+    backend.seed([party({ token: TOKEN, headCount: 1 })]);
+    deploymentEnv.set("RSVP_DEADLINE", "2099-01-01T00:00:00Z");
+
+    await visit(page, `/rsvp/${TOKEN}`);
+    await page.getByRole("button", { name: "JOYFULLY ACCEPT" }).click();
+    await fillGuest(page, 0, { first: "Rae", last: "Haddad", email: "rae@example.com", days: ["Wedding"] });
+    await page.getByLabel("Your email").fill("rae@example.com");
+
+    deploymentEnv.set("RSVP_DEADLINE", PAST);
+    await page.getByRole("button", { name: "SEND OUR REPLY" }).click();
+
+    await expect(page.getByRole("alert")).toContainText(/The reply date has passed/);
+    expect(backend.replyFor(TOKEN)?.respondedAt).toBeUndefined();
+    expect(backend.replyFor(TOKEN)?.guests).toEqual([]);
   });
 });
 
@@ -214,14 +317,14 @@ test.describe("declining", () => {
     await page.getByLabel("Your email").fill("rae@example.com");
     await page.getByRole("button", { name: "SEND OUR REGRETS" }).click();
 
-    await expect(page.getByText("We will miss you")).toBeVisible();
+    await expect(page.getByRole("heading", { name: "We will miss you" })).toBeVisible();
 
     const reply = backend.replyFor(TOKEN);
     expect(reply?.declined).toBe(true);
     expect(reply?.guestNote).toBe("We have a clash that weekend.");
 
     // The way back, so a decline is never a dead end.
-    await expect(page.getByRole("button", { name: "ACTUALLY, WE CAN COME" })).toBeVisible();
+    await expect(page.getByRole("button", { name: "ACTUALLY, WE CAN COME", exact: true })).toBeVisible();
   });
 
   test("will not take a decline without an email", async ({ page }) => {
@@ -255,7 +358,7 @@ test.describe("finding an invitation again", () => {
     await expect(page.getByText("Rae & Cherif")).toBeVisible();
 
     await visit(page, "/rsvp");
-    await expect(page).toHaveURL(`/rsvp/${TOKEN}`);
+    await expect(page).toHaveURL(`/rsvp/${TOKEN}?via=remembered`);
     await expect(page.getByText("Rae & Cherif")).toBeVisible();
   });
 
@@ -273,7 +376,7 @@ test.describe("finding an invitation again", () => {
     await visit(page, "/rsvp");
 
     await expect(page).toHaveURL("/rsvp");
-    await expect(page.getByText(/Which invitation is yours/i)).toBeVisible();
+    await expect(page.getByRole("heading", { name: "Find your invitation" })).toBeVisible();
     await context.close();
   });
 
@@ -287,7 +390,7 @@ test.describe("finding an invitation again", () => {
     await expect(page.getByText("Thank you")).toBeVisible();
 
     await visit(page, "/rsvp");
-    await expect(page).toHaveURL(`/rsvp/${TOKEN}`);
+    await expect(page).toHaveURL(`/rsvp/${TOKEN}?via=remembered`);
     // Straight to the reply, not the question again.
     await expect(page.getByText("Thank you")).toBeVisible();
   });
@@ -300,7 +403,8 @@ test.describe("finding an invitation again", () => {
     await expect(page.getByText(/could not find that invitation/i)).toBeVisible();
 
     await visit(page, "/rsvp");
-    await expect(page.getByText(/Which invitation is yours/i)).toBeVisible();
+    await expect(page).toHaveURL("/rsvp");
+    await expect(page.getByRole("heading", { name: "Find your invitation" })).toBeVisible();
     await context.close();
   });
 });

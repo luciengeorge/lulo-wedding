@@ -120,6 +120,7 @@ APP_NAME=
 SITE_URL=http://localhost:3000
 BETTER_AUTH_SECRET=          # openssl rand -hex 32
 TOAST_SECRET=                # openssl rand -hex 32, ≥32 chars
+APP_SERVER_SECRET=           # openssl rand -hex 32; same value on the Convex deployment
 
 VITE_CONVEX_URL=             # from `npx convex dev`
 VITE_CONVEX_SITE_URL=        # convex deployment HTTP actions URL

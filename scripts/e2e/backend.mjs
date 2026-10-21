@@ -14,25 +14,67 @@
  * the tests would quietly skip whatever you have not committed yet, which is
  * precisely the code most worth testing.
  *
- * Only the Convex CLI runs in the mirror. Vite runs from the repo root against
- * the `.env.e2e` this script writes, because a mirror with a symlinked
- * node_modules breaks Vite's module resolution, and duplicating node_modules to
- * fix that would be a lot of disk to solve a problem an env file already solves.
+ * The app under test is built from the same mirror, so one snapshot feeds both
+ * halves and an edit made mid-run reaches neither. `vite build` runs in the
+ * mirror against its symlinked node_modules; what broke there before was only
+ * Vite's dev server, which refuses to serve files that resolve outside its own
+ * root. A build has no such guard, and the alternatives cost more: a real install
+ * per run is minutes and gigabytes, and building from the repo root would read
+ * the live working tree, the very thing being frozen. scripts/e2e/serve-app.mjs
+ * then serves `.e2e/app/.output` with Nitro's own server, as production does.
+ *
+ * `pnpm e2e:dev` (E2E_DEV=1) skips the build and runs Vite's dev server from the
+ * repo root instead, for fast iteration; that run follows your edits live.
  *
  * Runs in the foreground and owns the backend's lifetime, because a local Convex
  * deployment is a child of `convex dev` and dies with it. Playwright starts it as
  * a webServer and kills it at the end.
  */
 import { spawn, spawnSync } from "node:child_process";
-import { existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { createHash, randomBytes } from "node:crypto";
+import { existsSync, mkdirSync, readdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { createServer } from "node:http";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
 const repoRoot = resolve(dirname(fileURLToPath(import.meta.url)), "../..");
 const mirror = join(repoRoot, ".e2e/app");
 const configPath = join(mirror, ".convex/local/default/config.json");
+/** Which code this run tests. Read by scripts/e2e/stamp.ts into the report. */
+const RUN_STAMP = join(repoRoot, ".e2e/run.json");
+const WEBHOOK_SECRET_FILE = join(repoRoot, ".e2e/webhook-secret");
+
+const APP_SERVER_SECRET_FILE = join(repoRoot, ".e2e/app-server-secret");
+
+function writeWebhookSecret(secret) {
+  mkdirSync(dirname(WEBHOOK_SECRET_FILE), { recursive: true });
+  writeFileSync(WEBHOOK_SECRET_FILE, secret);
+}
+
+/**
+ * APP_SERVER_SECRET for the throwaway backend and the app under test. Random, but
+ * kept across runs rather than fresh each time: `pnpm e2e:dev` may reuse a dev
+ * server started by an earlier run, whose env still holds the old value, and
+ * every guest-gate and name-lookup call would then be refused.
+ */
+function appServerSecret() {
+  if (existsSync(APP_SERVER_SECRET_FILE)) return readFileSync(APP_SERVER_SECRET_FILE, "utf8").trim();
+  const secret = randomBytes(32).toString("hex");
+  mkdirSync(dirname(APP_SERVER_SECRET_FILE), { recursive: true });
+  writeFileSync(APP_SERVER_SECRET_FILE, secret);
+  return secret;
+}
+const APP_SERVER_SECRET = appServerSecret();
+const DEV_MODE = process.env.E2E_DEV === "1";
 /** The local deployment always takes 3210 for its cloud port and 3211 for its site port. */
 const CLOUD_PORT = 3210;
+/**
+ * Answers 200 only once the backend has been synced, pushed and restarted for
+ * the run. Playwright's readiness probe points here rather than at the backend's
+ * own `/version`, which also answers during the short-lived `--once` push and
+ * during a stale backend's start-up.
+ */
+export const READY_PORT = 3209;
 
 /** Everything the Convex CLI and Vite need, and nothing that is huge or personal. */
 const EXCLUDES = [
@@ -99,7 +141,11 @@ function mirrorRepo() {
  * nothing else, so reclaiming it is safe.
  */
 function stopStrayBackend() {
-  const found = spawnSync("lsof", ["-ti", `tcp:${CLOUD_PORT}`], { encoding: "utf8" });
+  // Listeners only. A bare `tcp:3210` also matches every client with a socket open
+  // to the port, which includes the Playwright runner polling for readiness.
+  const found = spawnSync("lsof", ["-t", "-i", `tcp:${CLOUD_PORT}`, "-i", `tcp:${READY_PORT}`, "-sTCP:LISTEN"], {
+    encoding: "utf8",
+  });
   const pids = found.stdout
     .split("\n")
     .map((line) => line.trim())
@@ -111,10 +157,18 @@ function stopStrayBackend() {
   spawnSync("sleep", ["1"]);
 }
 
+/**
+ * Creates the throwaway deployment on first run. Anonymous on purpose:
+ * `convex deployment create local` needs a logged-in Convex account, which CI
+ * does not have and which a test backend has no business being tied to.
+ */
 function ensureDeployment() {
   if (existsSync(configPath)) return;
   console.log("[e2e] creating the local Convex deployment (first run downloads a backend binary)");
-  run("npx", ["convex", "deployment", "create", "local", "--select"], { cwd: mirror });
+  run("npx", ["convex", "dev", "--once", "--tail-logs", "disable"], {
+    cwd: mirror,
+    env: { ...process.env, CONVEX_AGENT_MODE: "anonymous" },
+  });
 }
 
 /**
@@ -131,7 +185,15 @@ const DEPLOYMENT_ENV = {
   SITE_URL: "http://127.0.0.1:3100",
   BETTER_AUTH_SECRET: "e2e-better-auth-secret-not-used-anywhere-real",
   E2E_CAPTURE_EMAILS: "1",
+  // Svix-format signing secret for the Resend webhook, fresh each run so nothing
+  // secret-shaped lives in the repo. e2e/fixtures.ts reads it from WEBHOOK_SECRET_FILE
+  // to sign the events it posts to /resend-webhook.
+  RESEND_WEBHOOK_SECRET: `whsec_${randomBytes(24).toString("base64")}`,
+  // Proves a call to the guest gate or the name lookup came from the app server.
+  // The same value goes into APP_ENV below.
+  APP_SERVER_SECRET,
 };
+writeWebhookSecret(DEPLOYMENT_ENV.RESEND_WEBHOOK_SECRET);
 
 function syncDeploymentEnv() {
   const existing = capture("npx", ["convex", "env", "list"], { cwd: mirror });
@@ -143,11 +205,10 @@ function syncDeploymentEnv() {
 }
 
 /**
- * The app-side variables, written to `.env.e2e` in the repo root.
- *
- * Vite is started with `--mode e2e`, so it loads this file after `.env.local` and
- * wins; dotenv-cli loads the same file for the server half. One file, both halves,
- * and your real `.env.local` is never read for a test run.
+ * The app-side variables. Baked into the build (VITE_*), passed to the built
+ * server by scripts/e2e/serve-app.mjs, and written to `.env.e2e` in the repo root
+ * for `pnpm e2e:dev`, where Vite runs with `--mode e2e` and loads that file after
+ * `.env.local`. Your real `.env.local` is never read for a test run.
  */
 const APP_ENV = {
   // Needed here as well as on the deployment. `getAdminSession` reads the app
@@ -164,14 +225,26 @@ const APP_ENV = {
   // The RSVP route is flag-gated off in production until it is finished. The
   // browser tests are the one place it must be on.
   VITE_FEATURE_RSVP: "1",
+  // A production build served over plain http, talking to a local http backend:
+  // relaxes the CSP at build time and the Secure cookie flag at run time. See
+  // nitro.config.ts and src/lib/guest-session.server.ts.
+  E2E_PLAIN_HTTP: "1",
+  // Read by the app server at run time, never at build time: see buildApp.
+  APP_SERVER_SECRET,
 };
+
+function appEnv(url) {
+  return {
+    ...APP_ENV,
+    VITE_CONVEX_URL: url,
+    VITE_CONVEX_SITE_URL: url.replace(/:(\d+)$/, (_, port) => `:${Number(port) + 1}`),
+  };
+}
 
 function writeAppEnv(url) {
   const lines = [
     "# Generated by scripts/e2e/backend.mjs. Fixtures, not secrets.",
-    ...Object.entries(APP_ENV).map(([key, value]) => `${key}=${value}`),
-    `VITE_CONVEX_URL=${url}`,
-    `VITE_CONVEX_SITE_URL=${url.replace(/:(\d+)$/, (_, port) => `:${Number(port) + 1}`)}`,
+    ...Object.entries(appEnv(url)).map(([key, value]) => `${key}=${value}`),
   ];
   const envPath = join(repoRoot, ".env.e2e");
   const next = `${lines.join("\n")}\n`;
@@ -186,6 +259,83 @@ function backendUrl() {
   return `http://127.0.0.1:${config.ports.cloud}`;
 }
 
+/** Files that are the mirror's own state rather than part of the snapshot. */
+const UNHASHED = new Set(["node_modules", ".convex", ".output", ".tanstack", ".nitro", ".env.local", ".env.e2e"]);
+
+/** A short hash of every file in the snapshot, so a report names exactly what it tested. */
+function snapshotHash() {
+  const hash = createHash("sha256");
+  const walk = (dir, prefix) => {
+    for (const entry of readdirSync(dir, { withFileTypes: true }).sort((a, b) => a.name.localeCompare(b.name))) {
+      if (!prefix && UNHASHED.has(entry.name)) continue;
+      const path = `${prefix}${entry.name}`;
+      if (entry.isDirectory()) walk(join(dir, entry.name), `${path}/`);
+      else if (entry.isFile())
+        hash
+          .update(path)
+          .update("\0")
+          .update(readFileSync(join(dir, entry.name)))
+          .update("\0");
+    }
+  };
+  walk(mirror, "");
+  return hash.digest("hex").slice(0, 12);
+}
+
+function stampRun() {
+  const git = (...args) => spawnSync("git", args, { cwd: repoRoot, encoding: "utf8" }).stdout.trim();
+  const stamp = {
+    commit: git("rev-parse", "--short=12", "HEAD"),
+    dirty: git("status", "--porcelain") !== "",
+    snapshot: DEV_MODE ? "live working tree (e2e:dev)" : snapshotHash(),
+    app: DEV_MODE ? "vite dev" : "production build",
+    at: new Date().toISOString(),
+  };
+  writeFileSync(RUN_STAMP, `${JSON.stringify(stamp, null, 2)}\n`);
+  console.log(
+    `[e2e] testing ${stamp.commit}${stamp.dirty ? " + uncommitted changes" : ""}, snapshot ${stamp.snapshot}, ${stamp.app}`,
+  );
+}
+
+/**
+ * Builds the app in the mirror. VITE_ variables are baked in at build time, so
+ * they are passed here; none are inherited from your shell, and no Sentry
+ * credentials reach a test build. The previous output is removed first, so a
+ * failed build can never leave an older one to be served.
+ */
+function buildApp(url) {
+  const inherited = Object.fromEntries(
+    Object.entries(process.env).filter(
+      ([key]) => !key.startsWith("VITE_") && !key.startsWith("SENTRY_") && key !== "APP_SERVER_SECRET",
+    ),
+  );
+  // Left out of the build so the run proves the server reads it at run time, as
+  // it must on Vercel, rather than passing on a value a bundler happened to inline.
+  const { APP_SERVER_SECRET: _runtimeOnly, ...buildEnv } = appEnv(url);
+  rmSync(join(mirror, ".output"), { recursive: true, force: true });
+  console.log("[e2e] building the app from the snapshot");
+  run("npx", ["vite", "build"], { cwd: mirror, env: { ...inherited, ...buildEnv } });
+}
+
+/** Everything a run needs before the long-running backend starts. */
+function prepare() {
+  stopStrayBackend();
+  mirrorRepo();
+  stampRun();
+  ensureDeployment();
+
+  // Push once up front so `convex env` and the first test both talk to a
+  // deployment that already has the functions on it.
+  run("npx", ["convex", "dev", "--once", "--tail-logs", "disable"], { cwd: mirror });
+  syncDeploymentEnv();
+
+  const url = backendUrl();
+  writeAppEnv(url);
+  if (!DEV_MODE) buildApp(url);
+  console.log(`[e2e] prepared ${url}`);
+  return url;
+}
+
 function main() {
   if (process.argv.includes("--clean")) {
     rmSync(join(repoRoot, ".e2e"), { recursive: true, force: true });
@@ -193,38 +343,37 @@ function main() {
     return;
   }
 
-  // The long-running path assumes globalSetup has already synced and pushed, so
-  // it does not repeat that work and does not briefly own the port on the way.
-  if (!process.argv.includes("--once")) {
-    const url = backendUrl();
-    console.log(`[e2e] serving ${url}`);
-    serve();
-    return;
-  }
-
-  stopStrayBackend();
-  mirrorRepo();
-  ensureDeployment();
-
-  // Push once up front so `convex env` and the first test both talk to a
-  // deployment that already has the functions on it. Playwright's globalSetup
-  // calls this path with --once before any server starts; the webServer then
-  // re-enters and falls through to the long-running branch below.
-  run("npx", ["convex", "dev", "--once", "--tail-logs", "disable"], { cwd: mirror });
-  syncDeploymentEnv();
-
-  const url = backendUrl();
-  writeAppEnv(url);
-  console.log(`[e2e] prepared ${url}`);
+  // Prepare and serve in one process, in that order. Playwright starts webServers
+  // before globalSetup, so the push cannot live in a globalSetup: the backend
+  // would already be serving the previous run's mirror by the time it ran.
+  const url = prepare();
+  if (process.argv.includes("--once")) return;
+  serve(url);
 }
 
 /** Long-running: the local backend is a child of this process and stops with it. */
-function serve() {
+function serve(url) {
   const dev = spawn("npx", ["convex", "dev", "--tail-logs", "disable"], { cwd: mirror, stdio: "inherit" });
   const stop = () => dev.kill("SIGTERM");
   process.on("SIGINT", stop);
   process.on("SIGTERM", stop);
   dev.on("exit", (code) => process.exit(code ?? 0));
+
+  void announceWhenReady(url);
+}
+
+/** Opens the readiness port once the restarted backend answers, and not before. */
+async function announceWhenReady(url) {
+  for (;;) {
+    try {
+      if ((await fetch(`${url}/version`)).ok) break;
+    } catch {
+      // Not up yet.
+    }
+    await new Promise((resolve) => setTimeout(resolve, 250));
+  }
+  createServer((_, response) => response.writeHead(200).end("ready")).listen(READY_PORT, "127.0.0.1");
+  console.log(`[e2e] serving ${url}`);
 }
 
 main();

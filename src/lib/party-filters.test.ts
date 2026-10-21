@@ -1,8 +1,16 @@
 import { describe, expect, it } from "vitest";
 
-import type { FilterableParty, RsvpGuest, RsvpParty } from "./party-filters";
+import type { FilterableParty, RsvpGuest, RsvpParty, TrackedParty } from "./party-filters";
 
-import { deriveRsvp, foldForSearch, matchesAny, matchesInvitedTo, partySearchText } from "./party-filters";
+import {
+  deriveRsvp,
+  foldForSearch,
+  matchesAny,
+  matchesInvitedTo,
+  matchesInvitedVia,
+  matchesSeen,
+  partySearchText,
+} from "./party-filters";
 
 const party: FilterableParty = {
   displayName: "Rae & Cherif",
@@ -114,5 +122,72 @@ describe("deriveRsvp", () => {
 
   it("lets an early decline from the sheet win, with no guest rows to carry it", () => {
     expect(deriveRsvp({ ...invited, earlyDecline: true }, []).state).toBe("declined");
+  });
+
+  it("lets a later online reply win over the sheet's early decline", () => {
+    const changedMind = { ...invited, earlyDecline: true, respondedAt: 10, declined: false };
+    expect(deriveRsvp(changedMind, [guest({ wedding: "yes" })])).toEqual({
+      state: "attending",
+      attending: 1,
+      guestCount: 1,
+      seatsNamed: 1,
+    });
+  });
+
+  it("declines on an online decline, even with no guest rows to carry it", () => {
+    expect(deriveRsvp({ ...invited, respondedAt: 10, declined: true }, []).state).toBe("declined");
+    expect(deriveRsvp({ ...invited, earlyDecline: true, respondedAt: 10, declined: true }, []).state).toBe("declined");
+  });
+
+  it("is still awaiting when the only rows are people the couple named", () => {
+    expect(deriveRsvp(invited, [guest(), guest()])).toEqual({
+      state: "awaiting",
+      attending: 0,
+      guestCount: 0,
+      seatsNamed: 0,
+    });
+  });
+
+  it("counts a brunch yes from someone the couple asked to the brunch", () => {
+    const own = { preWedding: false, wedding: false, brunch: true };
+    expect(deriveRsvp(invited, [guest({ brunch: "yes", invitedTo: own })]).attending).toBe(1);
+    expect(deriveRsvp({ ...invited, invitedToWedding: false }, [guest({ invitedTo: own })]).state).toBe("awaiting");
+  });
+});
+
+describe("matchesInvitedTo with per-guest invites", () => {
+  it("filters on the effective invite when the row carries one", () => {
+    const row = { ...party, invitedTo: { preWedding: false, wedding: true, brunch: true } };
+    expect(matchesInvitedTo(row, ["brunch"])).toBe(true);
+    expect(matchesInvitedTo(party, ["brunch"])).toBe(false);
+  });
+});
+
+describe("tracking filters", () => {
+  const unseen: TrackedParty = { earlyDecline: false, emailBounced: false };
+  const seenWaiting: TrackedParty = { ...unseen, lastVisitAt: 10, invitedVia: "whatsapp" };
+  const seenReplied: TrackedParty = { ...seenWaiting, respondedAt: 20, invitedVia: "both" };
+  const earlyNo: TrackedParty = { ...seenWaiting, earlyDecline: true };
+  const bounced: TrackedParty = { ...unseen, invitedVia: "email", emailBounced: true };
+
+  it("finds the people who opened their link but have not answered", () => {
+    const rows = [unseen, seenWaiting, seenReplied, earlyNo];
+    expect(rows.filter((row) => matchesSeen(row, ["seenNotReplied"]))).toEqual([seenWaiting]);
+    expect(rows.filter((row) => matchesSeen(row, ["seen"]))).toHaveLength(3);
+    expect(rows.filter((row) => matchesSeen(row, ["notSeen"]))).toEqual([unseen]);
+    expect(rows.filter((row) => matchesSeen(row, []))).toHaveLength(4);
+  });
+
+  it("counts a party invited both ways under either channel", () => {
+    expect(matchesInvitedVia(seenReplied, ["email"])).toBe(true);
+    expect(matchesInvitedVia(seenReplied, ["whatsapp"])).toBe(true);
+    expect(matchesInvitedVia(seenWaiting, ["email"])).toBe(false);
+  });
+
+  it("finds the uninvited and the bounced", () => {
+    const rows = [unseen, seenWaiting, bounced];
+    expect(rows.filter((row) => matchesInvitedVia(row, ["none"]))).toEqual([unseen]);
+    expect(rows.filter((row) => matchesInvitedVia(row, ["bounced"]))).toEqual([bounced]);
+    expect(rows.filter((row) => matchesInvitedVia(row, ["none", "bounced"]))).toEqual([unseen, bounced]);
   });
 });

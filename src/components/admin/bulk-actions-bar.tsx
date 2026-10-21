@@ -47,6 +47,8 @@ type BulkActionsBarProps = {
   deleteParties: (args: {
     partyIds: PartyId[];
   }) => Promise<{ deletedParties: number; deletedGuests: number; missing: number }>;
+  markWhatsApp: (args: { partyIds: PartyId[] }) => Promise<{ marked: number; alreadyMarked: number; missing: number }>;
+  unmarkWhatsApp: (args: { partyIds: PartyId[] }) => Promise<{ unmarked: number }>;
 };
 
 const CONTROL_CLASS =
@@ -107,7 +109,15 @@ function partyCount(count: number) {
   return `${count} ${count === 1 ? "party" : "parties"}`;
 }
 
-export function BulkActionsBar({ table, busy, onBusyChange, updateParties, deleteParties }: BulkActionsBarProps) {
+export function BulkActionsBar({
+  table,
+  busy,
+  onBusyChange,
+  updateParties,
+  deleteParties,
+  markWhatsApp,
+  unmarkWhatsApp,
+}: BulkActionsBarProps) {
   const running = useRef(false);
   const [deleteTarget, setDeleteTarget] = useState<PartyRow[] | null>(null);
   const selected = table.getSelectedRowModel().rows.map((row) => row.original);
@@ -139,6 +149,66 @@ export function BulkActionsBar({ table, busy, onBusyChange, updateParties, delet
         });
       } else {
         toast.success(message(updated), { description: skipped || undefined });
+      }
+    } finally {
+      running.current = false;
+      onBusyChange(false);
+    }
+  }
+
+  async function applyMarkWhatsApp() {
+    if (running.current || selected.length === 0) return;
+    // Undo must only take back the stamps this click added. A party stamped on an
+    // earlier evening stays stamped, or undoing one mistake would erase real sends.
+    const fresh = selected
+      .filter((party) => party.invitedVia !== "whatsapp" && party.invitedVia !== "both")
+      .map((party) => party._id);
+    running.current = true;
+    onBusyChange(true);
+    try {
+      const result = await runBulkChunks(
+        selected.map((party) => party._id),
+        (partyIds) => markWhatsApp({ partyIds }),
+      );
+      const marked = result.results.reduce((sum, chunk) => sum + chunk.marked, 0);
+      const already = result.results.reduce((sum, chunk) => sum + chunk.alreadyMarked, 0);
+      const missing = result.results.reduce((sum, chunk) => sum + chunk.missing, 0);
+      const message = `Marked ${partyCount(marked)} as invited on WhatsApp`;
+      const skipped = [
+        already > 0 ? `${partyCount(already)} already ${already === 1 ? "was" : "were"}.` : "",
+        missing > 0 ? `${partyCount(missing)} no longer exist and were skipped.` : "",
+      ]
+        .filter(Boolean)
+        .join(" ");
+      const undo =
+        marked > 0 && fresh.length > 0 ? { label: "Undo", onClick: () => void applyUnmarkWhatsApp(fresh) } : undefined;
+      if (result.status === "failed") {
+        toast.error(`${marked === 0 ? "Nothing was marked" : message} before the batch failed`, {
+          description: [skipped, convexErrorMessage(result.error)].filter(Boolean).join(" "),
+          action: undo,
+        });
+      } else {
+        toast.success(message, { description: skipped || undefined, action: undo });
+      }
+    } finally {
+      running.current = false;
+      onBusyChange(false);
+    }
+  }
+
+  async function applyUnmarkWhatsApp(partyIds: PartyId[]) {
+    if (running.current) return;
+    running.current = true;
+    onBusyChange(true);
+    try {
+      const result = await runBulkChunks(partyIds, (chunk) => unmarkWhatsApp({ partyIds: chunk }));
+      const unmarked = result.results.reduce((sum, chunk) => sum + chunk.unmarked, 0);
+      if (result.status === "failed") {
+        toast.error(`Undid ${partyCount(unmarked)} before the batch failed`, {
+          description: convexErrorMessage(result.error),
+        });
+      } else {
+        toast.success(`Undone: ${partyCount(unmarked)} no longer marked as invited on WhatsApp`);
       }
     } finally {
       running.current = false;
@@ -254,6 +324,10 @@ export function BulkActionsBar({ table, busy, onBusyChange, updateParties, delet
             ))}
           </DropdownMenuContent>
         </DropdownMenu>
+
+        <button type="button" className={CONTROL_CLASS} disabled={busy} onClick={() => void applyMarkWhatsApp()}>
+          Mark invited on WhatsApp
+        </button>
 
         <button
           type="button"

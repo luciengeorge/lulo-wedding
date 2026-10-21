@@ -42,7 +42,9 @@ export function useGuestSession() {
     cookie: {
       httpOnly: true,
       sameSite: "lax",
-      secure: process.env.NODE_ENV === "production",
+      // E2E_PLAIN_HTTP: the browser tests serve a production build over plain http
+      // (scripts/e2e/serve-app.mjs). Ignored on Vercel, so it can never weaken a deploy.
+      secure: process.env.NODE_ENV === "production" && !(process.env.E2E_PLAIN_HTTP === "1" && !process.env.VERCEL),
       path: "/",
       maxAge: GUEST_SESSION_MAX_AGE_SECONDS,
     },

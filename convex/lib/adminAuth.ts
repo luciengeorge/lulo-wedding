@@ -53,3 +53,15 @@ export async function requireAdmin(ctx: QueryCtx | MutationCtx) {
 
   return user;
 }
+
+/**
+ * The same check as `requireAdmin`, answered rather than thrown. For code that
+ * only behaves differently for the couple, such as not counting their own visits
+ * to a party's link as the party opening it.
+ */
+export async function isAdmin(ctx: QueryCtx | MutationCtx): Promise<boolean> {
+  const user = await authComponent.safeGetAuthUser(ctx);
+  const email = user?.email?.trim().toLowerCase();
+  if (!email || !user?.emailVerified) return false;
+  return adminEmails().has(email);
+}

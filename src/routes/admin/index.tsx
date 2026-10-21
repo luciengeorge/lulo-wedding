@@ -5,11 +5,19 @@ import { toast } from "sonner";
 
 import type { GuestListTableInstance } from "@/components/admin/guest-list-table";
 import type { PartyRow } from "@/components/admin/party-row";
-import type { InvitedToFilter, LinkFilter, WaveFilter, WhoFilter } from "@/lib/party-filters";
+import type {
+  InvitedToFilter,
+  InvitedViaFilter,
+  LinkFilter,
+  SeenFilter,
+  WaveFilter,
+  WhoFilter,
+} from "@/lib/party-filters";
 
 import { api } from "@/../convex/_generated/api";
 import { AdminMultiSelect } from "@/components/admin/admin-multi-select";
 import { BulkActionsBar } from "@/components/admin/bulk-actions-bar";
+import { FunnelStrip } from "@/components/admin/funnel-strip";
 import {
   GuestListTable,
   GuestListTableSkeleton,
@@ -23,6 +31,7 @@ import { Input } from "@/components/ui/input";
 import { Skeleton } from "@/components/ui/skeleton";
 import { csvFilename, partiesToCsv } from "@/lib/party-csv-export";
 import { LINK_LABEL, WAVE_LABEL, WHO_LONG_LABEL } from "@/lib/party-labels";
+import { cn } from "@/lib/utils";
 
 export const Route = createFileRoute("/admin/")({ component: GuestListPage });
 
@@ -46,6 +55,28 @@ const INVITED_TO_OPTIONS: readonly { value: InvitedToFilter; label: string }[] =
   { value: "brunch", label: "Brunch" },
   { value: "none", label: "Not invited yet" },
 ];
+
+const INVITED_VIA_OPTIONS: readonly { value: InvitedViaFilter; label: string }[] = [
+  { value: "email", label: "Email" },
+  { value: "whatsapp", label: "WhatsApp" },
+  { value: "none", label: "Not sent yet" },
+  { value: "bounced", label: "Email bounced" },
+];
+
+const SEEN_OPTIONS: readonly { value: SeenFilter; label: string }[] = [
+  { value: "seenNotReplied", label: "Seen, not replied" },
+  { value: "seen", label: "Seen" },
+  { value: "notSeen", label: "Never seen" },
+];
+
+/**
+ * The two lists the couple chase from. Each is one value in one column filter,
+ * so the preset and its dropdown are the same state and cannot disagree.
+ */
+const PRESETS = [
+  { label: "Seen, not replied", columnId: "lastSeen", value: "seenNotReplied" },
+  { label: "Bounced", columnId: "invitedVia", value: "bounced" },
+] as const;
 
 /**
  * Reads a column's filter out of table state rather than mirroring it in React
@@ -71,6 +102,9 @@ function GuestListPage() {
   const [bulkBusy, setBulkBusy] = useState(false);
   const bulkUpdateParties = useMutation(api.admin.bulkUpdateParties);
   const bulkDeleteParties = useMutation(api.admin.bulkDeleteParties);
+  const markInvitedOnWhatsApp = useMutation(api.admin.markInvitedOnWhatsApp);
+  const unmarkInvitedOnWhatsApp = useMutation(api.admin.unmarkInvitedOnWhatsApp);
+  const funnel = useQuery(api.admin.funnel, {});
 
   const table = useGuestListTable(data?.rows, {
     siteUrl: SITE_URL,
@@ -132,6 +166,8 @@ function GuestListPage() {
         />
       </section>
 
+      <FunnelStrip funnel={funnel} />
+
       <section className="flex flex-col gap-2 px-4 py-3.5 sm:flex-row sm:flex-wrap sm:items-center sm:px-6">
         <Input
           type="search"
@@ -176,6 +212,42 @@ function GuestListPage() {
             unitLabel="invites"
             aria-label="Invited to"
           />
+          <AdminMultiSelect
+            value={columnFilterValues<InvitedViaFilter>(table, "invitedVia")}
+            onChange={(values) => setColumnFilterValues(table, "invitedVia", values)}
+            options={INVITED_VIA_OPTIONS}
+            emptyLabel="Any channel"
+            unitLabel="selected"
+            aria-label="Invited via"
+          />
+          <AdminMultiSelect
+            value={columnFilterValues<SeenFilter>(table, "lastSeen")}
+            onChange={(values) => setColumnFilterValues(table, "lastSeen", values)}
+            options={SEEN_OPTIONS}
+            emptyLabel="Seen or not"
+            unitLabel="selected"
+            aria-label="Last seen"
+          />
+          {PRESETS.map((preset) => {
+            const values = columnFilterValues<string>(table, preset.columnId);
+            const active = values.length === 1 && values[0] === preset.value;
+            return (
+              <button
+                key={preset.label}
+                type="button"
+                aria-pressed={active}
+                onClick={() => setColumnFilterValues(table, preset.columnId, active ? [] : [preset.value])}
+                className={cn(
+                  "h-8 rounded-full border px-3 text-[12.5px] whitespace-nowrap transition-colors",
+                  active
+                    ? "border-[#18181B] bg-[#18181B] text-[#FFFFFF]"
+                    : "border-dashed border-[#D4D4D8] text-[#52525B] hover:bg-[#F4F4F5]",
+                )}
+              >
+                {preset.label}
+              </button>
+            );
+          })}
         </div>
 
         <div className="flex flex-wrap items-center gap-2 sm:ml-auto">
@@ -209,6 +281,8 @@ function GuestListPage() {
               onBusyChange={setBulkBusy}
               updateParties={bulkUpdateParties}
               deleteParties={bulkDeleteParties}
+              markWhatsApp={markInvitedOnWhatsApp}
+              unmarkWhatsApp={unmarkInvitedOnWhatsApp}
             />
             <GuestListTable table={table} rowWindow={rowWindow} />
 

@@ -28,6 +28,7 @@ export type ParsedParty = {
   earlyDecline: boolean;
   note?: string;
   contactEmail?: string;
+  contactPhone?: string;
 };
 
 export type ParseGuestCsvResult = { rows: ParsedParty[]; warnings: string[] };
@@ -227,6 +228,12 @@ export function parseGuestCsv(text: string): ParseGuestCsvResult {
     ]);
   }
 
+  // Optional and found by name rather than position: the sheet has no phone column
+  // yet, and the couple may add one wherever is handy after the fixed ones.
+  const phoneColumn = header.findIndex(
+    (title, index) => index >= EXPECTED_HEADERS.length && /^phone(\(s\))?$/i.test(title.trim()),
+  );
+
   const rows: ParsedParty[] = [];
   const warnings: string[] = [];
   const problems: string[] = [];
@@ -321,6 +328,7 @@ export function parseGuestCsv(text: string): ParseGuestCsvResult {
     const whereFrom = cell(record, COL.whereFrom);
     const note = cell(record, COL.note);
     const contactEmail = cell(record, COL.email);
+    const contactPhone = phoneColumn === -1 ? "" : cell(record, phoneColumn);
 
     rows.push({
       importKey,
@@ -337,6 +345,7 @@ export function parseGuestCsv(text: string): ParseGuestCsvResult {
       earlyDecline: cell(record, COL.rsvp) === "No",
       ...(note === "" ? {} : { note }),
       ...(contactEmail === "" ? {} : { contactEmail }),
+      ...(contactPhone === "" ? {} : { contactPhone }),
     });
   }
 

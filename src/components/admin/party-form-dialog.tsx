@@ -25,6 +25,8 @@ import { EMPTY_PARTY_FORM, type PartyFormValues, PartyFormSchema, toPartyMutatio
 
 import type { PartyRow } from "./party-row";
 
+import { NamedGuestsSection } from "./named-guests-section";
+
 const WHO_OPTIONS = (Object.keys(WHO_LONG_LABEL) as (keyof typeof WHO_LONG_LABEL)[]).map((value) => ({
   value,
   label: WHO_LONG_LABEL[value],
@@ -37,6 +39,8 @@ const LINK_OPTIONS = (Object.keys(LINK_LABEL) as (keyof typeof LINK_LABEL)[]).ma
   value,
   label: LINK_LABEL[value],
 }));
+
+const PARTY_FORM_ID = "party-form";
 
 function toFormValues(party: PartyRow): PartyFormValues {
   return {
@@ -56,6 +60,7 @@ function toFormValues(party: PartyRow): PartyFormValues {
     saveTheDateSent: party.saveTheDateSent,
     note: party.note ?? "",
     contactEmail: party.contactEmail ?? "",
+    contactPhone: party.contactPhone ?? "",
   };
 }
 
@@ -123,6 +128,7 @@ function PartyFormBody({ party, onDone }: { party: PartyRow | null; onDone: () =
       </DialogHeader>
 
       <form
+        id={PARTY_FORM_ID}
         onSubmit={(event) => {
           event.preventDefault();
           event.stopPropagation();
@@ -329,22 +335,42 @@ function PartyFormBody({ party, onDone }: { party: PartyRow | null; onDone: () =
           )}
         </form.Field>
 
-        <form.Field name="contactEmail">
-          {(field) => (
-            <Field>
-              <FieldLabel htmlFor={field.name}>Email(s)</FieldLabel>
-              <Input
-                id={field.name}
-                name={field.name}
-                value={field.state.value}
-                onChange={(e) => field.handleChange(e.target.value)}
-                onBlur={field.handleBlur}
-                placeholder="Separate several with commas"
-              />
-              {field.state.meta.isValid ? null : <FieldError errors={field.state.meta.errors} />}
-            </Field>
-          )}
-        </form.Field>
+        <div className="grid gap-4 sm:grid-cols-2">
+          <form.Field name="contactEmail">
+            {(field) => (
+              <Field>
+                <FieldLabel htmlFor={field.name}>Email(s)</FieldLabel>
+                <Input
+                  id={field.name}
+                  name={field.name}
+                  value={field.state.value}
+                  onChange={(e) => field.handleChange(e.target.value)}
+                  onBlur={field.handleBlur}
+                  placeholder="Separate several with commas"
+                />
+                {field.state.meta.isValid ? null : <FieldError errors={field.state.meta.errors} />}
+              </Field>
+            )}
+          </form.Field>
+
+          <form.Field name="contactPhone">
+            {(field) => (
+              <Field>
+                <FieldLabel htmlFor={field.name}>Phone</FieldLabel>
+                <Input
+                  id={field.name}
+                  name={field.name}
+                  type="tel"
+                  value={field.state.value}
+                  onChange={(e) => field.handleChange(e.target.value)}
+                  onBlur={field.handleBlur}
+                  placeholder="For WhatsApp"
+                />
+                {field.state.meta.isValid ? null : <FieldError errors={field.state.meta.errors} />}
+              </Field>
+            )}
+          </form.Field>
+        </div>
 
         <form.Field name="note">
           {(field) => (
@@ -362,39 +388,54 @@ function PartyFormBody({ party, onDone }: { party: PartyRow | null; onDone: () =
             </Field>
           )}
         </form.Field>
-
-        <form.Subscribe
-          selector={(state) => ({
-            canSubmit: state.canSubmit,
-            isSubmitting: state.isSubmitting,
-            errorMap: state.errorMap,
-          })}
-        >
-          {({ canSubmit, isSubmitting, errorMap }) => (
-            <div className="flex flex-col gap-3">
-              {errorMap.onSubmit?.form ? <FieldError>{String(errorMap.onSubmit.form)}</FieldError> : null}
-              <DialogFooter className="sm:justify-between">
-                {party ? (
-                  <Button type="button" variant="destructive" onClick={() => setConfirmingDelete(true)}>
-                    Delete party
-                  </Button>
-                ) : (
-                  <span />
-                )}
-                <div className="flex gap-2">
-                  <Button type="button" variant="outline" onClick={onDone}>
-                    Cancel
-                  </Button>
-                  <Button type="submit" disabled={!canSubmit || isSubmitting} className="bg-ink hover:bg-ink/90">
-                    {isSubmitting ? <Spinner /> : null}
-                    {party ? "Save changes" : "Add party"}
-                  </Button>
-                </div>
-              </DialogFooter>
-            </div>
-          )}
-        </form.Subscribe>
       </form>
+
+      {/* Outside the party's <form>: each person is a form of their own, and
+          forms cannot nest. The Save button reaches back with `form=`. */}
+      {party ? (
+        <NamedGuestsSection party={party} />
+      ) : (
+        <p className="text-[12.5px] text-[#71717A]">
+          To invite one person in this party to different events, add the party first, then edit it.
+        </p>
+      )}
+
+      <form.Subscribe
+        selector={(state) => ({
+          canSubmit: state.canSubmit,
+          isSubmitting: state.isSubmitting,
+          errorMap: state.errorMap,
+        })}
+      >
+        {({ canSubmit, isSubmitting, errorMap }) => (
+          <div className="flex flex-col gap-3">
+            {errorMap.onSubmit?.form ? <FieldError>{String(errorMap.onSubmit.form)}</FieldError> : null}
+            <DialogFooter className="sm:justify-between">
+              {party ? (
+                <Button type="button" variant="destructive" onClick={() => setConfirmingDelete(true)}>
+                  Delete party
+                </Button>
+              ) : (
+                <span />
+              )}
+              <div className="flex gap-2">
+                <Button type="button" variant="outline" onClick={onDone}>
+                  Cancel
+                </Button>
+                <Button
+                  type="submit"
+                  form={PARTY_FORM_ID}
+                  disabled={!canSubmit || isSubmitting}
+                  className="bg-ink hover:bg-ink/90"
+                >
+                  {isSubmitting ? <Spinner /> : null}
+                  {party ? "Save changes" : "Add party"}
+                </Button>
+              </div>
+            </DialogFooter>
+          </div>
+        )}
+      </form.Subscribe>
     </>
   );
 }

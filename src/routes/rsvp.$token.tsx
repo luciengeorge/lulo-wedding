@@ -2,6 +2,7 @@ import type { FunctionReturnType } from "convex/server";
 
 import { createFileRoute, notFound, useRouter } from "@tanstack/react-router";
 import { useMemo, useState } from "react";
+import z from "zod";
 
 import type { GuestDraft } from "@/components/rsvp/guest-card";
 import type { ReplyGuest, ReplyIssue, RsvpEventKey } from "@/lib/rsvp-rules";
@@ -13,8 +14,8 @@ import { emptyGuest, GuestCard } from "@/components/rsvp/guest-card";
 import { CardLabel, RsvpCard, RsvpHeader, RsvpShell } from "@/components/rsvp/rsvp-shell";
 import { convexErrorMessage } from "@/lib/convex-error";
 import { FEATURES } from "@/lib/flags";
-import { requireGuestUnlocked } from "@/lib/functions/guest-gate";
-import { getRsvp, submitRsvp } from "@/lib/functions/rsvp";
+import { isGuestUnlocked, requireGuestUnlocked, unlockWithToken } from "@/lib/functions/guest-gate";
+import { getRsvp, submitRsvp, VisitViaSchema } from "@/lib/functions/rsvp";
 import { invitedEvents, isBlankCard, RSVP_EVENTS, validateReply } from "@/lib/rsvp-rules";
 import { seo } from "@/lib/seo";
 
@@ -25,17 +26,31 @@ const EVENT_DATE: Record<RsvpEventKey, string> = {
   brunch: "Sun 18 July",
 };
 
+/**
+ * `s` is the send an email link came from; `via` is how a guest without a link
+ * got here. Both only label the visit, so junk in either is dropped, not refused.
+ */
+const RsvpSearchSchema = z.object({
+  s: z.string().max(64).optional().catch(undefined),
+  via: VisitViaSchema.optional().catch(undefined),
+});
+
 export const Route = createFileRoute("/rsvp/$token")({
-  beforeLoad: ({ location }) => {
+  validateSearch: RsvpSearchSchema,
+  beforeLoad: async ({ location, params }) => {
     // Unfinished work must be unreachable, not merely unlinked. A guest who
     // guessed the path should get the 404 the rest of the site gives.
     if (!FEATURES.rsvp) throw notFound();
+    if (await isGuestUnlocked()) return;
+    // A valid link is its own way past the gate. Only a dead one gets the password page.
+    if (await unlockWithToken({ data: { token: params.token } })) return;
     return requireGuestUnlocked(location.href);
   },
+  loaderDeps: ({ search }) => ({ s: search.s, via: search.via }),
   // Loaded on the server, so the invitation is in the first response rather than
   // a round trip later, and so the page does not depend on the browser's Convex
   // client, which holds queries until an auth token a guest will never have.
-  loader: ({ params }) => getRsvp({ data: { token: params.token } }),
+  loader: ({ params, deps }) => getRsvp({ data: { token: params.token, ...deps } }),
   head: () => ({
     meta: seo({
       title: "RSVP",
@@ -54,6 +69,8 @@ type Mode = "ask" | "accept" | "decline";
 
 type SubmitPayload = Parameters<typeof submitRsvp>[0]["data"];
 type Submit = (payload: SubmitPayload) => Promise<void>;
+/** Held above both forms, so an address typed on one is still there on the other. */
+type ContactEmail = { value: string; set: (value: string) => void };
 
 /** Taken from the query itself, so the screens cannot drift from what it returns. */
 type RsvpData = NonNullable<FunctionReturnType<typeof api.rsvp.getByToken>>;
@@ -72,25 +89,36 @@ function RsvpFlow({ token, data }: { token: string; data: RsvpData }) {
   const { party, deadlinePassed } = data;
   const events = invitedEvents(party);
 
-  /** Re-runs the loader, so the confirmation shows what was actually stored. */
+  /**
+   * Re-runs the loader, so the confirmation shows what was actually stored.
+   * `sync` waits for the fresh data; without it the reload runs in the background
+   * and the confirmation paints the previous answers first.
+   */
   const submit = async (payload: SubmitPayload) => {
     await submitRsvp({ data: payload });
-    await router.invalidate();
+    await router.invalidate({ sync: true });
   };
 
   const hasReplied = party.respondedAt !== undefined;
   // A party who already answered opens on what they said, not on the question
   // again. `earlyDecline` came from the spreadsheet, so treat it as an answer too.
   const [mode, setMode] = useState<Mode | null>(hasReplied || party.earlyDecline ? null : "ask");
+  const [email, setEmail] = useState(party.contactEmail ?? "");
+  const contactEmail = { value: email, set: setEmail };
 
+  // Nothing to answer yet: the couple have not chosen this party's events.
+  if (events.length === 0) return <NoEventsYet />;
   if (deadlinePassed) return <ClosedSummary data={data} />;
-  if (mode === null) return <Confirmed data={data} onChange={() => setMode(party.declined ? "decline" : "accept")} />;
+  // Both ways out of the confirmation lead to the guest list: "change our reply"
+  // and, for a party that declined, "actually, we can come".
+  if (mode === null) return <Confirmed data={data} onChange={() => setMode("accept")} />;
   if (mode === "ask") return <Ask party={party} events={events} onChoose={setMode} />;
   if (mode === "decline") {
     return (
       <DeclineForm
         token={token}
         data={data}
+        contactEmail={contactEmail}
         submit={submit}
         onBack={() => setMode("accept")}
         onDone={() => setMode(null)}
@@ -101,6 +129,7 @@ function RsvpFlow({ token, data }: { token: string; data: RsvpData }) {
     <AcceptForm
       token={token}
       data={data}
+      contactEmail={contactEmail}
       submit={submit}
       onDecline={() => setMode("decline")}
       onDone={() => setMode(null)}
@@ -147,14 +176,47 @@ function Ask({
 
 /* --------------------------------------------------------------- screen two */
 
+/**
+ * A card marked not coming is sent as blank, which is how the server reads "this
+ * person is not coming": a guest's own card is removed, and someone the couple
+ * named stays on the list as a "no". Blank here also keeps it out of the checks,
+ * so nobody is asked which days a person who is not coming will attend.
+ */
 function toReplyGuests(drafts: GuestDraft[]): ReplyGuest[] {
-  return drafts.map((draft) => ({
-    firstName: draft.firstName,
-    lastName: draft.lastName,
-    email: draft.noEmail || draft.email.trim() === "" ? undefined : draft.email,
-    isPlusOne: draft.isPlusOne,
-    attending: draft.attending,
-  }));
+  return drafts.map((draft) =>
+    draft.notComing
+      ? { firstName: "", lastName: "", isPlusOne: draft.isPlusOne, attending: {}, invitedTo: draft.invitedTo }
+      : {
+          firstName: draft.firstName,
+          lastName: draft.lastName,
+          email: draft.noEmail || draft.email.trim() === "" ? undefined : draft.email,
+          isPlusOne: draft.isPlusOne,
+          attending: draft.attending,
+          invitedTo: draft.invitedTo,
+        },
+  );
+}
+
+type StoredGuest = RsvpData["guests"][number];
+
+/** Invited events only: an answer to an event this person is not asked about is not theirs to see. */
+function storedDraft(guest: StoredGuest): GuestDraft {
+  const events = RSVP_EVENTS.filter((event) => guest.invitedTo[event.key]);
+  return {
+    guestId: guest._id,
+    firstName: guest.firstName,
+    lastName: guest.lastName,
+    email: guest.email ?? "",
+    noEmail: guest.email === undefined,
+    dietaryNotes: guest.dietaryNotes ?? "",
+    isPlusOne: guest.isPlusOne,
+    attending: Object.fromEntries(events.map((event) => [event.key, guest[event.key] === "yes"])),
+    invitedTo: guest.invitedTo,
+    addedByCouple: guest.addedByCouple,
+    // A couple-named guest who said no to everything they were asked opens as
+    // "cannot make it", the state the server stored when the card was cleared.
+    notComing: guest.addedByCouple && events.length > 0 && events.every((event) => guest[event.key] === "no"),
+  };
 }
 
 /** Issues keyed by card index, so each message can sit against its own field. */
@@ -178,59 +240,36 @@ function issuesByGuest(issues: ReplyIssue[]) {
 function AcceptForm({
   token,
   data,
+  contactEmail: { value: contactEmail, set: setContactEmail },
   submit,
   onDecline,
   onDone,
 }: {
   token: string;
   data: RsvpData;
+  contactEmail: ContactEmail;
   submit: Submit;
   onDecline: () => void;
   onDone: () => void;
 }) {
   const { party, guests: stored } = data;
-  const events = invitedEvents(party);
 
   const initial = useMemo(() => {
-    const named = stored
-      .filter((guest) => !guest.isPlusOne)
-      .map<GuestDraft>((guest) => ({
-        guestId: guest._id,
-        firstName: guest.firstName,
-        lastName: guest.lastName,
-        email: guest.email ?? "",
-        noEmail: guest.email === undefined,
-        dietaryNotes: guest.dietaryNotes ?? "",
-        isPlusOne: false,
-        attending: Object.fromEntries(events.map((event) => [event, guest[event] === "yes"])),
-      }));
+    const named = stored.filter((guest) => !guest.isPlusOne).map(storedDraft);
 
     // Always as many cards as seats, so a party of four sees four.
-    while (named.length < party.headCount) named.push(emptyGuest());
+    while (named.length < party.headCount) named.push(emptyGuest(party.defaultInvitedTo));
     return named;
-  }, [stored, party.headCount, events]);
+  }, [stored, party.headCount, party.defaultInvitedTo]);
 
   const storedPlusOne = stored.find((guest) => guest.isPlusOne);
   const initialPlusOne = useMemo<GuestDraft | null>(
-    () =>
-      storedPlusOne
-        ? {
-            guestId: storedPlusOne._id,
-            firstName: storedPlusOne.firstName,
-            lastName: storedPlusOne.lastName,
-            email: storedPlusOne.email ?? "",
-            noEmail: storedPlusOne.email === undefined,
-            dietaryNotes: storedPlusOne.dietaryNotes ?? "",
-            isPlusOne: true,
-            attending: Object.fromEntries(events.map((event) => [event, storedPlusOne[event] === "yes"])),
-          }
-        : null,
-    [storedPlusOne, events],
+    () => (storedPlusOne ? storedDraft(storedPlusOne) : null),
+    [storedPlusOne],
   );
 
   const [drafts, setDrafts] = useState<GuestDraft[]>(initial);
   const [plusOne, setPlusOne] = useState<GuestDraft | null>(initialPlusOne);
-  const [contactEmail, setContactEmail] = useState(party.contactEmail ?? "");
   const [issues, setIssues] = useState<ReplyIssue[]>([]);
   const [formError, setFormError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
@@ -292,7 +331,6 @@ function AcceptForm({
             guest={guest}
             index={index}
             label={`GUEST ${index + 1}`}
-            events={events}
             disabled={busy}
             errors={byGuest.get(index) ?? {}}
             onChange={(next) => setDrafts(drafts.map((current, i) => (i === index ? next : current)))}
@@ -316,7 +354,6 @@ function AcceptForm({
                 guest={plusOne}
                 index={drafts.length}
                 label="PLUS ONE"
-                events={events}
                 disabled={busy}
                 errors={byGuest.get(drafts.length) ?? {}}
                 onChange={setPlusOne}
@@ -326,7 +363,7 @@ function AcceptForm({
               <button
                 type="button"
                 disabled={busy}
-                onClick={() => setPlusOne(emptyGuest(true))}
+                onClick={() => setPlusOne(emptyGuest(party.defaultInvitedTo, true))}
                 className="flex h-11 w-full items-center justify-center rounded-[3px] border border-[#E7D9C4] bg-[#FFFCF7] font-display text-[15px] text-ink"
               >
                 + Add a plus one
@@ -391,19 +428,20 @@ function AcceptForm({
 function DeclineForm({
   token,
   data,
+  contactEmail: { value: contactEmail, set: setContactEmail },
   submit,
   onBack,
   onDone,
 }: {
   token: string;
   data: RsvpData;
+  contactEmail: ContactEmail;
   submit: Submit;
   onBack: () => void;
   onDone: () => void;
 }) {
   const { party } = data;
   const [note, setNote] = useState(party.guestNote ?? "");
-  const [contactEmail, setContactEmail] = useState(party.contactEmail ?? "");
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
 
@@ -516,7 +554,8 @@ function formatNames(names: string[]): string {
 
 function Confirmed({ data, onChange }: { data: RsvpData; onChange: () => void }) {
   const { party, guests } = data;
-  const declined = party.declined === true || party.earlyDecline;
+  // The sheet's early "no" stands only until the party answers online.
+  const declined = party.respondedAt === undefined ? party.earlyDecline : party.declined === true;
   const seatsNamed = guests.filter((guest) => !guest.isPlusOne).length;
 
   return (
@@ -578,6 +617,14 @@ function ClosedSummary({ data }: { data: RsvpData }) {
         }
       />
       {replied ? <ReplySummary data={data} /> : null}
+    </RsvpShell>
+  );
+}
+
+function NoEventsYet() {
+  return (
+    <RsvpShell>
+      <RsvpHeader title="Your invitation details are on their way" subtitle="Laura and Lucien will be in touch soon." />
     </RsvpShell>
   );
 }
