@@ -43,9 +43,10 @@ async function adminPost(path: string, body: unknown, attempt = 0): Promise<Resp
   } catch (error) {
     // `convex dev` reloads the local backend when it notices a file change, and a
     // call landing in that window fails to connect. Retrying is right; the
-    // backend is coming back, not broken.
-    const cause = (error as { cause?: { code?: string } }).cause;
-    const transient = String(error).includes("fetch failed") || cause?.code === "ECONNREFUSED";
+    // backend is coming back, not broken. Only a refused connection proves the
+    // call never arrived: every network error is "fetch failed", and retrying a
+    // dropped one could run a seeding mutation twice.
+    const transient = (error as { cause?: { code?: string } }).cause?.code === "ECONNREFUSED";
     if (!transient || attempt >= 4) throw error;
     await new Promise((resolve) => setTimeout(resolve, 1_000));
     return adminPost(path, body, attempt + 1);
