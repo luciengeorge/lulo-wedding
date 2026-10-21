@@ -100,6 +100,16 @@ const toDropLane: KeyboardCoordinateGetter = (event, { context }) => {
   return undefined;
 };
 
+/**
+ * Brings the chosen stage button to the middle of its row, on load and on every
+ * change, so the one lit up is never the one scrolled off the edge.
+ */
+function centreInRow(button: HTMLButtonElement | null) {
+  const row = button?.parentElement;
+  if (!button || !row) return;
+  row.scrollLeft = button.offsetLeft - (row.clientWidth - button.offsetWidth) / 2;
+}
+
 /** The pointer decides when there is one. A keyboard drag has none, so it falls back to overlap. */
 const collision: CollisionDetection = (args) => {
   const hits = pointerWithin(args);
@@ -223,7 +233,7 @@ export function PipelineBoard({
         <div
           role="group"
           aria-label="Stage"
-          className="flex snap-x [scrollbar-width:none] gap-1.5 overflow-x-auto px-4 pb-0.5 md:hidden"
+          className="relative flex snap-x [scrollbar-width:none] gap-1.5 overflow-x-auto scroll-smooth px-4 pb-0.5 motion-reduce:scroll-auto md:hidden"
         >
           {LANES.map((lane) => {
             const active = lane === mobileLane;
@@ -232,9 +242,11 @@ export function PipelineBoard({
                 key={lane}
                 type="button"
                 aria-pressed={active}
+                ref={active ? centreInRow : undefined}
                 onClick={() => setMobileLane(lane)}
                 className={cn(
-                  "inline-flex h-8 shrink-0 snap-start items-center gap-1.5 rounded-full border px-3 text-[12.5px] whitespace-nowrap transition-colors",
+                  // No colour transition: a fade leaves the old button looking chosen for a beat.
+                  "inline-flex h-8 shrink-0 snap-start items-center gap-1.5 rounded-full border px-3 text-[12.5px] whitespace-nowrap",
                   active
                     ? "border-foreground bg-foreground text-background"
                     : "border-border text-muted-foreground hover:bg-muted",
@@ -356,9 +368,8 @@ function LaneColumn({
         blocked && "cursor-no-drop opacity-45",
       )}
     >
-      {/* On a phone the stage button above already names the lane, so only its share shows. */}
-      <header className="flex flex-col gap-0.5 px-3 pt-2 pb-1 md:pt-3 md:pb-2">
-        <div className="flex items-baseline gap-2 max-md:sr-only">
+      <header className="flex flex-col gap-0.5 px-3 pt-3 pb-2">
+        <div className="flex items-baseline gap-2">
           {lane === "attention" ? (
             <span
               aria-hidden

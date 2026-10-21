@@ -379,6 +379,37 @@ test.describe("dragging a party to Invited", () => {
 
 test.describe("on a 375px phone", () => {
   test.describe.configure({ timeout: 120_000 });
+
+  test("lights up only the stage shown, and the lane names it", async ({ page, request }) => {
+    await boardScenario(request);
+    await openAdmin(page, "/admin/insights");
+
+    const stages = page.getByRole("group", { name: "Stage" });
+    const lanes = [
+      { label: "Not invited", count: 2 },
+      { label: "Invited", count: 3 },
+      { label: "Seen", count: 2 },
+      { label: "Replied", count: 4 },
+      { label: "Needs attention", count: 4 },
+    ];
+    // Opens on Not invited, so tap it last as well as relying on the default.
+    for (const { label, count } of [...lanes.slice(1), lanes[0]]) {
+      const button = stages.getByRole("button", { name: `${label} ${count}`, exact: true });
+      await button.click();
+      await expect(button).toBeInViewport({ ratio: 1 });
+      for (const other of lanes) {
+        await expect(
+          stages.getByRole("button", { name: `${other.label} ${other.count}`, exact: true }),
+        ).toHaveAttribute("aria-pressed", String(other.label === label));
+        await expect(page.getByRole("region", { name: other.label, exact: true })).toBeVisible({
+          visible: other.label === label,
+        });
+      }
+      const lane = page.getByRole("region", { name: label, exact: true });
+      await expect(lane.getByRole("heading", { level: 2 })).toHaveText(label);
+      await expect(lane.locator("header")).toContainText(`${label}${count}`);
+    }
+  });
   test.use({ viewport: { width: 375, height: 812 } });
 
   test("shows one stage at a time, marks invited from the card's menu, and never scrolls sideways", async ({
