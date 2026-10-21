@@ -4,9 +4,11 @@ import type { ReactElement } from "react";
 
 import { v } from "convex/values";
 import { render } from "react-email";
+import { Resend as ResendSdk } from "resend";
 
 import { internal } from "../_generated/api";
 import { internalAction } from "../_generated/server";
+import { MONOGRAM_CID, MONOGRAM_PNG_BASE64 } from "./monogram";
 import { resend } from "./resend";
 import AccountDeletedEmail from "./templates/accountDeleted";
 import ChangeEmail from "./templates/changeEmail";
@@ -46,6 +48,23 @@ function buildTemplate(name: TemplateName, props: Record<string, unknown>): Reac
  * open events can be matched back to the party it went to. Auth email passes
  * none and is not tracked.
  */
+type SendOptions = Parameters<ResendSdk["emails"]["send"]>[0];
+
+/**
+ * One send, retried briefly when Resend says we are going too fast. The
+ * Idempotency-Key makes a retry safe: Resend sends a given key once.
+ */
+async function sendWithRetry(sdk: ResendSdk, options: SendOptions, attempt = 0): Promise<string> {
+  const { data, error } = await sdk.emails.send(options);
+  if (data?.id) return data.id;
+
+  if (error?.name === "rate_limit_exceeded" && attempt < 3) {
+    await new Promise((resolve) => setTimeout(resolve, 1000 * 2 ** attempt));
+    return sendWithRetry(sdk, options, attempt + 1);
+  }
+  throw new Error(`Resend error: ${error?.message ?? "no id returned"}`);
+}
+
 export const sendEmail = internalAction({
   args: {
     to: v.string(),
@@ -90,7 +109,23 @@ export const sendEmail = internalAction({
         throw new Error("RESEND_API_KEY and RESEND_FROM_EMAIL must be set");
       }
       const text = await render(element, { plainText: true });
-      emailId = await resend.sendEmail(ctx, { from, to, subject, html, text });
+      // Sent directly, not through the component's batch queue: Resend's batch
+      // endpoint takes no attachments, and the monogram travels as one. The
+      // component still records the email, so status and webhooks work as before.
+      const sdk = new ResendSdk(apiKey);
+      emailId = await resend.sendEmailManually(ctx, { from, to, subject }, (id) =>
+        sendWithRetry(sdk, {
+          from,
+          to,
+          subject,
+          html,
+          text,
+          attachments: html.includes(`cid:${MONOGRAM_CID}`)
+            ? [{ filename: "monogram.png", content: MONOGRAM_PNG_BASE64, contentId: MONOGRAM_CID }]
+            : undefined,
+          headers: { "Idempotency-Key": id },
+        }),
+      );
     } catch (error) {
       // Otherwise the row sits at "queued" forever and /admin reads it as in flight.
       // Failures after this point, inside the Resend component, are caught by the

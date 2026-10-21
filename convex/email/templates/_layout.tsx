@@ -2,7 +2,8 @@ import type { ReactNode } from "react";
 
 import { Body, Container, Head, Hr, Html, Img, Link, Preview, Section, Tailwind, Text } from "react-email";
 
-import { siteUrl, supportEmail } from "./_components";
+import { MONOGRAM_CID } from "../monogram";
+import { supportEmail } from "./_components";
 
 interface EmailLayoutProps {
   preview: string;
@@ -46,10 +47,12 @@ export function EmailLayout({ preview, appName, children }: EmailLayoutProps) {
                 read correctly with the image missing. The monogram is decorative
                 with an empty alt — a broken-image icon plus wrapping alt text is
                 worse than no image — and the couple's name is real text
-                underneath, which always renders. */}
+                underneath, which always renders. It is attached to the message
+                (convex/email/monogram.ts), not fetched, so it shows even where
+                remote images are blocked. */}
             <Section className="mb-7" style={{ textAlign: "center" }}>
               <Img
-                src={logoUrl ?? `${siteUrl()}/art/monogram-email.png`}
+                src={logoUrl ?? `cid:${MONOGRAM_CID}`}
                 alt=""
                 width="44"
                 height="44"
