@@ -16,7 +16,7 @@ import {
 } from "@dnd-kit/core";
 import { useRef, useState } from "react";
 
-import type { AttentionFlag, ReplyOutcome, Stage, StageCounts } from "@/lib/pipeline";
+import type { AttentionFlag, ReplyOutcome, Stage } from "@/lib/pipeline";
 
 import { Skeleton } from "@/components/ui/skeleton";
 import { foldForSearch } from "@/lib/party-filters";
@@ -46,9 +46,10 @@ const DROP_LANE = "invited";
 const FLAG_ORDER: Record<AttentionFlag["kind"], number> = {
   emailBounced: 0,
   emailComplained: 1,
-  neverSeen: 2,
-  seenNoReply: 3,
-  noEvents: 4,
+  emailFailed: 2,
+  neverSeen: 3,
+  seenNoReply: 4,
+  noEvents: 5,
 };
 
 const byName = (a: BoardParty, b: BoardParty) => foldForSearch(partyName(a)).localeCompare(foldForSearch(partyName(b)));
@@ -75,8 +76,8 @@ export function groupLanes(parties: readonly BoardParty[]): Record<Lane, BoardPa
   return lanes;
 }
 
-function conversionText(counts: StageCounts, stage: Stage): string | undefined {
-  const percent = stageConversion(counts, stage);
+function conversionText(parties: readonly BoardParty[], stage: Stage): string | undefined {
+  const percent = stageConversion(parties, stage);
   const base = CONVERSION_BASE[stage];
   return percent === undefined || base === undefined ? undefined : `${percent}% ${base}`;
 }
@@ -282,7 +283,7 @@ export function PipelineBoard({
                   ? canDrag
                     ? "Drag to Invited once sent"
                     : undefined
-                  : conversionText(counts, stage)
+                  : conversionText(parties, stage)
               }
               mobileActive={mobileLane === stage}
               dragging={dragging !== null}

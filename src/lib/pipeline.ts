@@ -36,6 +36,7 @@ export const REPLY_LABEL: Record<ReplyOutcome, string> = {
 export type AttentionFlag =
   | { kind: "emailBounced" }
   | { kind: "emailComplained" }
+  | { kind: "emailFailed" }
   | { kind: "noEvents" }
   | { kind: "seenNoReply"; days: number }
   | { kind: "neverSeen"; days: number };
@@ -77,10 +78,11 @@ export function replyOutcome(
 export type PipelineFacts = {
   /** The first invitation on any channel. Absent: never sent one. */
   firstInvitedAt?: number;
-  firstVisitAt?: number;
+  /** The latest visit, so a party who came back yesterday is not chased for one a fortnight ago. */
+  lastVisitAt?: number;
   reply?: ReplyOutcome;
   /** The latest email's status, when it did not land. */
-  emailTrouble?: "bounced" | "complained";
+  emailTrouble?: "bounced" | "complained" | "failed";
   /** The party's flags OR any couple-named guest's own invite. */
   invitedTo: EventFlags;
 };
@@ -98,7 +100,7 @@ export function derivePipeline(facts: PipelineFacts, now: number): PipelinePlace
   const stage: Stage =
     facts.reply !== undefined
       ? "replied"
-      : facts.firstVisitAt !== undefined
+      : facts.lastVisitAt !== undefined
         ? "seen"
         : facts.firstInvitedAt !== undefined
           ? "invited"
@@ -107,11 +109,12 @@ export function derivePipeline(facts: PipelineFacts, now: number): PipelinePlace
   const flags: AttentionFlag[] = [];
   if (facts.emailTrouble === "bounced") flags.push({ kind: "emailBounced" });
   if (facts.emailTrouble === "complained") flags.push({ kind: "emailComplained" });
+  if (facts.emailTrouble === "failed") flags.push({ kind: "emailFailed" });
   if (!facts.invitedTo.preWedding && !facts.invitedTo.wedding && !facts.invitedTo.brunch) {
     flags.push({ kind: "noEvents" });
   }
-  if (stage === "seen" && facts.firstVisitAt !== undefined) {
-    const days = Math.floor((now - facts.firstVisitAt) / DAY);
+  if (stage === "seen" && facts.lastVisitAt !== undefined) {
+    const days = Math.floor((now - facts.lastVisitAt) / DAY);
     if (days >= SEEN_NO_REPLY_DAYS) flags.push({ kind: "seenNoReply", days });
   }
   if (stage === "invited" && facts.firstInvitedAt !== undefined) {
@@ -129,6 +132,8 @@ export function attentionReason(flag: AttentionFlag): string {
       return "Email bounced";
     case "emailComplained":
       return "Email marked as spam";
+    case "emailFailed":
+      return "Email failed";
     case "noEvents":
       return "Invited to no events";
     case "seenNoReply":
@@ -146,16 +151,35 @@ export function countStages(stages: readonly Stage[]): StageCounts {
   return counts;
 }
 
+function share(part: number, whole: number): number | undefined {
+  return whole === 0 ? undefined : Math.round((part / whole) * 100);
+}
+
 /**
- * The share of parties who reached the previous stage that got at least this
- * far. Cumulative on purpose: a party in Replied has also been seen, so "Seen:
- * 63% of invited" counts it, otherwise the numbers fall as people answer.
- * Undefined where there is no base to divide by.
+ * Each step as a share of the one before, read off each party's own facts
+ * rather than its lane. A sheet "No" lands in Replied but was never sent or
+ * seen anything, so it must not count as invited or seen. That is the same
+ * reading as `admin.funnel`'s per-channel rows: invited means an invite was
+ * sent, seen means an invited party visited. Undefined with no base.
+ *
+ * - Invited: of every party on the list.
+ * - Seen: of the invited.
+ * - Replied: of the invited who have seen it.
  */
-export function stageConversion(counts: StageCounts, stage: Stage): number | undefined {
-  const index = STAGES.indexOf(stage);
-  if (index === 0) return undefined;
-  const reached = (from: number) => STAGES.slice(from).reduce((sum, key) => sum + counts[key], 0);
-  const base = reached(index - 1);
-  return base === 0 ? undefined : Math.round((reached(index) / base) * 100);
+export function stageConversion(
+  parties: readonly Pick<PipelineFacts, "firstInvitedAt" | "lastVisitAt" | "reply">[],
+  stage: Stage,
+): number | undefined {
+  const invited = parties.filter((party) => party.firstInvitedAt !== undefined);
+  const seen = invited.filter((party) => party.lastVisitAt !== undefined);
+  switch (stage) {
+    case "notInvited":
+      return undefined;
+    case "invited":
+      return share(invited.length, parties.length);
+    case "seen":
+      return share(seen.length, invited.length);
+    case "replied":
+      return share(seen.filter((party) => party.reply !== undefined).length, seen.length);
+  }
 }

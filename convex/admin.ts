@@ -832,10 +832,10 @@ export const pipeline = query({
       invitedTo: eventFlags,
       invitedVia: v.optional(invitedVia),
       firstInvitedAt: v.optional(v.number()),
-      firstVisitAt: v.optional(v.number()),
+      lastVisitAt: v.optional(v.number()),
       lastActivityAt: v.optional(v.number()),
       reply: v.optional(v.union(v.literal("coming"), v.literal("partly"), v.literal("declined"))),
-      emailTrouble: v.optional(v.union(v.literal("bounced"), v.literal("complained"))),
+      emailTrouble: v.optional(v.union(v.literal("bounced"), v.literal("complained"), v.literal("failed"))),
       /** The latest invitation or update email. Receipts go to people who already replied. */
       latestEmail: v.optional(emailProgress),
     }),
@@ -866,10 +866,10 @@ export const pipeline = query({
         invitedTo: partyInvitedTo(party, guests),
         invitedVia: via,
         firstInvitedAt: invites.length > 0 ? Math.min(...invites.map((send) => send.sentAt)) : undefined,
-        firstVisitAt: visits.length > 0 ? Math.min(...visits.map((visit) => visit.at)) : undefined,
+        lastVisitAt: visits.length > 0 ? Math.max(...visits.map((visit) => visit.at)) : undefined,
         lastActivityAt: lastActivityOf(party, sends, visits),
         reply: replyOutcome(party, guests),
-        emailTrouble: trouble === "bounced" || trouble === "complained" ? trouble : undefined,
+        emailTrouble: trouble === "bounced" || trouble === "complained" || trouble === "failed" ? trouble : undefined,
         latestEmail:
           latest && (latest.kind === "invite" || latest.kind === "update")
             ? {

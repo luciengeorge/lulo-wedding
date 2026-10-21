@@ -111,8 +111,9 @@ test.describe("the funnel above the guest list", () => {
  * - Not invited: Dalia (nothing yet), Karim (and invited to no events, so flagged).
  * - Invited: Elie (WhatsApp, yesterday), Fadi (emailed, and the email bounced),
  *   Imad (WhatsApp 20 days ago, never seen, so flagged).
- * - Seen: Amal (emailed, delivered and opened, three visits), Joumana (looked 10
- *   days ago and never answered, so flagged).
+ * - Seen: Amal (emailed, delivered and opened; first looked 9 days ago and came
+ *   back today, so not chased), Joumana (looked 12 and 10 days ago and never
+ *   answered, so flagged from the latest look).
  * - Replied: Ghada (coming), Bassam (named one of two seats: partly), Chadi (the
  *   sheet's early "No") and Hana (said no online).
  */
@@ -165,10 +166,11 @@ async function boardScenario(request: Parameters<typeof postResendEvent>[0]) {
   await expect.poll(() => backend.activity("e2e-fadi").sends[0].status).toBe("bounced");
   await expect.poll(() => backend.activity("e2e-amal").sends[0].openCount).toBe(1);
 
+  backend.seedVisit({ token: "e2e-amal", source: "link", at: now - 9 * DAY });
   for (const hoursAgo of [5, 4, 3])
     backend.seedVisit({ token: "e2e-amal", source: "email", at: now - hoursAgo * HOUR });
   backend.seedVisit({ token: "e2e-bassam", source: "link", at: now - 2 * HOUR });
-  backend.seedVisit({ token: "e2e-joumana", source: "link", at: now - 10 * DAY });
+  for (const daysAgo of [12, 10]) backend.seedVisit({ token: "e2e-joumana", source: "link", at: now - daysAgo * DAY });
 }
 
 /** Card names in a lane or group, top to bottom. */
@@ -200,12 +202,14 @@ test.describe("the pipeline board", () => {
     // Most recent activity first: Fadi's bounce came in just now.
     await expect.poll(() => cards(invited)).toEqual(["Fadi Haddad", "Elie Nassar", "Imad Saliba"]);
     await expect(laneHeader(invited)).toContainText("Invited3");
-    await expect(laneHeader(invited)).toContainText("82% of the list");
+    await expect(laneHeader(invited)).toContainText("64% of the list");
     await expect(invited.getByRole("button", { name: "Fadi Haddad", exact: true })).toContainText("Bounced");
 
     const seen = await showLane(page, "Seen");
     expect(await cards(seen)).toEqual(["Amal Khalil", "Joumana Khoury"]);
-    await expect(laneHeader(seen)).toContainText("67% of invited");
+    // Chadi and Hana replied without an invite on record, so they count towards
+    // neither share: 7 of 11 were sent one, 3 of those 7 looked, 1 of those 3 replied.
+    await expect(laneHeader(seen)).toContainText("43% of invited");
     const amal = seen.getByRole("button", { name: "Amal Khalil", exact: true });
     await expect(amal.getByText("Delivered", { exact: true })).toBeVisible();
     // Opened is the soft one, and says why on hover.
@@ -216,7 +220,7 @@ test.describe("the pipeline board", () => {
 
     const replied = await showLane(page, "Replied");
     await expect(laneHeader(replied)).toContainText("Replied4");
-    await expect(laneHeader(replied)).toContainText("67% of seen");
+    await expect(laneHeader(replied)).toContainText("33% of seen");
     expect(await cards(replied.getByRole("region", { name: "Coming" }))).toEqual(["Ghada Azar"]);
     expect(await cards(replied.getByRole("region", { name: "Partly" }))).toEqual(["Bassam Aoun"]);
     // An online "no" and the sheet's early "No" are both declines.
@@ -226,6 +230,7 @@ test.describe("the pipeline board", () => {
     ]);
 
     const attention = await showLane(page, "Needs attention");
+    // Amal first looked 9 days ago but came back today, so she is not here.
     expect(await cards(attention)).toEqual(["Fadi Haddad", "Imad Saliba", "Joumana Khoury", "Karim Fares"]);
     await expect(attention.getByRole("button", { name: "Fadi Haddad", exact: true })).toContainText("Email bounced");
     await expect(attention.getByRole("button", { name: "Imad Saliba", exact: true })).toContainText(
@@ -248,6 +253,18 @@ test.describe("the pipeline board", () => {
     );
     await expect(strip.getByRole("group", { name: "Emails" }).getByText(/^\d+ delivered$/)).toHaveText("1 delivered");
     await expect(strip.getByRole("group", { name: "Emails" }).getByText(/^\d+ bounced$/)).toHaveText("1 bounced");
+  });
+
+  test("flags an email that failed to send, in its own words", async ({ page }) => {
+    backend.seed([party({ token: "e2e-lina", displayName: "Lina", surname: "Sfeir", contactEmail: "lina@example" })]);
+    backend.seedSend({ token: "e2e-lina", channel: "email", kind: "invite", to: "lina@example", status: "failed" });
+    await openAdmin(page, "/admin/insights");
+
+    const attention = await showLane(page, "Needs attention");
+    const lina = attention.getByRole("button", { name: "Lina Sfeir", exact: true });
+    await expect(lina).toContainText("Email failed");
+    await expect(lina).not.toContainText("Email bounced");
+    expect(await cards(await showLane(page, "Invited"))).toEqual(["Lina Sfeir"]);
   });
 
   test("narrows the board by name and by filter", async ({ page, request }) => {
@@ -276,10 +293,11 @@ test.describe("the pipeline board", () => {
     const sheet = page.getByRole("dialog");
     await expect(sheet.getByText("Amal Khalil", { exact: true })).toBeVisible();
     const entries = sheet.getByRole("listitem");
-    await expect(entries).toHaveCount(4);
+    await expect(entries).toHaveCount(5);
     await expect(entries.nth(0)).toContainText("Opened their invitation from an email");
     await expect(entries.nth(3)).toContainText("Invitation emailed to amal@example.com");
     await expect(entries.nth(3)).toContainText("Opened once, last");
+    await expect(entries.nth(4)).toContainText("Opened their invitation from their link");
     await expect(sheet.getByRole("link")).toHaveCount(0);
     await page.keyboard.press("Escape");
     await expect(sheet).toBeHidden();

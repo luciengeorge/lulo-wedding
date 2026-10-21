@@ -667,7 +667,8 @@ describe("the pipeline board's query", () => {
     expect(rows.find((row) => row.partyId === emailed)).toMatchObject({
       invitedVia: "both",
       firstInvitedAt: 5,
-      firstVisitAt: 20,
+      // The latest of the two visits: the "seen, no reply" clock starts here.
+      lastVisitAt: 30,
       lastActivityAt: 42,
       // One of two named seats has answered.
       reply: "partly",
@@ -683,5 +684,20 @@ describe("the pipeline board's query", () => {
     });
     expect(rows.find((row) => row.partyId === quiet)).not.toHaveProperty("reply");
     expect(JSON.stringify(rows)).not.toContain("token");
+  });
+
+  it("counts a failed email as trouble, and a later good one clears it", async () => {
+    const t = setup();
+    const partyId = await insertParty(t);
+    await insertSend(t, partyId, { sentAt: 10, status: "failed", failedAt: 11, error: "Invalid address" });
+
+    const failed = (await t.query(api.admin.pipeline, {}))[0];
+    expect(failed).toMatchObject({
+      emailTrouble: "failed",
+      latestEmail: { kind: "invite", status: "failed", delivered: false },
+    });
+
+    await insertSend(t, partyId, { kind: "update", sentAt: 20, status: "delivered", deliveredAt: 21 });
+    expect((await t.query(api.admin.pipeline, {}))[0]).not.toHaveProperty("emailTrouble");
   });
 });

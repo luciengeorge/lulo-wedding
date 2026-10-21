@@ -20,7 +20,7 @@ function party(name: string, overrides: Partial<BoardParty> = {}): BoardParty {
     invitedTo: { preWedding: false, wedding: true, brunch: false },
     invitedVia: undefined,
     firstInvitedAt: undefined,
-    firstVisitAt: undefined,
+    lastVisitAt: undefined,
     lastActivityAt: undefined,
     reply: undefined,
     emailTrouble: undefined,
@@ -47,12 +47,27 @@ const board: BoardParty[] = [
   party("Dalia", {
     stage: "seen",
     invitedVia: "email",
+    firstInvitedAt: now - 2 * DAY,
+    lastVisitAt: now - 3 * 60 * 60 * 1000,
     lastActivityAt: now - 3 * 60 * 60 * 1000,
     latestEmail: { kind: "invite", status: "delivered", delivered: true, opened: true, clicked: false },
   }),
-  party("Elie", { stage: "replied", reply: "coming", lastActivityAt: now - DAY }),
-  party("Fadi", { stage: "replied", reply: "partly", lastActivityAt: now - DAY }),
-  party("Ghada", { stage: "replied", reply: "declined", lastActivityAt: now - DAY }),
+  party("Elie", {
+    stage: "replied",
+    reply: "coming",
+    firstInvitedAt: now - 3 * DAY,
+    lastVisitAt: now - DAY,
+    lastActivityAt: now - DAY,
+  }),
+  party("Fadi", {
+    stage: "replied",
+    reply: "partly",
+    firstInvitedAt: now - 3 * DAY,
+    lastVisitAt: now - DAY,
+    lastActivityAt: now - DAY,
+  }),
+  // The sheet's early "No": in Replied, but never sent or seen anything.
+  party("Ghada", { stage: "replied", reply: "declined" }),
   party("Hana", {
     stage: "notInvited",
     invitedTo: { preWedding: false, wedding: false, brunch: false },
@@ -99,10 +114,11 @@ describe("PipelineBoard", () => {
     renderBoard();
     expect(cardNames(lane("Not invited"))).toEqual(["Amal Haddad", "Hana Haddad", "Zeina Haddad"]);
     expect(cardNames(lane("Invited"))).toEqual(["Bassam Haddad", "Chadi Haddad"]);
-    // 6 of 9 got past Not invited; 4 of those 6 have seen it; 3 of those 4 replied.
-    expect(lane("Invited")).toHaveTextContent("67% of the list");
-    expect(lane("Seen")).toHaveTextContent("67% of invited");
-    expect(lane("Replied")).toHaveTextContent("75% of seen");
+    // 5 of 9 were sent an invite, 3 of those 5 looked, 2 of those 3 replied.
+    // Ghada's early "No" counts towards none of it.
+    expect(lane("Invited")).toHaveTextContent("56% of the list");
+    expect(lane("Seen")).toHaveTextContent("60% of invited");
+    expect(lane("Replied")).toHaveTextContent("67% of seen");
   });
 
   it("splits Replied into coming, partly and declined", () => {
