@@ -39,8 +39,8 @@ async function fillRae(page: Page) {
   await page.getByLabel("Your email").fill(EMAIL);
 }
 
-test.beforeEach(() => {
-  backend.seed([party({ token: TOKEN, headCount: 2 })]);
+test.beforeEach(async () => {
+  await backend.seed([party({ token: TOKEN, headCount: 2 })]);
 });
 
 test.describe("sending a reply", () => {
@@ -68,8 +68,8 @@ test.describe("sending a reply", () => {
     await expect(page.getByText("Thank you")).toBeVisible();
     await waitForEmail(EMAIL);
     expect(sent).toBe(1);
-    expect(backend.activity(TOKEN).sends).toHaveLength(1);
-    expect(backend.emailCount(EMAIL)).toBe(1);
+    expect((await backend.activity(TOKEN)).sends).toHaveLength(1);
+    expect(await backend.emailCount(EMAIL)).toBe(1);
   });
 
   test("a dropped connection shows an error and keeps everything typed", async ({ page }) => {
@@ -86,13 +86,15 @@ test.describe("sending a reply", () => {
     await expect(chip(page, "GUEST 1", "wedding")).toBeChecked();
     await expect(page.getByLabel("Your email")).toHaveValue(EMAIL);
     await expect(page.getByRole("button", { name: "SEND OUR REPLY" })).toBeEnabled();
-    expect(backend.replyFor(TOKEN)?.respondedAt).toBeUndefined();
+    expect((await backend.replyFor(TOKEN))?.respondedAt).toBeUndefined();
 
     // Signal back: the same form goes through.
     await page.unrouteAll();
     await page.getByRole("button", { name: "SEND OUR REPLY" }).click();
     await expect(page.getByText("Thank you")).toBeVisible();
-    expect(backend.replyFor(TOKEN)?.guests).toEqual([expect.objectContaining({ firstName: "Rae", wedding: "yes" })]);
+    expect((await backend.replyFor(TOKEN))?.guests).toEqual([
+      expect.objectContaining({ firstName: "Rae", wedding: "yes" }),
+    ]);
   });
 
   /**
@@ -101,10 +103,10 @@ test.describe("sending a reply", () => {
    */
   test("the confirmation never shows the previous answers, even for a moment", async ({ page }) => {
     const token = "e2e-interact-stale";
-    backend.seed([
+    await backend.seed([
       party({ token, displayName: "The Haddads", headCount: 2, respondedAt: Date.now(), contactEmail: EMAIL }),
     ]);
-    backend.seedGuests(token, [
+    await backend.seedGuests(token, [
       { firstName: "Rae", lastName: "Haddad", wedding: "yes" },
       { firstName: "Cherif", lastName: "Haddad", wedding: "yes" },
     ]);
@@ -135,11 +137,11 @@ test.describe("sending a reply", () => {
   test("too many replies from one link in a row are refused, and say why", async ({ page }) => {
     await openForm(page);
     await fillRae(page);
-    backend.exhaustSubmit(TOKEN);
+    await backend.exhaustSubmit(TOKEN);
 
     await page.getByRole("button", { name: "SEND OUR REPLY" }).click();
     await expect(page.getByRole("alert")).toContainText("That is a lot of changes at once.");
-    expect(backend.replyFor(TOKEN)?.respondedAt).toBeUndefined();
+    expect((await backend.replyFor(TOKEN))?.respondedAt).toBeUndefined();
   });
 });
 
@@ -163,7 +165,7 @@ test.describe("moving around", () => {
     await expect(page).toHaveURL(`/rsvp/${TOKEN}?via=lookup`);
     await expect(page.getByText("Thank you")).toBeVisible();
     await expect(page.getByRole("button", { name: "JOYFULLY ACCEPT" })).toHaveCount(0);
-    expect(backend.replyFor(TOKEN)?.guests).toHaveLength(1);
+    expect((await backend.replyFor(TOKEN))?.guests).toHaveLength(1);
   });
 
   test("an email typed on one form is still there on the other", async ({ page }) => {
@@ -186,7 +188,7 @@ test.describe("moving around", () => {
 
     await page.reload();
     await expect(page.getByRole("button", { name: "JOYFULLY ACCEPT" })).toBeVisible();
-    expect(backend.replyFor(TOKEN)?.respondedAt).toBeUndefined();
+    expect((await backend.replyFor(TOKEN))?.respondedAt).toBeUndefined();
 
     await page.getByRole("button", { name: "JOYFULLY ACCEPT" }).click();
     await fillRae(page);
@@ -210,7 +212,7 @@ test.describe("two devices on one invitation", () => {
     await sendReply(second, "cherif@example.com");
     await expect(second.getByText("Thank you")).toBeVisible();
 
-    expect(backend.replyFor(TOKEN)).toEqual(
+    expect(await backend.replyFor(TOKEN)).toEqual(
       expect.objectContaining({
         contactEmail: "cherif@example.com",
         guests: [expect.objectContaining({ firstName: "Cherif", wedding: "yes" })],
@@ -252,7 +254,7 @@ test.describe("two devices on one invitation", () => {
     await expect(page.getByRole("alert")).toContainText("That reply is out of date. Please reload the page");
     await expect(card(page, "GUEST 2").getByLabel("Last name, guest 2")).toHaveValue("Haddad-Saab");
 
-    expect(backend.replyFor(TOKEN)?.guests.map((guest) => guest.firstName)).toEqual(["Rae"]);
+    expect((await backend.replyFor(TOKEN))?.guests.map((guest) => guest.firstName)).toEqual(["Rae"]);
     await other.close();
   });
 });

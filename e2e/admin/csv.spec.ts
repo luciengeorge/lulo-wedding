@@ -59,7 +59,7 @@ test.describe("the guest sheet", () => {
   });
 
   test("exports a phone typed into the party dialog", async ({ page }) => {
-    backend.seed([party({ token: "e2e-csv", displayName: "Rae & Cherif", contactPhone: "+44 7700 900123" })]);
+    await backend.seed([party({ token: "e2e-csv", displayName: "Rae & Cherif", contactPhone: "+44 7700 900123" })]);
     await openAdmin(page);
 
     const download = page.waitForEvent("download");

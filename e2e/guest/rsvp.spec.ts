@@ -59,7 +59,7 @@ async function fillGuest(
 
 test.describe("a party replying for the first time", () => {
   test("names its guests, picks days, and gets a confirmation", async ({ page }) => {
-    backend.seed([party({ token: TOKEN, headCount: 2, invitedToBrunch: true })]);
+    await backend.seed([party({ token: TOKEN, headCount: 2, invitedToBrunch: true })]);
 
     await visit(page, `/rsvp/${TOKEN}`);
     await expect(page.getByText("Rae & Cherif")).toBeVisible();
@@ -78,7 +78,7 @@ test.describe("a party replying for the first time", () => {
 
     await expect(page.getByText("Thank you")).toBeVisible();
 
-    const reply = backend.replyFor(TOKEN);
+    const reply = await backend.replyFor(TOKEN);
     expect(reply?.declined).toBe(false);
     expect(reply?.contactEmail).toBe("rae@example.com");
     expect(reply?.guests).toEqual([
@@ -91,7 +91,7 @@ test.describe("a party replying for the first time", () => {
   });
 
   test("accepts every event for everyone in one go", async ({ page }) => {
-    backend.seed([party({ token: TOKEN, headCount: 2, invitedToPreWedding: true, invitedToBrunch: true })]);
+    await backend.seed([party({ token: TOKEN, headCount: 2, invitedToPreWedding: true, invitedToBrunch: true })]);
     await visit(page, `/rsvp/${TOKEN}`);
     await page.getByRole("button", { name: "JOYFULLY ACCEPT" }).click();
 
@@ -104,7 +104,7 @@ test.describe("a party replying for the first time", () => {
     await expect(page.getByText("Thank you")).toBeVisible();
     // Every day lists both names on the summary the guest reads back.
     await expect(page.getByText("Rae and Cherif")).toHaveCount(3);
-    expect(backend.replyFor(TOKEN)?.guests).toEqual([
+    expect((await backend.replyFor(TOKEN))?.guests).toEqual([
       expect.objectContaining({ firstName: "Rae", preWedding: "yes", wedding: "yes", brunch: "yes" }),
       expect.objectContaining({ firstName: "Cherif", preWedding: "yes", wedding: "yes", brunch: "yes" }),
     ]);
@@ -112,7 +112,7 @@ test.describe("a party replying for the first time", () => {
 
   /** A name with no day ticked is the one genuinely ambiguous state on the form. */
   test("refuses a named guest with no day ticked, and says whose", async ({ page }) => {
-    backend.seed([party({ token: TOKEN, headCount: 2 })]);
+    await backend.seed([party({ token: TOKEN, headCount: 2 })]);
     await visit(page, `/rsvp/${TOKEN}`);
     await page.getByRole("button", { name: "JOYFULLY ACCEPT" }).click();
 
@@ -123,13 +123,13 @@ test.describe("a party replying for the first time", () => {
     await page.getByRole("button", { name: "SEND OUR REPLY" }).click();
 
     await expect(page.getByRole("alert").filter({ hasText: "Nour" })).toBeVisible();
-    expect(backend.replyFor(TOKEN)?.respondedAt).toBeUndefined();
+    expect((await backend.replyFor(TOKEN))?.respondedAt).toBeUndefined();
   });
 });
 
 test.describe("a party of more than one", () => {
   test("shows one card per seat and accepts a reply for only some of them", async ({ page }) => {
-    backend.seed([party({ token: TOKEN, headCount: 4 })]);
+    await backend.seed([party({ token: TOKEN, headCount: 4 })]);
     await visit(page, `/rsvp/${TOKEN}`);
     await page.getByRole("button", { name: "JOYFULLY ACCEPT" }).click();
 
@@ -143,11 +143,11 @@ test.describe("a party of more than one", () => {
     // Two seats spoken for out of four, and the screen has to say so or a partial
     // reply reads as finished.
     await expect(page.getByText(/told us about 2 of your 4 places/i)).toBeVisible();
-    expect(backend.replyFor(TOKEN)?.guests).toHaveLength(2);
+    expect((await backend.replyFor(TOKEN))?.guests).toHaveLength(2);
   });
 
   test("takes a child with no email address", async ({ page }) => {
-    backend.seed([party({ token: TOKEN, headCount: 2 })]);
+    await backend.seed([party({ token: TOKEN, headCount: 2 })]);
     await visit(page, `/rsvp/${TOKEN}`);
     await page.getByRole("button", { name: "JOYFULLY ACCEPT" }).click();
 
@@ -157,14 +157,14 @@ test.describe("a party of more than one", () => {
     await page.getByRole("button", { name: "SEND OUR REPLY" }).click();
 
     await expect(page.getByText("Thank you")).toBeVisible();
-    const guests = backend.replyFor(TOKEN)?.guests ?? [];
+    const guests = (await backend.replyFor(TOKEN))?.guests ?? [];
     expect(guests.map((guest) => guest.email)).toEqual(["rae@example.com", undefined]);
   });
 });
 
 test.describe("plus ones", () => {
   test("offers a plus one when the invitation includes one", async ({ page }) => {
-    backend.seed([party({ token: TOKEN, headCount: 1, plusOneAllowed: true })]);
+    await backend.seed([party({ token: TOKEN, headCount: 1, plusOneAllowed: true })]);
     await visit(page, `/rsvp/${TOKEN}`);
     await page.getByRole("button", { name: "JOYFULLY ACCEPT" }).click();
 
@@ -182,13 +182,13 @@ test.describe("plus ones", () => {
     await page.getByRole("button", { name: "SEND OUR REPLY" }).click();
 
     await expect(page.getByText("Thank you")).toBeVisible();
-    const guests = backend.replyFor(TOKEN)?.guests ?? [];
+    const guests = (await backend.replyFor(TOKEN))?.guests ?? [];
     expect(guests.filter((guest) => guest.isPlusOne).map((guest) => guest.firstName)).toEqual(["Sami"]);
   });
 
   /** Never show a guest a door that is locked. */
   test("says nothing at all about plus ones when the invitation has none", async ({ page }) => {
-    backend.seed([party({ token: TOKEN, headCount: 1, plusOneAllowed: false })]);
+    await backend.seed([party({ token: TOKEN, headCount: 1, plusOneAllowed: false })]);
     await visit(page, `/rsvp/${TOKEN}`);
     await page.getByRole("button", { name: "JOYFULLY ACCEPT" }).click();
 
@@ -198,7 +198,7 @@ test.describe("plus ones", () => {
 
 test.describe("a party coming back to change their reply", () => {
   test("opens on what they said, not on the question again", async ({ page }) => {
-    backend.seed([party({ token: TOKEN, headCount: 2 })]);
+    await backend.seed([party({ token: TOKEN, headCount: 2 })]);
     await visit(page, `/rsvp/${TOKEN}`);
     await page.getByRole("button", { name: "JOYFULLY ACCEPT" }).click();
     await fillGuest(page, 0, { first: "Rae", last: "Haddad", email: "rae@example.com", days: ["Wedding"] });
@@ -218,7 +218,7 @@ test.describe("a party coming back to change their reply", () => {
     await page.getByRole("button", { name: "SEND OUR REPLY" }).click();
     await expect(page.getByText("Thank you")).toBeVisible();
 
-    const guests = backend.replyFor(TOKEN)?.guests ?? [];
+    const guests = (await backend.replyFor(TOKEN))?.guests ?? [];
     expect(guests).toHaveLength(1);
     expect(guests[0].lastName).toBe("Haddad-Sahyoun");
     // Changing a name must not touch the answer given with it.
@@ -226,7 +226,7 @@ test.describe("a party coming back to change their reply", () => {
   });
 
   test("keeps the days they picked when they come back to add someone", async ({ page }) => {
-    backend.seed([party({ token: TOKEN, headCount: 2, invitedToBrunch: true })]);
+    await backend.seed([party({ token: TOKEN, headCount: 2, invitedToBrunch: true })]);
     await visit(page, `/rsvp/${TOKEN}`);
     await page.getByRole("button", { name: "JOYFULLY ACCEPT" }).click();
     await fillGuest(page, 0, { first: "Rae", last: "Haddad", email: "rae@example.com", days: ["Brunch"] });
@@ -242,7 +242,7 @@ test.describe("a party coming back to change their reply", () => {
     await page.getByRole("button", { name: "SEND OUR REPLY" }).click();
     await expect(page.getByText("Thank you")).toBeVisible();
 
-    expect(backend.replyFor(TOKEN)?.guests).toEqual([
+    expect((await backend.replyFor(TOKEN))?.guests).toEqual([
       expect.objectContaining({ firstName: "Rae", wedding: "no", brunch: "yes" }),
       expect.objectContaining({ firstName: "Cherif", wedding: "yes", brunch: "no" }),
     ]);
@@ -260,8 +260,8 @@ test.describe("after the reply date", () => {
     page,
     deploymentEnv,
   }) => {
-    backend.seed([party({ token: TOKEN, headCount: 2 })]);
-    deploymentEnv.set("RSVP_DEADLINE", PAST);
+    await backend.seed([party({ token: TOKEN, headCount: 2 })]);
+    await deploymentEnv.set("RSVP_DEADLINE", PAST);
 
     await visit(page, `/rsvp/${TOKEN}`);
     await expect(page.getByText(/Replies have closed. Please get in touch/)).toBeVisible();
@@ -270,7 +270,7 @@ test.describe("after the reply date", () => {
   });
 
   test("shows a party what they said, without a way to change it", async ({ page, deploymentEnv }) => {
-    backend.seed([party({ token: TOKEN, headCount: 1 })]);
+    await backend.seed([party({ token: TOKEN, headCount: 1 })]);
     await visit(page, `/rsvp/${TOKEN}`);
     await page.getByRole("button", { name: "JOYFULLY ACCEPT" }).click();
     await fillGuest(page, 0, { first: "Rae", last: "Haddad", email: "rae@example.com", days: ["Wedding"] });
@@ -278,7 +278,7 @@ test.describe("after the reply date", () => {
     await page.getByRole("button", { name: "SEND OUR REPLY" }).click();
     await expect(page.getByText("Thank you")).toBeVisible();
 
-    deploymentEnv.set("RSVP_DEADLINE", PAST);
+    await deploymentEnv.set("RSVP_DEADLINE", PAST);
     await visit(page, `/rsvp/${TOKEN}`);
     await expect(page.getByText(/Replies have closed. Here is what we have written down/)).toBeVisible();
     await expect(page.getByText("YOUR REPLY")).toBeVisible();
@@ -290,26 +290,26 @@ test.describe("after the reply date", () => {
    * The server decides, and the guest is told why nothing was saved.
    */
   test("refuses a reply sent after the cutoff from a form opened before it", async ({ page, deploymentEnv }) => {
-    backend.seed([party({ token: TOKEN, headCount: 1 })]);
-    deploymentEnv.set("RSVP_DEADLINE", "2099-01-01T00:00:00Z");
+    await backend.seed([party({ token: TOKEN, headCount: 1 })]);
+    await deploymentEnv.set("RSVP_DEADLINE", "2099-01-01T00:00:00Z");
 
     await visit(page, `/rsvp/${TOKEN}`);
     await page.getByRole("button", { name: "JOYFULLY ACCEPT" }).click();
     await fillGuest(page, 0, { first: "Rae", last: "Haddad", email: "rae@example.com", days: ["Wedding"] });
     await page.getByLabel("Your email").fill("rae@example.com");
 
-    deploymentEnv.set("RSVP_DEADLINE", PAST);
+    await deploymentEnv.set("RSVP_DEADLINE", PAST);
     await page.getByRole("button", { name: "SEND OUR REPLY" }).click();
 
     await expect(page.getByRole("alert")).toContainText(/The reply date has passed/);
-    expect(backend.replyFor(TOKEN)?.respondedAt).toBeUndefined();
-    expect(backend.replyFor(TOKEN)?.guests).toEqual([]);
+    expect((await backend.replyFor(TOKEN))?.respondedAt).toBeUndefined();
+    expect((await backend.replyFor(TOKEN))?.guests).toEqual([]);
   });
 });
 
 test.describe("declining", () => {
   test("takes a note and an email, and keeps a way back", async ({ page }) => {
-    backend.seed([party({ token: TOKEN, headCount: 2 })]);
+    await backend.seed([party({ token: TOKEN, headCount: 2 })]);
     await visit(page, `/rsvp/${TOKEN}`);
 
     await page.getByRole("button", { name: "REGRETFULLY DECLINE" }).click();
@@ -319,7 +319,7 @@ test.describe("declining", () => {
 
     await expect(page.getByRole("heading", { name: "We will miss you" })).toBeVisible();
 
-    const reply = backend.replyFor(TOKEN);
+    const reply = await backend.replyFor(TOKEN);
     expect(reply?.declined).toBe(true);
     expect(reply?.guestNote).toBe("We have a clash that weekend.");
 
@@ -328,14 +328,14 @@ test.describe("declining", () => {
   });
 
   test("will not take a decline without an email", async ({ page }) => {
-    backend.seed([party({ token: TOKEN, headCount: 1 })]);
+    await backend.seed([party({ token: TOKEN, headCount: 1 })]);
     await visit(page, `/rsvp/${TOKEN}`);
 
     await page.getByRole("button", { name: "REGRETFULLY DECLINE" }).click();
     await page.getByRole("button", { name: "SEND OUR REGRETS" }).click();
 
     await expect(page.getByRole("alert")).toContainText(/email address/i);
-    expect(backend.replyFor(TOKEN)?.respondedAt).toBeUndefined();
+    expect((await backend.replyFor(TOKEN))?.respondedAt).toBeUndefined();
   });
 });
 
@@ -352,7 +352,7 @@ test.describe("finding an invitation again", () => {
    * message, types the bare address. Before this there was no route back at all.
    */
   test("remembers the invitation this device opened", async ({ page }) => {
-    backend.seed([party({ token: TOKEN })]);
+    await backend.seed([party({ token: TOKEN })]);
 
     await visit(page, `/rsvp/${TOKEN}`);
     await expect(page.getByText("Rae & Cherif")).toBeVisible();
@@ -368,7 +368,7 @@ test.describe("finding an invitation again", () => {
    * empty form.
    */
   test("tells a device that has never opened one that it cannot tell", async ({ browser }) => {
-    backend.seed([party({ token: TOKEN })]);
+    await backend.seed([party({ token: TOKEN })]);
 
     // A fresh context: past the gate, but with no memory of any invitation.
     const context = await browser.newContext({ storageState: GUEST_STATE });
@@ -381,7 +381,7 @@ test.describe("finding an invitation again", () => {
   });
 
   test("still remembers after the reply is submitted", async ({ page }) => {
-    backend.seed([party({ token: TOKEN, headCount: 1 })]);
+    await backend.seed([party({ token: TOKEN, headCount: 1 })]);
     await visit(page, `/rsvp/${TOKEN}`);
     await page.getByRole("button", { name: "JOYFULLY ACCEPT" }).click();
     await fillGuest(page, 0, { first: "Rae", last: "Haddad", email: "rae@example.com", days: ["Wedding"] });
@@ -415,7 +415,7 @@ test.describe("the invitation arrives without a round trip", () => {
    * phones; their names should be in the first response, not fetched afterwards.
    */
   test("renders the party name in the server response", async ({ request }) => {
-    backend.seed([party({ token: TOKEN })]);
+    await backend.seed([party({ token: TOKEN })]);
 
     const response = await request.get(`/rsvp/${TOKEN}`, {
       headers: { cookie: await guestCookieHeader() },

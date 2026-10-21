@@ -8,7 +8,7 @@ import { ADMIN_STATE, backend, expect, signIn, test as setup } from "./fixtures"
  * sign-in flow itself is covered by e2e/admin/sign-in.spec.ts.
  */
 setup("sign the admin in", async ({ page }) => {
-  backend.resetRateLimits();
+  await backend.resetRateLimits();
   await signIn(page);
   await expect(page).toHaveURL(/\/admin/);
   await page.context().storageState({ path: ADMIN_STATE });

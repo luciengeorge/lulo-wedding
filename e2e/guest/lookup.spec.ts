@@ -38,7 +38,7 @@ function results(page: Page) {
 }
 
 test.beforeEach(async ({ page }) => {
-  backend.seed(GUEST_LIST);
+  await backend.seed(GUEST_LIST);
   await visit(page, "/rsvp");
   await expect(page.getByRole("heading", { name: "Find your invitation" })).toBeVisible();
 });
@@ -53,7 +53,7 @@ test.describe("a guest finding their invitation by name", () => {
 
     await expect(page).toHaveURL("/rsvp/e2e-haddad?via=lookup");
     await expect(page.getByRole("button", { name: "JOYFULLY ACCEPT" })).toBeVisible();
-    expect(backend.activity("e2e-haddad").visits).toEqual([{ source: "lookup" }]);
+    expect((await backend.activity("e2e-haddad")).visits).toEqual([{ source: "lookup" }]);
   });
 
   test("ignores accents and capitals, on either side", async ({ page }) => {
@@ -88,7 +88,7 @@ test.describe("a guest finding their invitation by name", () => {
 
     await expect(page).toHaveURL("/rsvp/e2e-khoury-lea?via=lookup");
     await expect(page.getByText("Karim & Léa")).toBeVisible();
-    expect(backend.activity("e2e-khoury-nour").visits).toEqual([]);
+    expect((await backend.activity("e2e-khoury-nour")).visits).toEqual([]);
   });
 
   /** Six families share "Sami Nassar". Listing them all would hand out links on a guess. */
@@ -116,7 +116,7 @@ test.describe("a guest finding their invitation by name", () => {
   });
 
   test("stops answering after too many searches from one place", async ({ page }) => {
-    backend.exhaustNameLookup();
+    await backend.exhaustNameLookup();
     await search(page, "Rae Haddad");
 
     await expect(page.getByText(/That is a lot of searching/)).toBeVisible();

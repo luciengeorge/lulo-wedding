@@ -31,15 +31,15 @@ const DAY = 24 * HOUR;
 
 async function scenario(request: Parameters<typeof postResendEvent>[0]) {
   const now = Date.now();
-  backend.seed([
+  await backend.seed([
     party({ token: "e2e-amal", displayName: "Amal", surname: "Khalil", contactEmail: "amal@example.com" }),
     party({ token: "e2e-bassam", displayName: "Bassam", surname: "Aoun", respondedAt: now - HOUR }),
     party({ token: "e2e-chadi", displayName: "Chadi", surname: "Mrad", earlyDecline: true }),
     party({ token: "e2e-dalia", displayName: "Dalia", surname: "Saab" }),
   ]);
-  backend.seedGuests("e2e-bassam", [{ firstName: "Bassam", lastName: "Aoun", wedding: "yes" }]);
+  await backend.seedGuests("e2e-bassam", [{ firstName: "Bassam", lastName: "Aoun", wedding: "yes" }]);
 
-  const sendId = backend.seedSend({
+  const sendId = await backend.seedSend({
     token: "e2e-amal",
     channel: "email",
     kind: "invite",
@@ -47,16 +47,17 @@ async function scenario(request: Parameters<typeof postResendEvent>[0]) {
     sentAt: now - 6 * HOUR,
   });
   const resendId = `re_${randomUUID()}`;
-  backend.linkSendToResend(sendId, resendId);
+  await backend.linkSendToResend(sendId, resendId);
   for (const type of ["email.delivered", "email.opened", "email.opened"] as const) {
     expect((await postResendEvent(request, resendEvent(type, resendId, "amal@example.com"))).ok()).toBe(true);
   }
-  await expect.poll(() => backend.activity("e2e-amal").sends[0].openCount).toBe(2);
+  await expect.poll(async () => (await backend.activity("e2e-amal")).sends[0].openCount).toBe(2);
 
-  backend.seedSend({ token: "e2e-bassam", channel: "whatsapp", kind: "invite", sentAt: now - 5 * HOUR });
+  await backend.seedSend({ token: "e2e-bassam", channel: "whatsapp", kind: "invite", sentAt: now - 5 * HOUR });
   for (const hoursAgo of [5, 4, 3])
-    backend.seedVisit({ token: "e2e-amal", source: "email", at: now - hoursAgo * HOUR });
-  for (const hoursAgo of [2, 1]) backend.seedVisit({ token: "e2e-bassam", source: "link", at: now - hoursAgo * HOUR });
+    await backend.seedVisit({ token: "e2e-amal", source: "email", at: now - hoursAgo * HOUR });
+  for (const hoursAgo of [2, 1])
+    await backend.seedVisit({ token: "e2e-bassam", source: "link", at: now - hoursAgo * HOUR });
 }
 
 function funnelStep(page: Page, label: string) {
@@ -119,7 +120,7 @@ test.describe("the funnel above the guest list", () => {
  */
 async function boardScenario(request: Parameters<typeof postResendEvent>[0]) {
   const now = Date.now();
-  backend.seed([
+  await backend.seed([
     party({ token: "e2e-amal", displayName: "Amal", surname: "Khalil", contactEmail: "amal@example.com" }),
     party({ token: "e2e-bassam", displayName: "Bassam", surname: "Aoun", respondedAt: now - HOUR, who: "lucien" }),
     party({ token: "e2e-chadi", displayName: "Chadi", surname: "Mrad", earlyDecline: true }),
@@ -134,9 +135,9 @@ async function boardScenario(request: Parameters<typeof postResendEvent>[0]) {
   ]);
 
   // Replies: one named seat of two, all of one, and a no from both.
-  backend.seedGuests("e2e-bassam", [{ firstName: "Bassam", lastName: "Aoun", wedding: "yes" }]);
-  backend.seedGuests("e2e-ghada", [{ firstName: "Ghada", lastName: "Azar", wedding: "yes" }]);
-  backend.seedGuests("e2e-hana", [
+  await backend.seedGuests("e2e-bassam", [{ firstName: "Bassam", lastName: "Aoun", wedding: "yes" }]);
+  await backend.seedGuests("e2e-ghada", [{ firstName: "Ghada", lastName: "Azar", wedding: "yes" }]);
+  await backend.seedGuests("e2e-hana", [
     { firstName: "Hana", lastName: "Daher", wedding: "no" },
     { firstName: "Rami", lastName: "Daher", wedding: "no" },
   ]);
@@ -149,7 +150,7 @@ async function boardScenario(request: Parameters<typeof postResendEvent>[0]) {
     ["e2e-imad", 20],
     ["e2e-joumana", 12],
   ] as const) {
-    backend.seedSend({ token, channel: "whatsapp", kind: "invite", sentAt: now - daysAgo * DAY });
+    await backend.seedSend({ token, channel: "whatsapp", kind: "invite", sentAt: now - daysAgo * DAY });
   }
 
   // Emails, and what Resend's webhook says happened to them.
@@ -157,20 +158,21 @@ async function boardScenario(request: Parameters<typeof postResendEvent>[0]) {
     ["e2e-amal", "amal@example.com", ["email.delivered", "email.opened"]],
     ["e2e-fadi", "fadi@example.com", ["email.bounced"]],
   ] as const) {
-    const sendId = backend.seedSend({ token, channel: "email", kind: "invite", to, sentAt: now - 6 * HOUR });
+    const sendId = await backend.seedSend({ token, channel: "email", kind: "invite", to, sentAt: now - 6 * HOUR });
     const resendId = `re_${randomUUID()}`;
-    backend.linkSendToResend(sendId, resendId);
+    await backend.linkSendToResend(sendId, resendId);
     for (const type of events)
       expect((await postResendEvent(request, resendEvent(type, resendId, to))).ok()).toBe(true);
   }
-  await expect.poll(() => backend.activity("e2e-fadi").sends[0].status).toBe("bounced");
-  await expect.poll(() => backend.activity("e2e-amal").sends[0].openCount).toBe(1);
+  await expect.poll(async () => (await backend.activity("e2e-fadi")).sends[0].status).toBe("bounced");
+  await expect.poll(async () => (await backend.activity("e2e-amal")).sends[0].openCount).toBe(1);
 
-  backend.seedVisit({ token: "e2e-amal", source: "link", at: now - 9 * DAY });
+  await backend.seedVisit({ token: "e2e-amal", source: "link", at: now - 9 * DAY });
   for (const hoursAgo of [5, 4, 3])
-    backend.seedVisit({ token: "e2e-amal", source: "email", at: now - hoursAgo * HOUR });
-  backend.seedVisit({ token: "e2e-bassam", source: "link", at: now - 2 * HOUR });
-  for (const daysAgo of [12, 10]) backend.seedVisit({ token: "e2e-joumana", source: "link", at: now - daysAgo * DAY });
+    await backend.seedVisit({ token: "e2e-amal", source: "email", at: now - hoursAgo * HOUR });
+  await backend.seedVisit({ token: "e2e-bassam", source: "link", at: now - 2 * HOUR });
+  for (const daysAgo of [12, 10])
+    await backend.seedVisit({ token: "e2e-joumana", source: "link", at: now - daysAgo * DAY });
 }
 
 /** Card names in a lane or group, top to bottom. */
@@ -182,8 +184,8 @@ function laneHeader(lane: Locator) {
   return lane.locator("header");
 }
 
-function whatsappSends(token: string) {
-  return backend.activity(token).sends.filter((send) => send.channel === "whatsapp" && send.kind === "invite");
+async function whatsappSends(token: string) {
+  return (await backend.activity(token)).sends.filter((send) => send.channel === "whatsapp" && send.kind === "invite");
 }
 
 test.describe("the pipeline board", () => {
@@ -256,8 +258,16 @@ test.describe("the pipeline board", () => {
   });
 
   test("flags an email that failed to send, in its own words", async ({ page }) => {
-    backend.seed([party({ token: "e2e-lina", displayName: "Lina", surname: "Sfeir", contactEmail: "lina@example" })]);
-    backend.seedSend({ token: "e2e-lina", channel: "email", kind: "invite", to: "lina@example", status: "failed" });
+    await backend.seed([
+      party({ token: "e2e-lina", displayName: "Lina", surname: "Sfeir", contactEmail: "lina@example" }),
+    ]);
+    await backend.seedSend({
+      token: "e2e-lina",
+      channel: "email",
+      kind: "invite",
+      to: "lina@example",
+      status: "failed",
+    });
     await openAdmin(page, "/admin/insights");
 
     const attention = await showLane(page, "Needs attention");
@@ -314,12 +324,12 @@ test.describe("the pipeline board", () => {
 test.describe("dragging a party to Invited", () => {
   test.use({ viewport: { width: 1440, height: 900 }, isMobile: false, hasTouch: false });
 
-  test.beforeEach(() => {
-    backend.seed([
+  test.beforeEach(async () => {
+    await backend.seed([
       party({ token: "e2e-dalia", displayName: "Dalia", surname: "Saab" }),
       party({ token: "e2e-amal", displayName: "Amal", surname: "Khalil" }),
     ]);
-    backend.seedVisit({ token: "e2e-amal", source: "link", at: Date.now() - HOUR });
+    await backend.seedVisit({ token: "e2e-amal", source: "link", at: Date.now() - HOUR });
   });
 
   async function dragTo(page: Page, card: Locator, target: Locator, check?: () => Promise<void>) {
@@ -352,19 +362,19 @@ test.describe("dragging a party to Invited", () => {
     await expect(seen).not.toHaveAttribute("data-drop");
     expect(await cards(notInvited)).toEqual(["Dalia Saab"]);
     await expect(page.getByText(/as invited on WhatsApp$/)).toHaveCount(0);
-    expect(whatsappSends("e2e-dalia")).toHaveLength(0);
+    expect(await whatsappSends("e2e-dalia")).toHaveLength(0);
 
     await dragTo(page, dalia, invited);
     await expect(page.getByText("Marked Dalia Saab as invited on WhatsApp")).toBeVisible();
     await expect.poll(() => cards(invited)).toEqual(["Dalia Saab"]);
     expect(await cards(notInvited)).toEqual([]);
-    await expect.poll(() => whatsappSends("e2e-dalia").length).toBe(1);
+    await expect.poll(async () => (await whatsappSends("e2e-dalia")).length).toBe(1);
     await expect(page.getByRole("group", { name: "WhatsApp first" })).toContainText("1 invited");
 
     await page.getByRole("button", { name: "Undo" }).click();
     await expect(page.getByText("Undone: Dalia Saab no longer marked as invited on WhatsApp")).toBeVisible();
     await expect.poll(() => cards(notInvited)).toEqual(["Dalia Saab"]);
-    expect(whatsappSends("e2e-dalia")).toHaveLength(0);
+    expect(await whatsappSends("e2e-dalia")).toHaveLength(0);
   });
 
   test("works from the keyboard: Space, right arrow, Space", async ({ page }) => {
@@ -389,7 +399,7 @@ test.describe("dragging a party to Invited", () => {
 
     await expect(page.getByText("Marked Dalia Saab as invited on WhatsApp")).toBeVisible();
     await expect.poll(() => cards(invited)).toEqual(["Dalia Saab"]);
-    await expect.poll(() => whatsappSends("e2e-dalia").length).toBe(1);
+    await expect.poll(async () => (await whatsappSends("e2e-dalia")).length).toBe(1);
     // Picking up and dropping is not a click: the timeline stays shut.
     await expect(page.getByRole("dialog")).toHaveCount(0);
   });
@@ -451,7 +461,7 @@ test.describe("on a 375px phone", () => {
     await page.getByRole("menuitem", { name: "Mark invited on WhatsApp" }).click();
     await expect(page.getByText("Marked Dalia Saab as invited on WhatsApp")).toBeVisible();
     await expect.poll(() => cards(notInvited)).toEqual(["Karim Fares"]);
-    await expect.poll(() => whatsappSends("e2e-dalia").length).toBe(1);
+    await expect.poll(async () => (await whatsappSends("e2e-dalia")).length).toBe(1);
 
     const invited = await showLane(page, "Invited");
     await expect.poll(() => cards(invited)).toContain("Dalia Saab");
@@ -459,7 +469,7 @@ test.describe("on a 375px phone", () => {
     await page.getByRole("button", { name: "Undo" }).click();
     await expect(page.getByText("Undone: Dalia Saab no longer marked as invited on WhatsApp")).toBeVisible();
     await expect.poll(() => cards(invited)).not.toContain("Dalia Saab");
-    expect(whatsappSends("e2e-dalia")).toHaveLength(0);
+    expect(await whatsappSends("e2e-dalia")).toHaveLength(0);
 
     for (const lane of ["Seen", "Replied", "Needs attention"]) {
       await showLane(page, lane);

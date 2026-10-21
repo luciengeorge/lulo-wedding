@@ -12,7 +12,7 @@ import { backend, expect, GUEST_PASSWORD, GUEST_STATE, test as setup, visit, ent
  */
 setup("unlock the guest gate", async ({ page }) => {
   // Clears the gate and magic-link buckets, which several runs an hour exhaust.
-  backend.resetRateLimits();
+  await backend.resetRateLimits();
 
   await visit(page, "/enter");
   await enterPassword(page, GUEST_PASSWORD);

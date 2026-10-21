@@ -76,9 +76,9 @@ export const PAIRWISE_CASES: FormCase[] = [
   return found;
 });
 
-export function seedCases(cases: readonly FormCase[]) {
-  backend.reset();
-  backend.seed(
+export async function seedCases(cases: readonly FormCase[]) {
+  await backend.reset();
+  await backend.seed(
     cases.map((c) =>
       party({
         token: c.token,
@@ -138,7 +138,7 @@ export async function runFormCase(page: Page, c: FormCase) {
   await expect(page.getByText("Thank you")).toBeVisible();
 
   const invite = flags(...c.events);
-  const reply = backend.replyFor(c.token);
+  const reply = await backend.replyFor(c.token);
   expect(reply?.declined).toBe(false);
   expect(reply?.guests).toEqual(
     filled.map((guest) => ({

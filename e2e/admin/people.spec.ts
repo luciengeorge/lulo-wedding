@@ -27,8 +27,8 @@ function person(page: Page, name: string) {
   return page.getByRole("dialog").getByRole("form", { name });
 }
 
-function seedFamily(headCount = 2) {
-  backend.seed([
+async function seedFamily(headCount = 2) {
+  await backend.seed([
     party({
       token: TOKEN,
       displayName: "Nadia & Omar",
@@ -42,7 +42,7 @@ function seedFamily(headCount = 2) {
 
 test.describe("people the couple name in a party", () => {
   test("are added with their own events, edited back to the party's, and removed", async ({ page }) => {
-    seedFamily();
+    await seedFamily();
     await openAdmin(page);
     await expect(row(page, "Nadia & Omar").getByTitle("Brunch")).toHaveCount(0);
 
@@ -59,7 +59,7 @@ test.describe("people the couple name in a party", () => {
 
     await expect(page.getByText("Added Nadia Haddad to Nadia & Omar")).toBeVisible();
     await expect(person(page, "Nadia Haddad")).toBeVisible();
-    expect(backend.replyFor(TOKEN)?.guests).toEqual([
+    expect((await backend.replyFor(TOKEN))?.guests).toEqual([
       expect.objectContaining({
         firstName: "Nadia",
         addedByCouple: true,
@@ -80,9 +80,9 @@ test.describe("people the couple name in a party", () => {
     await expect(nadia.getByText("Same as the party")).toBeVisible();
     await nadia.getByRole("button", { name: "Save person" }).click();
     await expect(page.getByText("Saved Nadine Haddad")).toBeVisible();
-    await expect.poll(() => backend.replyFor(TOKEN)?.guests[0].firstName).toBe("Nadine");
+    await expect.poll(async () => (await backend.replyFor(TOKEN))?.guests[0].firstName).toBe("Nadine");
     // Back on the party's flags means no invite of her own at all.
-    expect(backend.replyFor(TOKEN)?.guests[0]).not.toHaveProperty("invitedTo");
+    expect((await backend.replyFor(TOKEN))?.guests[0]).not.toHaveProperty("invitedTo");
 
     const adding2 = person(page, "Add a person");
     await adding2.getByLabel("First name").fill("Omar");
@@ -96,12 +96,12 @@ test.describe("people the couple name in a party", () => {
     await adding3.getByLabel("Last name").fill("Haddad");
     await adding3.getByRole("button", { name: "Add person" }).click();
     await expect(adding3.getByText(/already has 2 named seat\(s\)\. Raise the head count first\./)).toBeVisible();
-    expect(backend.replyFor(TOKEN)?.guests.map((guest) => guest.firstName)).toEqual(["Nadine", "Omar"]);
+    expect((await backend.replyFor(TOKEN))?.guests.map((guest) => guest.firstName)).toEqual(["Nadine", "Omar"]);
 
     await person(page, "Omar Haddad").getByRole("button", { name: "Remove" }).click();
     await expect(page.getByText("Removed Omar Haddad from Nadia & Omar")).toBeVisible();
     await expect(person(page, "Omar Haddad")).toHaveCount(0);
-    expect(backend.replyFor(TOKEN)?.guests.map((guest) => guest.firstName)).toEqual(["Nadine"]);
+    expect((await backend.replyFor(TOKEN))?.guests.map((guest) => guest.firstName)).toEqual(["Nadine"]);
 
     await dialog.getByRole("button", { name: "Cancel" }).click();
     await expect(row(page, "Nadia & Omar").getByTitle("Brunch")).toHaveCount(0);
@@ -109,8 +109,8 @@ test.describe("people the couple name in a party", () => {
 
   /** Their answer is the party's reply now. Deleting it here would lose it silently. */
   test("cannot be removed once they have answered", async ({ page }) => {
-    seedFamily();
-    backend.seedGuests(TOKEN, [{ firstName: "Nadia", lastName: "Haddad", addedByCouple: true, wedding: "yes" }]);
+    await seedFamily();
+    await backend.seedGuests(TOKEN, [{ firstName: "Nadia", lastName: "Haddad", addedByCouple: true, wedding: "yes" }]);
     await openAdmin(page);
 
     await editParty(page, "Nadia & Omar");
@@ -122,7 +122,7 @@ test.describe("people the couple name in a party", () => {
 
 test.describe("the party's phone number", () => {
   test("is saved from the party dialog", async ({ page }) => {
-    seedFamily();
+    await seedFamily();
     await openAdmin(page);
 
     const dialog = await editParty(page, "Nadia & Omar");
@@ -130,7 +130,7 @@ test.describe("the party's phone number", () => {
     await dialog.getByRole("button", { name: "Save changes" }).click();
 
     await expect(page.getByText("Party updated")).toBeVisible();
-    expect(backend.partyFields(TOKEN).contactPhone).toBe("+961 3 123 456");
+    expect((await backend.partyFields(TOKEN)).contactPhone).toBe("+961 3 123 456");
 
     await editParty(page, "Nadia & Omar");
     await expect(page.getByRole("dialog").getByLabel("Phone")).toHaveValue("+961 3 123 456");
