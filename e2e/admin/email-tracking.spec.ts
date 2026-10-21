@@ -12,6 +12,7 @@ import {
   party,
   postResendEvent,
   resendEvent,
+  showLane,
   signedWebhook,
   test,
   visit,
@@ -38,8 +39,12 @@ function seedEmailedInvite(): { sendId: string; resendId: string } {
   return { sendId, resendId };
 }
 
+/** One count in the board's email line, e.g. "1 delivered". */
 function emailStat(page: Page, label: string) {
-  return page.getByRole("region", { name: "Funnel by channel" }).getByText(label, { exact: true }).locator("..");
+  return page
+    .getByRole("region", { name: "Funnel by channel" })
+    .getByRole("group", { name: "Emails" })
+    .getByText(new RegExp(`^\\d+ ${label}$`));
 }
 
 function funnelStep(page: Page, label: string) {
@@ -50,10 +55,11 @@ function partyRow(page: Page, name: string) {
   return page.getByRole("row").filter({ has: page.getByText(name, { exact: true }) });
 }
 
-async function openTimeline(page: Page, name: string) {
-  await page.getByRole("region", { name: "Engagement" }).getByRole("button", { name, exact: true }).click();
+/** Opens Amal's timeline from her card in one lane of the pipeline board. */
+async function openTimeline(page: Page, lane: string) {
+  await (await showLane(page, lane)).getByRole("button", { name: "Amal Khalil", exact: true }).click();
   const sheet = page.getByRole("dialog");
-  await expect(sheet.getByText(name, { exact: true })).toBeVisible();
+  await expect(sheet.getByText("Amal Khalil", { exact: true })).toBeVisible();
   return sheet;
 }
 
@@ -61,21 +67,21 @@ test.describe("an emailed invitation", () => {
   test("shows delivery, two opens and a click to the couple", async ({ page, request }) => {
     const { resendId } = seedEmailedInvite();
     await openAdmin(page, "/admin/insights");
-    await expect(emailStat(page, "Delivered")).toHaveText("Delivered0 parties · 0%");
+    await expect(emailStat(page, "delivered")).toHaveText("0 delivered");
 
     expect((await postResendEvent(request, resendEvent("email.delivered", resendId, EMAIL))).ok()).toBe(true);
-    await expect(emailStat(page, "Delivered")).toHaveText("Delivered1 party · 100%");
+    await expect(emailStat(page, "delivered")).toHaveText("1 delivered");
 
     for (const type of ["email.opened", "email.opened", "email.clicked"] as const) {
       expect((await postResendEvent(request, resendEvent(type, resendId, EMAIL))).ok()).toBe(true);
     }
-    await expect(emailStat(page, "Opened")).toHaveText("Opened1 party · 100%");
-    await expect(emailStat(page, "Clicked")).toHaveText("Clicked1 party · 100%");
+    await expect(emailStat(page, "opened")).toHaveText("1 opened");
+    await expect(emailStat(page, "clicked")).toHaveText("1 clicked");
     await expect
       .poll(() => backend.activity(TOKEN).sends[0])
       .toEqual(expect.objectContaining({ status: "delivered", openCount: 2, clickCount: 1 }));
 
-    const sheet = await openTimeline(page, "Amal");
+    const sheet = await openTimeline(page, "Invited");
     await expect(sheet.getByText(`Invitation emailed to ${EMAIL}`)).toBeVisible();
     await expect(sheet.getByText(/^Delivered/)).toBeVisible();
     await expect(sheet.getByText(/^Opened 2 times, last/)).toBeVisible();
@@ -108,9 +114,9 @@ test.describe("an emailed invitation", () => {
     await expect(page.getByText("Showing all 1 (filtered from 2)")).toBeVisible();
 
     await openAdmin(page, "/admin/insights");
-    const engagement = page.getByRole("region", { name: "Engagement" });
-    await expect(engagement.getByRole("row").filter({ hasText: "Amal" })).toContainText("Bounced");
-    const sheet = await openTimeline(page, "Amal");
+    const attention = await showLane(page, "Needs attention");
+    await expect(attention.getByRole("button", { name: "Amal Khalil", exact: true })).toContainText("Email bounced");
+    const sheet = await openTimeline(page, "Invited");
     await expect(sheet.getByText("Bounced: Mailbox does not exist")).toBeVisible();
   });
 
@@ -141,8 +147,8 @@ test.describe("an emailed invitation", () => {
     // A genuine event afterwards is the barrier: once it shows, anything the
     // forged ones could have done would have shown too.
     expect((await postResendEvent(request, resendEvent("email.delivered", resendId, EMAIL))).ok()).toBe(true);
-    await expect(emailStat(page, "Delivered")).toHaveText("Delivered1 party · 100%");
-    await expect(emailStat(page, "Opened")).toHaveText("Opened0 parties · 0%");
+    await expect(emailStat(page, "delivered")).toHaveText("1 delivered");
+    await expect(emailStat(page, "opened")).toHaveText("0 opened");
     expect(backend.activity(TOKEN).sends[0]).toEqual(expect.objectContaining({ openCount: 0, status: "delivered" }));
   });
 
@@ -154,8 +160,8 @@ test.describe("an emailed invitation", () => {
     expect(stranger.ok()).toBe(true);
 
     expect((await postResendEvent(request, resendEvent("email.delivered", resendId, EMAIL))).ok()).toBe(true);
-    await expect(emailStat(page, "Delivered")).toHaveText("Delivered1 party · 100%");
-    await expect(emailStat(page, "Bounced")).toHaveText("Bounced0 parties · 0%");
+    await expect(emailStat(page, "delivered")).toHaveText("1 delivered");
+    await expect(emailStat(page, "bounced")).toHaveText("0 bounced");
   });
 });
 
@@ -184,13 +190,16 @@ test.describe("a reply receipt", () => {
     }
 
     await openAdmin(page, "/admin/insights");
-    const sheet = await openTimeline(page, "Amal");
+    const sheet = await openTimeline(page, "Replied");
     await expect(sheet.getByText(`Reply receipt emailed to ${EMAIL}`)).toBeVisible();
     await expect(sheet.getByText(/^Opened once, last/)).toBeVisible();
     await page.keyboard.press("Escape");
-    await expect(emailStat(page, "Opened")).toHaveText("Opened0 parties");
-    await expect(emailStat(page, "Emailed")).toHaveText("Emailed0 parties");
+    // The card shows no invitation email either: the receipt's open is not engagement.
+    await expect(
+      (await showLane(page, "Replied")).getByRole("button", { name: "Amal Khalil", exact: true }).getByText("Opened"),
+    ).toHaveCount(0);
     // A receipt is not an invitation: nothing has been emailed in the funnel's terms.
+    await expect(page.getByRole("group", { name: "Emails" })).toHaveCount(0);
     await expect(
       page.getByText("Email invites aren't sent from here yet, so the email numbers stay at zero."),
     ).toBeVisible();

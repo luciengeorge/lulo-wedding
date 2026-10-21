@@ -6,6 +6,7 @@ import type { MutationCtx, QueryCtx } from "./_generated/server";
 import { buildImportKey } from "../src/lib/guest-csv";
 import { MAX_BULK } from "../src/lib/party-bulk";
 import { deriveRsvp, type RsvpState } from "../src/lib/party-filters";
+import { replyOutcome } from "../src/lib/pipeline";
 import { type EventFlags, partyInvitedTo } from "../src/lib/rsvp-rules";
 import { mutation, query } from "./_generated/server";
 import { requireAdmin } from "./lib/adminAuth";
@@ -174,7 +175,6 @@ function engagementOf(sends: readonly Doc<"sends">[], visits: readonly Doc<"visi
     lastVisitAt: visits.length > 0 ? Math.max(...visits.map((visit) => visit.at)) : undefined,
     visitCount: visits.length,
     emailBounced: emails.some((send) => send.status === "bounced"),
-    latestEmailStatus: emails[0]?.status,
     invitedVia:
       viaEmail && viaWhatsApp
         ? ("both" as const)
@@ -194,10 +194,7 @@ async function loadParties(ctx: QueryCtx): Promise<PartyRow[]> {
 
   return parties.map(({ _creationTime: _ignored, ...party }) => {
     const guests = guestsByParty.get(party._id) ?? [];
-    const { latestEmailStatus: _latest, ...engagement } = engagementOf(
-      sendsByParty.get(party._id) ?? [],
-      visitsByParty.get(party._id) ?? [],
-    );
+    const engagement = engagementOf(sendsByParty.get(party._id) ?? [], visitsByParty.get(party._id) ?? []);
     return {
       ...party,
       rsvp: deriveRsvp(party, guests),
@@ -789,37 +786,102 @@ export const partyActivity = query({
   },
 });
 
-/** Per-party engagement, for the "seen, not replied" and "bounced" lists. */
-export const engagementList = query({
+const emailProgress = v.object({
+  kind: v.union(v.literal("invite"), v.literal("update")),
+  status: sendStatus,
+  delivered: v.boolean(),
+  opened: v.boolean(),
+  clicked: v.boolean(),
+});
+
+/** The latest moment anything happened to a party: a message, an email event, a visit or a reply. */
+function lastActivityOf(party: Doc<"parties">, sends: readonly Doc<"sends">[], visits: readonly Doc<"visits">[]) {
+  const moments = [
+    party.respondedAt,
+    ...visits.map((visit) => visit.at),
+    ...sends.flatMap((send) => [
+      send.sentAt,
+      send.deliveredAt,
+      send.lastOpenedAt,
+      send.lastClickedAt,
+      send.bouncedAt,
+      send.complainedAt,
+      send.failedAt,
+    ]),
+  ].filter((at): at is number => at !== undefined);
+  return moments.length > 0 ? Math.max(...moments) : undefined;
+}
+
+/**
+ * One card per party for the pipeline board on /admin/insights, with only what a
+ * card shows. The stage itself is placed in the browser by `derivePipeline`, as
+ * two of its flags are about elapsed time and a query result does not age.
+ *
+ * `reply` is derived here, where the guest rows are, so the board never ships them.
+ */
+export const pipeline = query({
   args: {},
   returns: v.array(
     v.object({
       partyId: v.id("parties"),
       displayName: v.string(),
-      lastVisitAt: v.optional(v.number()),
-      visitCount: v.number(),
-      latestEmailStatus: v.optional(sendStatus),
-      bounced: v.boolean(),
-      replied: v.boolean(),
+      surname: v.string(),
+      headCount: v.number(),
+      plusOneAllowed: v.boolean(),
+      who: partyWho,
+      wave: partyWave,
+      invitedTo: eventFlags,
       invitedVia: v.optional(invitedVia),
+      firstInvitedAt: v.optional(v.number()),
+      lastVisitAt: v.optional(v.number()),
+      lastActivityAt: v.optional(v.number()),
+      reply: v.optional(v.union(v.literal("coming"), v.literal("partly"), v.literal("declined"))),
+      emailTrouble: v.optional(v.union(v.literal("bounced"), v.literal("complained"), v.literal("failed"))),
+      /** The latest invitation or update email. Receipts go to people who already replied. */
+      latestEmail: v.optional(emailProgress),
     }),
   ),
   handler: async (ctx) => {
     await requireAdmin(ctx);
 
-    const { parties, sendsByParty, visitsByParty } = await loadAll(ctx);
+    const { parties, guestsByParty, sendsByParty, visitsByParty } = await loadAll(ctx);
 
     return parties.map((party) => {
-      const { emailBounced, ...engagement } = engagementOf(
-        sendsByParty.get(party._id) ?? [],
-        visitsByParty.get(party._id) ?? [],
-      );
+      const guests = guestsByParty.get(party._id) ?? [];
+      const sends = sendsByParty.get(party._id) ?? [];
+      const visits = visitsByParty.get(party._id) ?? [];
+      const { invitedVia: via } = engagementOf(sends, visits);
+      const invites = sends.filter((send) => send.kind === "invite");
+      const emails = sends.filter((send) => send.channel === "email").sort((a, b) => b.sentAt - a.sentAt);
+      const latest = emails.find(isEmailInvite);
+      const trouble = emails[0]?.status;
+
       return {
         partyId: party._id,
         displayName: party.displayName,
-        ...engagement,
-        bounced: emailBounced,
-        replied: party.respondedAt !== undefined || party.earlyDecline,
+        surname: party.surname,
+        headCount: party.headCount,
+        plusOneAllowed: party.plusOneAllowed,
+        who: party.who,
+        wave: party.wave,
+        invitedTo: partyInvitedTo(party, guests),
+        invitedVia: via,
+        firstInvitedAt: invites.length > 0 ? Math.min(...invites.map((send) => send.sentAt)) : undefined,
+        lastVisitAt: visits.length > 0 ? Math.max(...visits.map((visit) => visit.at)) : undefined,
+        lastActivityAt: lastActivityOf(party, sends, visits),
+        reply: replyOutcome(party, guests),
+        emailTrouble: trouble === "bounced" || trouble === "complained" || trouble === "failed" ? trouble : undefined,
+        latestEmail:
+          latest && (latest.kind === "invite" || latest.kind === "update")
+            ? {
+                kind: latest.kind,
+                status: latest.status,
+                // An open or a click proves delivery even when the delivered event was lost.
+                delivered: latest.deliveredAt !== undefined || latest.openCount > 0 || latest.clickCount > 0,
+                opened: latest.openCount > 0,
+                clicked: latest.clickCount > 0,
+              }
+            : undefined,
       };
     });
   },

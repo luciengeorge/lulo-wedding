@@ -277,7 +277,21 @@ export async function enterPassword(page: Page, password: string) {
 export async function openAdmin(page: Page, path: "/admin" | "/admin/insights" = "/admin"): Promise<void> {
   await visit(page, path);
   if (path === "/admin") await expect(page.getByText(/^No parties$|^Showing all/)).toBeVisible();
-  else await expect(page.getByRole("region", { name: "Engagement" }).getByRole("table")).toBeVisible();
+  else await expect(page.getByRole("region", { name: "Pipeline board" })).toBeVisible();
+}
+
+/**
+ * One lane of the pipeline board on /admin/insights. On a phone the lanes show
+ * one at a time behind a row of stage buttons, so it presses the right one first.
+ */
+export async function showLane(page: Page, lane: string) {
+  const stages = page.getByRole("group", { name: "Stage" });
+  if (await stages.isVisible()) {
+    await stages.getByRole("button", { name: new RegExp(`^${lane} \\d+$`) }).click();
+  }
+  const region = page.getByRole("region", { name: lane, exact: true });
+  await expect(region).toBeVisible();
+  return region;
 }
 
 /**
