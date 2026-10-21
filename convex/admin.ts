@@ -806,6 +806,7 @@ function lastActivityOf(party: Doc<"parties">, sends: readonly Doc<"sends">[], v
       send.lastClickedAt,
       send.bouncedAt,
       send.complainedAt,
+      send.failedAt,
     ]),
   ].filter((at): at is number => at !== undefined);
   return moments.length > 0 ? Math.max(...moments) : undefined;
