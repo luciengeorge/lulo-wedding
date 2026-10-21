@@ -645,6 +645,8 @@ export const funnel = query({
     parties: v.number(),
     invited: v.object({ email: v.number(), whatsapp: v.number(), any: v.number() }),
     email: v.object({
+      /** Parties with any invitation or update email. Zero until the app sends them. */
+      sent: v.number(),
       delivered: v.number(),
       opened: v.number(),
       clicked: v.number(),
@@ -663,7 +665,7 @@ export const funnel = query({
     const counts = {
       parties: parties.length,
       invited: { email: 0, whatsapp: 0, any: 0 },
-      email: { delivered: 0, opened: 0, clicked: 0, bounced: 0, complained: 0 },
+      email: { sent: 0, delivered: 0, opened: 0, clicked: 0, bounced: 0, complained: 0 },
       visited: 0,
       replied: 0,
       byFirstChannel: {
@@ -683,6 +685,7 @@ export const funnel = query({
       if (invites.some((send) => send.channel === "whatsapp")) counts.invited.whatsapp++;
       if (invites.length > 0) counts.invited.any++;
 
+      if (emails.length > 0) counts.email.sent++;
       // An open or a click proves delivery even when the delivered event was lost.
       if (emails.some((send) => send.deliveredAt !== undefined || send.firstOpenedAt !== undefined)) {
         counts.email.delivered++;

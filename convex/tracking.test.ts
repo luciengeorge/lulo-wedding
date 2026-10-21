@@ -80,9 +80,12 @@ const guestsOf = (t: T, partyId: Id<"parties">) =>
       .collect(),
   );
 
+const APP_SERVER_SECRET = "app-server-secret-for-tests";
+
 beforeEach(() => {
   auth.admin = false;
   delete process.env.RSVP_DEADLINE;
+  process.env.APP_SERVER_SECRET = APP_SERVER_SECRET;
 });
 
 describe("handleEmailEvent", () => {
@@ -244,8 +247,8 @@ describe("recordVisit", () => {
 });
 
 describe("lookupByName", () => {
-  const lookup = (t: T, query: string, clientKey = "1.2.3.4") =>
-    t.mutation(api.rsvp.lookupByName, { query, clientKey });
+  const lookup = (t: T, query: string, clientKey = "1.2.3.4", serverSecret = APP_SERVER_SECRET) =>
+    t.mutation(api.rsvp.lookupByName, { query, clientKey, serverSecret });
 
   async function guestList(t: T) {
     await insertParty(t, {
@@ -310,6 +313,21 @@ describe("lookupByName", () => {
       });
     }
     expect(await lookup(t, "Sami Haddad")).toEqual({ kind: "tooMany" });
+  });
+
+  it("refuses a caller without the app server's secret, and hands out no link", async () => {
+    const t = setup();
+    await guestList(t);
+    await expect(lookup(t, "cherif haddad", "1.2.3.4", "")).rejects.toThrow(/Only the app server/);
+    await expect(lookup(t, "cherif haddad", "1.2.3.4", "guessed")).rejects.toThrow(/Only the app server/);
+  });
+
+  it("refuses everyone when the deployment has no secret set", async () => {
+    delete process.env.APP_SERVER_SECRET;
+    const t = setup();
+    await guestList(t);
+    await expect(lookup(t, "cherif haddad", "1.2.3.4", "")).rejects.toThrow(/APP_SERVER_SECRET is not set/);
+    await expect(lookup(t, "cherif haddad")).rejects.toThrow(/APP_SERVER_SECRET is not set/);
   });
 
   it("stops answering one client after twenty tries in a window", async () => {
@@ -579,7 +597,7 @@ describe("WhatsApp invites and the funnel", () => {
     expect(await t.query(api.admin.funnel, {})).toEqual({
       parties: 4,
       invited: { email: 2, whatsapp: 1, any: 3 },
-      email: { delivered: 1, opened: 1, clicked: 1, bounced: 1, complained: 0 },
+      email: { sent: 2, delivered: 1, opened: 1, clicked: 1, bounced: 1, complained: 0 },
       visited: 2,
       replied: 2,
       byFirstChannel: {
@@ -605,5 +623,18 @@ describe("WhatsApp invites and the funnel", () => {
       ["visit", 5],
     ]);
     expect(JSON.stringify(timeline)).not.toContain("token");
+  });
+
+  /** What /admin uses to say the email numbers are zero because nothing was emailed, not because nothing landed. */
+  it("counts no email sent while only receipts and WhatsApp invites exist", async () => {
+    const t = setup();
+    const party = await insertParty(t);
+    await insertSend(t, party, { kind: "receipt", status: "delivered", deliveredAt: 2 });
+    await t.mutation(api.admin.markInvitedOnWhatsApp, { partyIds: [party] });
+
+    expect((await t.query(api.admin.funnel, {})).email.sent).toBe(0);
+
+    await insertSend(t, party, { kind: "update" });
+    expect((await t.query(api.admin.funnel, {})).email.sent).toBe(1);
   });
 });

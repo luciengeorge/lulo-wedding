@@ -138,7 +138,8 @@ export default defineSchema({
   })
     .index("by_party", ["partyId", "sentAt"])
     .index("by_email_id", ["emailId"])
-    .index("by_channel", ["channel", "sentAt"]),
+    .index("by_channel", ["channel", "sentAt"])
+    .index("by_status", ["status", "sentAt"]),
 
   /** A party's link being opened. The receiving end of every channel, WhatsApp included. */
   visits: defineTable({

@@ -39,10 +39,13 @@ export const rateLimiter = new RateLimiter(components.rateLimiter, {
   // RSVP: name lookups per client IP. A match hands out a party's link, so this
   //   caps how fast anyone can guess names, on the same terms as the password gate.
   nameLookup: { kind: "fixed window", rate: 20, period: 15 * MINUTE },
-  // RSVP: name lookups across everyone. The mutation is public and `clientKey` is
-  //   only honest when it comes through our server, so a caller hitting Convex
-  //   directly could rotate keys. This caps the whole site regardless.
-  nameLookupGlobal: { kind: "fixed window", rate: 200, period: HOUR },
+  // RSVP: name lookups across everyone. A backstop, no longer the main guard: the
+  //   mutation now refuses any caller without APP_SERVER_SECRET, so `clientKey` is
+  //   always the IP our server saw and cannot be rotated per call. What is left is
+  //   someone with many real IPs, each held to the limit above. Raised from 200,
+  //   because at 200 one such person could lock every guest out of the search; at
+  //   1,000 the whole list searching on invitation day stays well under it.
+  nameLookupGlobal: { kind: "fixed window", rate: 1000, period: HOUR },
   // Generic: per-second hot-loop guard
   hotPath: { kind: "token bucket", rate: 1, period: SECOND, capacity: 5 },
 });

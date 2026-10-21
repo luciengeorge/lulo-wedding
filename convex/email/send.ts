@@ -68,28 +68,33 @@ export const sendEmail = internalAction({
     const from = process.env.RESEND_FROM_EMAIL;
     const capture = process.env.E2E_CAPTURE_EMAILS === "1";
 
-    const element = buildTemplate(template, props ?? {});
-    const html = await render(element);
-    const text = await render(element, { plainText: true });
-
-    // The seam the browser tests use. Capturing the email rather than bypassing
-    // the auth means the tests sign in through the real magic-link flow, and the
-    // worst case if this flag ever leaked into production is undelivered mail
-    // rather than a way to mint a session. Capturing deployments carry no Resend
-    // credentials and should not need any.
-    if (capture) {
-      await ctx.runMutation(internal.email.captured.record, { to, subject, template, html });
-      return { id: null };
-    }
-
     let emailId;
     try {
+      const element = buildTemplate(template, props ?? {});
+      const html = await render(element);
+
+      // The seam the browser tests use. Capturing the email rather than bypassing
+      // the auth means the tests sign in through the real magic-link flow, and the
+      // worst case if this flag ever leaked into production is undelivered mail
+      // rather than a way to mint a session. Capturing deployments carry no Resend
+      // credentials and should not need any.
+      if (capture) {
+        await ctx.runMutation(internal.email.captured.record, { to, subject, template, html });
+        // As far as the app can tell, a captured email went out. Without this the
+        // row would sit at "queued" on every deployment that captures.
+        if (sendId) await ctx.runMutation(internal.sends.markSent, { sendId });
+        return { id: null };
+      }
+
       if (!apiKey || !from) {
         throw new Error("RESEND_API_KEY and RESEND_FROM_EMAIL must be set");
       }
+      const text = await render(element, { plainText: true });
       emailId = await resend.sendEmail(ctx, { from, to, subject, html, text });
     } catch (error) {
       // Otherwise the row sits at "queued" forever and /admin reads it as in flight.
+      // Failures after this point, inside the Resend component, are caught by the
+      // `reconcileQueued` cron in convex/sends.ts.
       if (sendId) {
         await ctx.runMutation(internal.sends.markFailed, { sendId, error: String(error) });
       }

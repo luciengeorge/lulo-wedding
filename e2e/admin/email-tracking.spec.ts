@@ -190,5 +190,9 @@ test.describe("a reply receipt", () => {
     await page.keyboard.press("Escape");
     await expect(emailStat(page, "Opened")).toHaveText("Opened0 parties");
     await expect(emailStat(page, "Emailed")).toHaveText("Emailed0 parties");
+    // A receipt is not an invitation: nothing has been emailed in the funnel's terms.
+    await expect(
+      page.getByText("Email invites aren't sent from here yet, so the email numbers stay at zero."),
+    ).toBeVisible();
   });
 });

@@ -4,6 +4,7 @@ import { createServerFn } from "@tanstack/react-start";
 import z from "zod";
 
 import { api } from "@/../convex/_generated/api";
+import { getAppServerSecret } from "@/lib/app-server-secret.server";
 import { fetchAuthMutation, fetchAuthQuery } from "@/lib/auth-server";
 import { getClientKey } from "@/lib/client-key.server";
 import { useGuestSession } from "@/lib/guest-session.server";
@@ -26,6 +27,7 @@ export const enterGate = createServerFn({ method: "POST" })
       const result = await fetchAuthMutation(api.guests.verifyGuestPassword, {
         password: data.password,
         clientKey: getClientKey(),
+        serverSecret: getAppServerSecret(),
       });
 
       if (result.ok) {

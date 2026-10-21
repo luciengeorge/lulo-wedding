@@ -1,6 +1,58 @@
-import { describe, expect, it } from "vitest";
+// @vitest-environment edge-runtime
+/// <reference types="vite/client" />
+import rateLimiterTest from "@convex-dev/rate-limiter/test";
+import { convexTest } from "convex-test";
+import { afterEach, beforeEach, describe, expect, it } from "vitest";
 
-import { constantTimeEqual } from "./guests";
+import { api } from "./_generated/api";
+import { constantTimeEqual } from "./lib/secrets";
+import schema from "./schema";
+
+const modules = import.meta.glob("./**/*.ts");
+const SECRET = "app-server-secret-for-tests";
+
+function setup() {
+  const t = convexTest(schema, modules);
+  rateLimiterTest.register(t);
+  return t;
+}
+
+describe("verifyGuestPassword", () => {
+  const verify = (
+    t: ReturnType<typeof setup>,
+    serverSecret: string,
+    password = "laura&lucien2027",
+    clientKey = "1.2.3.4",
+  ) => t.mutation(api.guests.verifyGuestPassword, { password, clientKey, serverSecret });
+
+  beforeEach(() => {
+    process.env.GUEST_PASSWORD = "laura&lucien2027";
+    process.env.APP_SERVER_SECRET = SECRET;
+  });
+  afterEach(() => {
+    delete process.env.GUEST_PASSWORD;
+    delete process.env.APP_SERVER_SECRET;
+  });
+
+  it("checks the password for the app server", async () => {
+    const t = setup();
+    expect(await verify(t, SECRET)).toEqual({ ok: true });
+    expect(await verify(t, SECRET, "wrong")).toEqual({ ok: false, reason: "wrong" });
+  });
+
+  it("refuses a caller without the app server's secret, even with the right password", async () => {
+    const t = setup();
+    await expect(verify(t, "")).rejects.toThrow(/Only the app server/);
+    await expect(verify(t, "guessed")).rejects.toThrow(/Only the app server/);
+  });
+
+  it("refuses everyone when the deployment has no secret set", async () => {
+    delete process.env.APP_SERVER_SECRET;
+    const t = setup();
+    await expect(verify(t, "")).rejects.toThrow(/APP_SERVER_SECRET is not set/);
+    await expect(verify(t, SECRET)).rejects.toThrow(/APP_SERVER_SECRET is not set/);
+  });
+});
 
 describe("constantTimeEqual", () => {
   it("matches identical strings", () => {

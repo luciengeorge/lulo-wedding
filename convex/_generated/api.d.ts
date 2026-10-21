@@ -35,6 +35,7 @@ import type * as guests from "../guests.js";
 import type * as http from "../http.js";
 import type * as lib_adminAuth from "../lib/adminAuth.js";
 import type * as lib_plans from "../lib/plans.js";
+import type * as lib_secrets from "../lib/secrets.js";
 import type * as lib_webhook from "../lib/webhook.js";
 import type * as parties from "../parties.js";
 import type * as rag from "../rag.js";
@@ -84,6 +85,7 @@ declare const fullApi: ApiFromModules<{
   http: typeof http;
   "lib/adminAuth": typeof lib_adminAuth;
   "lib/plans": typeof lib_plans;
+  "lib/secrets": typeof lib_secrets;
   "lib/webhook": typeof lib_webhook;
   parties: typeof parties;
   rag: typeof rag;

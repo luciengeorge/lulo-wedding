@@ -44,10 +44,27 @@ const configPath = join(mirror, ".convex/local/default/config.json");
 const RUN_STAMP = join(repoRoot, ".e2e/run.json");
 const WEBHOOK_SECRET_FILE = join(repoRoot, ".e2e/webhook-secret");
 
+const APP_SERVER_SECRET_FILE = join(repoRoot, ".e2e/app-server-secret");
+
 function writeWebhookSecret(secret) {
   mkdirSync(dirname(WEBHOOK_SECRET_FILE), { recursive: true });
   writeFileSync(WEBHOOK_SECRET_FILE, secret);
 }
+
+/**
+ * APP_SERVER_SECRET for the throwaway backend and the app under test. Random, but
+ * kept across runs rather than fresh each time: `pnpm e2e:dev` may reuse a dev
+ * server started by an earlier run, whose env still holds the old value, and
+ * every guest-gate and name-lookup call would then be refused.
+ */
+function appServerSecret() {
+  if (existsSync(APP_SERVER_SECRET_FILE)) return readFileSync(APP_SERVER_SECRET_FILE, "utf8").trim();
+  const secret = randomBytes(32).toString("hex");
+  mkdirSync(dirname(APP_SERVER_SECRET_FILE), { recursive: true });
+  writeFileSync(APP_SERVER_SECRET_FILE, secret);
+  return secret;
+}
+const APP_SERVER_SECRET = appServerSecret();
 const DEV_MODE = process.env.E2E_DEV === "1";
 /** The local deployment always takes 3210 for its cloud port and 3211 for its site port. */
 const CLOUD_PORT = 3210;
@@ -172,6 +189,9 @@ const DEPLOYMENT_ENV = {
   // secret-shaped lives in the repo. e2e/fixtures.ts reads it from WEBHOOK_SECRET_FILE
   // to sign the events it posts to /resend-webhook.
   RESEND_WEBHOOK_SECRET: `whsec_${randomBytes(24).toString("base64")}`,
+  // Proves a call to the guest gate or the name lookup came from the app server.
+  // The same value goes into APP_ENV below.
+  APP_SERVER_SECRET,
 };
 writeWebhookSecret(DEPLOYMENT_ENV.RESEND_WEBHOOK_SECRET);
 
@@ -209,6 +229,8 @@ const APP_ENV = {
   // relaxes the CSP at build time and the Secure cookie flag at run time. See
   // nitro.config.ts and src/lib/guest-session.server.ts.
   E2E_PLAIN_HTTP: "1",
+  // Read by the app server at run time, never at build time: see buildApp.
+  APP_SERVER_SECRET,
 };
 
 function appEnv(url) {
@@ -283,11 +305,16 @@ function stampRun() {
  */
 function buildApp(url) {
   const inherited = Object.fromEntries(
-    Object.entries(process.env).filter(([key]) => !key.startsWith("VITE_") && !key.startsWith("SENTRY_")),
+    Object.entries(process.env).filter(
+      ([key]) => !key.startsWith("VITE_") && !key.startsWith("SENTRY_") && key !== "APP_SERVER_SECRET",
+    ),
   );
+  // Left out of the build so the run proves the server reads it at run time, as
+  // it must on Vercel, rather than passing on a value a bundler happened to inline.
+  const { APP_SERVER_SECRET: _runtimeOnly, ...buildEnv } = appEnv(url);
   rmSync(join(mirror, ".output"), { recursive: true, force: true });
   console.log("[e2e] building the app from the snapshot");
-  run("npx", ["vite", "build"], { cwd: mirror, env: { ...inherited, ...appEnv(url) } });
+  run("npx", ["vite", "build"], { cwd: mirror, env: { ...inherited, ...buildEnv } });
 }
 
 /** Everything a run needs before the long-running backend starts. */

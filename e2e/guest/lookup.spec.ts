@@ -1,4 +1,4 @@
-import type { Page } from "@playwright/test";
+import type { APIRequestContext, Page } from "@playwright/test";
 
 import { backend, expect, GUEST_STATE, party, test, visit } from "../fixtures";
 
@@ -158,5 +158,33 @@ test.describe("a guest finding their invitation by name", () => {
     await visit(page, "/rsvp");
     await expect(page).toHaveURL("/rsvp/e2e-haddad?via=remembered");
     await expect(page.getByText("Rae & Cherif")).toBeVisible();
+  });
+});
+
+/**
+ * The search hands out links, and a link unlocks the gate, so only our own server
+ * may ask: the deployment URL is in every page's bundle, and a direct caller would
+ * skip the gate and choose its own rate-limit key.
+ */
+test.describe("a name lookup sent straight to the backend", () => {
+  const CONVEX_URL = "http://127.0.0.1:3210";
+
+  async function lookupDirect(request: APIRequestContext, args: Record<string, unknown>) {
+    const response = await request.post(`${CONVEX_URL}/api/mutation`, {
+      data: { path: "rsvp:lookupByName", args, format: "json" },
+    });
+    return { text: await response.text(), body: (await response.json()) as { status: string } };
+  }
+
+  test("is refused without the app server's secret, and hands out no link", async ({ request }) => {
+    for (const args of [
+      { query: "Rae Haddad", clientKey: "203.0.113.7" },
+      { query: "Rae Haddad", clientKey: "203.0.113.7", serverSecret: "" },
+      { query: "Rae Haddad", clientKey: "203.0.113.7", serverSecret: "a-guess" },
+    ]) {
+      const { text, body } = await lookupDirect(request, args);
+      expect(body.status).toBe("error");
+      expect(text).not.toContain("e2e-haddad");
+    }
   });
 });

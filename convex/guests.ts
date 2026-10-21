@@ -1,6 +1,7 @@
 import { v } from "convex/values";
 
 import { mutation } from "./_generated/server";
+import { constantTimeEqual, requireAppServer } from "./lib/secrets";
 import { rateLimiter } from "./rateLimiter";
 
 export type VerifyGuestPasswordResult =
@@ -8,36 +9,15 @@ export type VerifyGuestPasswordResult =
   | { ok: false; reason: "wrong" | "rate_limited"; retryAfterMs?: number };
 
 /**
- * Constant-time string comparison.
- *
- * Convex functions run on V8, not Node, so `node:crypto`'s `timingSafeEqual` is
- * unavailable here — hence the hand-rolled version. Every call walks the full
- * `max(a.length, b.length)` range with no early return, so neither a mismatched
- * character nor a mismatched length shortens the loop and leaks the prefix.
- */
-export function constantTimeEqual(a: string, b: string): boolean {
-  const length = Math.max(a.length, b.length);
-
-  // Seed with the length difference so unequal lengths can never accumulate to 0,
-  // without branching out of the loop early.
-  let diff = a.length ^ b.length;
-  for (let i = 0; i < length; i++) {
-    // Out-of-range reads are NaN; `| 0` normalises them to 0 so the XOR stays numeric.
-    diff |= (a.charCodeAt(i) | 0) ^ (b.charCodeAt(i) | 0);
-  }
-
-  return diff === 0;
-}
-
-/**
  * Verifies the single shared guest password for the wedding site.
  *
  * There are no guest accounts — one password unlocks the whole guest-facing site.
  * `clientKey` is derived server-side from the request IP by the caller; it is never
- * supplied by the browser.
+ * supplied by the browser. `serverSecret` proves the caller is that app server,
+ * so a direct call cannot pick its own key and dodge the per-IP limit.
  */
 export const verifyGuestPassword = mutation({
-  args: { password: v.string(), clientKey: v.string() },
+  args: { password: v.string(), clientKey: v.string(), serverSecret: v.string() },
   returns: v.union(
     v.object({ ok: v.literal(true) }),
     v.object({
@@ -46,8 +26,10 @@ export const verifyGuestPassword = mutation({
       retryAfterMs: v.optional(v.number()),
     }),
   ),
-  handler: async (ctx, { password, clientKey }): Promise<VerifyGuestPasswordResult> => {
-    // Rate limit before touching the secret, and without `throws: true` — the UI needs
+  handler: async (ctx, { password, clientKey, serverSecret }): Promise<VerifyGuestPasswordResult> => {
+    requireAppServer(serverSecret);
+
+    // Rate limit before touching the password, and without `throws: true` — the UI needs
     // a structured result so it can tell "wrong password" from "slow down".
     const limit = await rateLimiter.limit(ctx, "guestGate", { key: clientKey });
     if (!limit.ok) {

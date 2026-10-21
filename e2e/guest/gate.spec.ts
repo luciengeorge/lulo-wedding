@@ -79,3 +79,24 @@ test.describe("the guest gate", () => {
     await expect(page).toHaveURL("/");
   });
 });
+
+/**
+ * The gate's rate limit is keyed by the caller's IP, which only our server can
+ * vouch for. A direct caller choosing a fresh key per guess would never meet it.
+ */
+test.describe("a password guess sent straight to the backend", () => {
+  test("is refused without the app server's secret, even with the right password", async ({ request }) => {
+    for (const serverSecret of [undefined, "", "a-guess"]) {
+      const response = await request.post("http://127.0.0.1:3210/api/mutation", {
+        data: {
+          path: "guests:verifyGuestPassword",
+          args: { password: GUEST_PASSWORD, clientKey: "203.0.113.7", serverSecret },
+          format: "json",
+        },
+      });
+      const body = (await response.json()) as { status: string; value?: unknown };
+      expect(body.status).toBe("error");
+      expect(body.value).toBeUndefined();
+    }
+  });
+});

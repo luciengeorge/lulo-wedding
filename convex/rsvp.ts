@@ -19,6 +19,7 @@ import {
 import { internal } from "./_generated/api";
 import { internalMutation, mutation, query } from "./_generated/server";
 import { isAdmin } from "./lib/adminAuth";
+import { requireAppServer } from "./lib/secrets";
 import { rateLimiter } from "./rateLimiter";
 
 /**
@@ -520,14 +521,17 @@ const MAX_LOOKUP_MATCHES = 5;
  *
  * A mutation rather than a query so it can spend from the rate limiter, which is
  * keyed by the caller's IP the same way the password gate is: `clientKey` is
- * derived on the app server, never sent by the browser. Returns the link and the
- * name on the invitation and nothing else, since the link already opens the rest.
+ * derived on the app server, never sent by the browser, and `serverSecret` is
+ * what proves the call came from there. Without it anyone could call this
+ * straight from the deployment URL, skip the guest gate, and take a party's link,
+ * which itself unlocks the gate. Returns the link and the name on the invitation
+ * and nothing else, since the link already opens the rest.
  *
  * Two full scans, the same as `admin.listParties`: one wedding's guest list,
  * sized by the venue.
  */
 export const lookupByName = mutation({
-  args: { query: v.string(), clientKey: v.string() },
+  args: { query: v.string(), clientKey: v.string(), serverSecret: v.string() },
   returns: v.union(
     v.object({
       kind: v.literal("matches"),
@@ -536,7 +540,9 @@ export const lookupByName = mutation({
     v.object({ kind: v.literal("tooMany") }),
     v.object({ kind: v.literal("rateLimited"), retryAfterMs: v.number() }),
   ),
-  handler: async (ctx, { query: typed, clientKey }) => {
+  handler: async (ctx, { query: typed, clientKey, serverSecret }) => {
+    requireAppServer(serverSecret);
+
     const limit = await rateLimiter.limit(ctx, "nameLookup", { key: clientKey });
     if (!limit.ok) return { kind: "rateLimited" as const, retryAfterMs: Math.ceil(limit.retryAfter ?? 0) };
 

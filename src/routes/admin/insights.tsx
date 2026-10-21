@@ -7,7 +7,7 @@ import type { Funnel } from "@/components/admin/funnel-strip";
 
 import { api } from "@/../convex/_generated/api";
 import { EngagementTable } from "@/components/admin/engagement-table";
-import { percentOf } from "@/components/admin/funnel-strip";
+import { NO_EMAIL_INVITES_NOTE, percentOf } from "@/components/admin/funnel-strip";
 import { PartyTimelineSheet } from "@/components/admin/party-timeline";
 import { Skeleton } from "@/components/ui/skeleton";
 import { seo } from "@/lib/seo";
@@ -47,6 +47,7 @@ function InsightsPage() {
           <ChannelTable funnel={funnel} />
         )}
         <EmailStats funnel={funnel} />
+        {funnel?.email.sent === 0 ? <p className="text-[12.5px] text-[#71717A]">{NO_EMAIL_INVITES_NOTE}</p> : null}
       </section>
 
       <section aria-labelledby="engagement-title" className="flex flex-col gap-3">

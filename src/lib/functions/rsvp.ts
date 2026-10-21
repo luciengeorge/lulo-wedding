@@ -5,6 +5,7 @@ import { createServerFn } from "@tanstack/react-start";
 import z from "zod";
 
 import { api } from "@/../convex/_generated/api";
+import { getAppServerSecret } from "@/lib/app-server-secret.server";
 import { fetchAuthMutation, fetchAuthQuery } from "@/lib/auth-server";
 import { getClientKey } from "@/lib/client-key.server";
 import { useGuestSession } from "@/lib/guest-session.server";
@@ -23,8 +24,11 @@ const logger = createLogger("rsvp.visit");
  * first HTML response instead of arriving a round trip later, which is worth
  * having on a phone on mobile data.
  *
- * Nothing here is an authorisation boundary. `convex/rsvp.ts` authorises on the
- * token, the same as it would for a call straight from a browser.
+ * Apart from the name lookup, nothing here is an authorisation boundary.
+ * `convex/rsvp.ts` authorises on the token, the same as it would for a call
+ * straight from a browser. The lookup has no token to go on, so Convex only
+ * answers it for this server (APP_SERVER_SECRET), and this server only asks for a
+ * session past the guest gate.
  */
 
 /** Long enough for the 22-character tokens, short enough that a junk value is cheap to reject. */
@@ -138,6 +142,10 @@ export const lookupParty = createServerFn({ method: "POST" })
       const session = await useGuestSession();
       if (session.data.unlocked !== true) throw new Error("The guest gate is locked");
 
-      return await fetchAuthMutation(api.rsvp.lookupByName, { query: data.query, clientKey: getClientKey() });
+      return await fetchAuthMutation(api.rsvp.lookupByName, {
+        query: data.query,
+        clientKey: getClientKey(),
+        serverSecret: getAppServerSecret(),
+      });
     });
   });
