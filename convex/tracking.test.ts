@@ -638,3 +638,50 @@ describe("WhatsApp invites and the funnel", () => {
     expect((await t.query(api.admin.funnel, {})).email.sent).toBe(1);
   });
 });
+
+describe("the pipeline board's query", () => {
+  it("returns each party's first invite, first visit, reply and latest email", async () => {
+    const t = setup();
+    const emailed = await insertParty(t, { token: "e", importKey: "e", headCount: 2, respondedAt: 40 });
+    const early = await insertParty(t, { token: "x", importKey: "x", earlyDecline: true });
+    const quiet = await insertParty(t, { token: "q", importKey: "q", invitedToWedding: false });
+
+    await insertSend(t, emailed, { sentAt: 10, status: "delivered", deliveredAt: 11, openCount: 1, lastOpenedAt: 12 });
+    await insertSend(t, emailed, { kind: "receipt", sentAt: 41, status: "bounced", bouncedAt: 42 });
+    await insertSend(t, emailed, { channel: "whatsapp", sentAt: 5, status: "sent" });
+    await t.run(async (ctx) => {
+      await ctx.db.insert("visits", { partyId: emailed, at: 20, source: "email" });
+      await ctx.db.insert("visits", { partyId: emailed, at: 30, source: "link" });
+      await ctx.db.insert("guests", {
+        partyId: emailed,
+        firstName: "Rae",
+        lastName: "Haddad",
+        isPlusOne: false,
+        preWedding: "pending",
+        wedding: "yes",
+        brunch: "pending",
+      });
+    });
+
+    const rows = await t.query(api.admin.pipeline, {});
+    expect(rows.find((row) => row.partyId === emailed)).toMatchObject({
+      invitedVia: "both",
+      firstInvitedAt: 5,
+      firstVisitAt: 20,
+      lastActivityAt: 42,
+      // One of two named seats has answered.
+      reply: "partly",
+      // The latest email of any kind bounced, so the address needs a look.
+      emailTrouble: "bounced",
+      // The card's progress is the invitation's, not the receipt's.
+      latestEmail: { kind: "invite", status: "delivered", delivered: true, opened: true, clicked: false },
+    });
+    expect(rows.find((row) => row.partyId === early)).toMatchObject({ reply: "declined" });
+    expect(rows.find((row) => row.partyId === early)).not.toHaveProperty("firstInvitedAt");
+    expect(rows.find((row) => row.partyId === quiet)).toMatchObject({
+      invitedTo: { preWedding: false, wedding: false, brunch: false },
+    });
+    expect(rows.find((row) => row.partyId === quiet)).not.toHaveProperty("reply");
+    expect(JSON.stringify(rows)).not.toContain("token");
+  });
+});
