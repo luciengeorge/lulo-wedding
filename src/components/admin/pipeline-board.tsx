@@ -14,6 +14,8 @@ import {
   useSensor,
   useSensors,
 } from "@dnd-kit/core";
+import { ArrowDown01Icon } from "@hugeicons/core-free-icons";
+import { HugeiconsIcon } from "@hugeicons/react";
 import { useRef, useState } from "react";
 
 import type { AttentionFlag, ReplyOutcome, Stage } from "@/lib/pipeline";
@@ -24,6 +26,7 @@ import { countStages, REPLY_LABEL, REPLY_OUTCOMES, STAGE_LABEL, STAGES, stageCon
 import { cn } from "@/lib/utils";
 
 import { type BoardParty, partyName, PipelineCard } from "./pipeline-card";
+import { useFolded } from "./use-folded";
 
 export type Lane = Stage | "attention";
 
@@ -413,7 +416,9 @@ function LaneColumn({
           )}
         </p>
       </header>
-      <div className="flex flex-col gap-3 px-2 pb-2 md:min-h-0 md:flex-1 md:overflow-y-auto">{children}</div>
+      <div className="flex flex-col gap-3 px-2 pb-2 md:min-h-0 md:flex-1 md:overflow-y-auto md:overscroll-contain">
+        {children}
+      </div>
     </section>
   );
 }
@@ -425,12 +430,19 @@ function RepliedGroups({
   parties: readonly BoardParty[];
   render: (cards: BoardParty[]) => ReactNode;
 }) {
+  const folds = useFolded("admin.pipeline.repliedFolded");
   return (
     <>
       {REPLY_OUTCOMES.map((outcome) => {
         const cards = parties.filter((party) => party.reply === outcome);
         return (
-          <ReplyGroup key={outcome} outcome={outcome} count={cards.length}>
+          <ReplyGroup
+            key={outcome}
+            outcome={outcome}
+            count={cards.length}
+            open={folds.isOpen(outcome)}
+            onToggle={() => folds.toggle(outcome)}
+          >
             {render(cards)}
           </ReplyGroup>
         );
@@ -445,18 +457,51 @@ const OUTCOME_DOT: Record<ReplyOutcome, string> = {
   declined: "border border-muted-foreground bg-transparent",
 };
 
-function ReplyGroup({ outcome, count, children }: { outcome: ReplyOutcome; count: number; children: ReactNode }) {
+function ReplyGroup({
+  outcome,
+  count,
+  open,
+  onToggle,
+  children,
+}: {
+  outcome: ReplyOutcome;
+  count: number;
+  open: boolean;
+  onToggle: () => void;
+  children: ReactNode;
+}) {
   const titleId = `reply-${outcome}`;
+  const bodyId = `reply-${outcome}-cards`;
   return (
     <section aria-labelledby={titleId} className="flex flex-col gap-1.5">
-      <div className="flex items-center gap-1.5 px-1 text-[11.5px] text-muted-foreground">
-        <span aria-hidden className={cn("size-1.5 rounded-full", OUTCOME_DOT[outcome])} />
-        <h3 id={titleId} className="font-medium text-foreground/80">
-          {REPLY_LABEL[outcome]}
-        </h3>
-        <span style={{ fontVariantNumeric: "tabular-nums" }}>{count}</span>
+      <h3>
+        <button
+          type="button"
+          aria-expanded={open}
+          aria-controls={bodyId}
+          onClick={onToggle}
+          className="flex h-6 w-full items-center gap-1.5 rounded-md px-1 text-left text-[11.5px] text-muted-foreground outline-none hover:bg-background/70 hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring/40"
+        >
+          <span aria-hidden className={cn("size-1.5 shrink-0 rounded-full", OUTCOME_DOT[outcome])} />
+          <span id={titleId} className="font-medium text-foreground/80">
+            {REPLY_LABEL[outcome]}
+          </span>{" "}
+          <span style={{ fontVariantNumeric: "tabular-nums" }}>{count}</span>
+          <HugeiconsIcon
+            icon={ArrowDown01Icon}
+            size={14}
+            strokeWidth={1.75}
+            aria-hidden
+            className={cn(
+              "ml-auto shrink-0 text-muted-foreground/70 transition-transform duration-150 motion-reduce:transition-none",
+              !open && "-rotate-90",
+            )}
+          />
+        </button>
+      </h3>
+      <div id={bodyId} hidden={!open} className="flex flex-col gap-1.5">
+        {open ? children : null}
       </div>
-      {children}
     </section>
   );
 }
