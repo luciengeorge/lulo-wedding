@@ -177,10 +177,17 @@ describe("buildDashboard groups and timing", () => {
         }),
         // Replied before firstRespondedAt was recorded: the earliest answer stands in.
         entry({ party: party({ respondedAt: T0 + 30 * DAY }), guests: yes, sends: [invite(T0)] }),
+        // Said yes on day 2 then declined on day 30, which restamps every answer:
+        // the day-2 receipt still dates the first reply.
+        entry({
+          party: party({ respondedAt: T0 + 30 * DAY, declined: true }),
+          guests: [guest({ wedding: "no", weddingAt: T0 + 30 * DAY })],
+          sends: [invite(T0), { ...invite(T0 + 2 * DAY + 1), kind: "receipt" as const }],
+        }),
       ],
       [],
     );
-    expect(dashboard.timeToReply.bins.filter((bin) => bin.parties > 0)).toEqual([{ label: "2", parties: 2 }]);
+    expect(dashboard.timeToReply.bins.filter((bin) => bin.parties > 0)).toEqual([{ label: "2", parties: 3 }]);
     expect(dashboard.repliesOverTime.days[0]?.day).toBe(new Date(T0 + 2 * DAY).toISOString().slice(0, 10));
   });
 

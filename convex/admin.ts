@@ -124,6 +124,7 @@ const partyRow = v.object({
   contactEmail: v.optional(v.string()),
   contactPhone: v.optional(v.string()),
   respondedAt: v.optional(v.number()),
+  firstRespondedAt: v.optional(v.number()),
   declined: v.optional(v.boolean()),
   guestNote: v.optional(v.string()),
   rsvp: rsvpSummary,
@@ -1186,7 +1187,12 @@ export const cancelCampaign = mutation({
     for (const row of rows) {
       if (row.status !== "queued" || row.scheduledId === undefined) continue;
       await ctx.scheduler.cancel(row.scheduledId);
-      await ctx.db.patch(row._id, { status: "cancelled", cancelKind: "stopped", scheduledId: undefined, error: STOPPED });
+      await ctx.db.patch(row._id, {
+        status: "cancelled",
+        cancelKind: "stopped",
+        scheduledId: undefined,
+        error: STOPPED,
+      });
       stopped++;
     }
 
@@ -1209,9 +1215,7 @@ const campaignSummary = v.object({
   /** Cancelled because the couple pressed Stop. */
   stopped: v.number(),
   /** Cancelled at their turn because the party no longer qualified, with who and why. */
-  skipped: v.array(
-    v.object({ displayName: v.string(), surname: v.string(), reason: v.optional(skipReason) }),
-  ),
+  skipped: v.array(v.object({ displayName: v.string(), surname: v.string(), reason: v.optional(skipReason) })),
   /** Not handed over yet: waiting their turn, or going out right now. */
   remaining: v.number(),
 });

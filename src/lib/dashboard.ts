@@ -50,13 +50,19 @@ export type DashboardGuest = RsvpGuest & {
 /**
  * When the party first replied. `respondedAt` moves on every edit, so it is the
  * last resort. Replies from before `firstRespondedAt` existed fall back to the
- * earliest per-event answer, which only moves when that answer changes.
+ * earliest receipt, which every submit sends, or the earliest per-event answer,
+ * which only moves when that answer changes.
  */
-function firstReplyAt(party: DashboardParty, guests: readonly DashboardGuest[]): number | undefined {
+function firstReplyAt(
+  party: DashboardParty,
+  guests: readonly DashboardGuest[],
+  sends: readonly DashboardSend[],
+): number | undefined {
   if (party.firstRespondedAt !== undefined) return party.firstRespondedAt;
   if (party.respondedAt === undefined) return undefined;
   const answered = guests.flatMap((guest) => [guest.preWeddingAt, guest.weddingAt, guest.brunchAt]);
-  return Math.min(party.respondedAt, ...answered.filter((at): at is number => at !== undefined));
+  const receipts = sends.filter((send) => send.kind === "receipt").map((send) => send.sentAt);
+  return Math.min(party.respondedAt, ...receipts, ...answered.filter((at): at is number => at !== undefined));
 }
 
 export type DashboardSend = {
@@ -285,7 +291,7 @@ export function buildDashboard(entries: readonly DashboardEntry[], campaigns: re
       if (coming && note) dietary.push({ name: `${guest.firstName} ${guest.lastName}`.trim(), note });
     }
 
-    const repliedAt = firstReplyAt(party, guests);
+    const repliedAt = firstReplyAt(party, guests, sends);
     if (repliedAt !== undefined && (rsvp.state === "attending" || declined)) {
       const day = dayKey(repliedAt);
       const counts = replyDays.get(day) ?? { coming: 0, declined: 0 };

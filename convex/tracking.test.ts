@@ -207,6 +207,15 @@ describe("submit", () => {
     expect(edited?.firstRespondedAt).toBe(1_000);
     expect(edited?.respondedAt).toBeGreaterThan(1_000);
   });
+
+  it("keeps the admin guest list loading once a party has replied", async () => {
+    const t = setup();
+    await insertParty(t);
+    await t.mutation(api.rsvp.submit, reply(false));
+
+    const { rows } = await t.query(api.admin.listParties, {});
+    expect(rows[0]).toMatchObject({ firstRespondedAt: expect.any(Number) });
+  });
 });
 
 describe("recordVisit", () => {
