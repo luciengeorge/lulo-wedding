@@ -197,7 +197,7 @@ test.describe("emailing invitations", () => {
   });
 
   test("a reply landing mid-run skips that party, and says so apart from Stop", async ({ page }) => {
-    const parties = Array.from({ length: 8 }, (_, index) =>
+    const parties = Array.from({ length: RUN }, (_, index) =>
       party({
         token: `e2e-mid-${index}`,
         displayName: `Guest${index}`,
@@ -208,26 +208,27 @@ test.describe("emailing invitations", () => {
     await backend.seed(parties);
 
     await openAdmin(page);
-    await page.getByRole("checkbox", { name: "Select all 8 matching parties" }).click();
+    await page.getByRole("checkbox", { name: `Select all ${RUN} matching parties` }).click();
     const dialog = await openComposer(page);
-    await dialog.getByRole("button", { name: "Send to 8 parties" }).click();
-    await dialog.getByRole("button", { name: "Yes, send to 8 parties" }).click();
+    await dialog.getByRole("button", { name: `Send to ${RUN} parties` }).click();
+    await dialog.getByRole("button", { name: `Yes, send to ${RUN} parties` }).click();
     const progress = dialog.getByRole("region", { name: "Progress" });
     await expect(progress.getByRole("heading", { name: "Sending the invitation" })).toBeVisible();
-    // Once the run has started, the last in line replies (by WhatsApp, say) before its turn about four seconds in.
-    await backend.markReplied("e2e-mid-7");
+    // Once the run has started, the last in line replies (by WhatsApp, say). Its turn
+    // comes about 12 s in, the same margin the Stop test needs on a slow runner.
+    await backend.markReplied(`e2e-mid-${RUN - 1}`);
 
-    await expect(progress.getByRole("heading", { name: "Finished" })).toBeVisible({ timeout: 20_000 });
-    await expect(progress).toContainText("7 sent · 1 skipped at send time");
+    await expect(progress.getByRole("heading", { name: "Finished" })).toBeVisible({ timeout: 40_000 });
+    await expect(progress).toContainText(`${RUN - 1} sent · 1 skipped at send time`);
     await progress.locator("summary", { hasText: "1 skipped at send time" }).click();
-    await expect(progress.getByText("Guest7 Mid: Already replied")).toBeVisible();
-    expect(await backend.emailCount("mid7@example.com")).toBe(0);
-    expect((await backend.activity("e2e-mid-7")).sends[0].status).toBe("cancelled");
+    await expect(progress.getByText(`Guest${RUN - 1} Mid: Already replied`)).toBeVisible();
+    expect(await backend.emailCount(`mid${RUN - 1}@example.com`)).toBe(0);
+    expect((await backend.activity(`e2e-mid-${RUN - 1}`)).sends[0].status).toBe("cancelled");
 
     await page.keyboard.press("Escape");
     const recent = page.getByRole("region", { name: "Recent sends" });
-    await expect(recent).toContainText("7 sent · 1 skipped at send time");
-    await expect(recent.getByTitle("Guest7 Mid: Already replied")).toBeVisible();
+    await expect(recent).toContainText(`${RUN - 1} sent · 1 skipped at send time`);
+    await expect(recent.getByTitle(`Guest${RUN - 1} Mid: Already replied`)).toBeVisible();
   });
 });
 
