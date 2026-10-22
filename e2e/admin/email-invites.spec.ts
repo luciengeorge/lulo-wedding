@@ -32,6 +32,8 @@ const REMINDER_SUBJECT = "A gentle reminder from Laura & Lucien";
  * inherit this file's signed-in admin, whose visits are never counted.
  */
 const MAIL_APP = { storageState: { cookies: [], origins: [] } };
+/** Long enough a run (about 12 seconds at 600 ms each) that Stop lands mid-run on a slow machine. */
+const RUN = 20;
 
 async function select(page: Page, name: string) {
   await page.getByRole("checkbox", { name: `Select ${name}` }).click();
@@ -157,7 +159,7 @@ test.describe("emailing invitations", () => {
   });
 
   test("Stop sending cancels whatever has not gone yet", async ({ page }) => {
-    const parties = Array.from({ length: 10 }, (_, index) =>
+    const parties = Array.from({ length: RUN }, (_, index) =>
       party({
         token: `e2e-run-${index}`,
         displayName: `Guest${index}`,
@@ -168,29 +170,29 @@ test.describe("emailing invitations", () => {
     await backend.seed(parties);
 
     await openAdmin(page);
-    await page.getByRole("checkbox", { name: "Select all 10 matching parties" }).click();
+    await page.getByRole("checkbox", { name: `Select all ${RUN} matching parties` }).click();
     const dialog = await openComposer(page);
-    await dialog.getByRole("button", { name: "Send to 10 parties" }).click();
-    await dialog.getByRole("button", { name: "Yes, send to 10 parties" }).click();
+    await dialog.getByRole("button", { name: `Send to ${RUN} parties` }).click();
+    await dialog.getByRole("button", { name: `Yes, send to ${RUN} parties` }).click();
     await dialog.getByRole("button", { name: "Stop sending" }).click();
 
     const progress = dialog.getByRole("region", { name: "Progress" });
     await expect(progress.getByText("Stopped", { exact: true })).toBeVisible();
 
     // Long enough for every send of the run to have gone out had it not been stopped.
-    await page.waitForTimeout(7_000);
+    await page.waitForTimeout(RUN * 600 + 1_500);
     const statuses = await Promise.all(
       parties.map(async (seeded) => (await backend.activity(seeded.token)).sends.map((send) => send.status)),
     );
     const flat = statuses.flat();
-    expect(flat).toHaveLength(10);
+    expect(flat).toHaveLength(RUN);
     const cancelled = flat.filter((status) => status === "cancelled").length;
     expect(cancelled).toBeGreaterThan(0);
-    expect(flat.filter((status) => status === "sent")).toHaveLength(10 - cancelled);
+    expect(flat.filter((status) => status === "sent")).toHaveLength(RUN - cancelled);
 
     const captured = await Promise.all(parties.map((seeded) => backend.emailCount(seeded.contactEmail ?? "")));
-    expect(captured.reduce((sum, count) => sum + count, 0)).toBe(10 - cancelled);
-    await expect(progress).toContainText(`Stopped: ${10 - cancelled} sent, ${cancelled} not sent`);
+    expect(captured.reduce((sum, count) => sum + count, 0)).toBe(RUN - cancelled);
+    await expect(progress).toContainText(`Stopped: ${RUN - cancelled} sent, ${cancelled} not sent`);
   });
 });
 
