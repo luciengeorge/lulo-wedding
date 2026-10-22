@@ -55,12 +55,32 @@ function duration(count: number) {
   return `about ${Math.round(seconds / 60)} minutes`;
 }
 
-/** One line of progress, the same in the composer and the recent sends panel. */
+/**
+ * One line of progress, the same in the composer and the recent sends panel.
+ * "Skipped" is the send-time check leaving a party out; "not sent" is Stop.
+ */
 export function progressText(campaign: CampaignSummary): string {
-  const failed = campaign.failed > 0 ? `, ${campaign.failed} failed` : "";
-  if (campaign.status === "cancelled") return `Stopped: ${campaign.sent} sent${failed}, ${campaign.cancelled} not sent`;
-  if (campaign.status === "done") return `${campaign.sent} sent${failed}`;
-  return `${campaign.sent} of ${campaign.total} sent${failed}`;
+  const parts =
+    campaign.status === "cancelled"
+      ? [`Stopped: ${campaign.sent} sent`, `${campaign.stopped} not sent`]
+      : [campaign.status === "done" ? `${campaign.sent} sent` : `${campaign.sent} of ${campaign.total} sent`];
+  if (campaign.skipped.length > 0) parts.push(`${campaign.skipped.length} skipped at send time`);
+  if (campaign.failed > 0) parts.push(`${campaign.failed} failed`);
+  return parts.join(" · ");
+}
+
+/** Who the send-time check left out and why, one per line, for a hover or a list. */
+export function skippedLines(campaign: CampaignSummary): string[] {
+  return campaign.skipped.map(
+    (party) => `${partyName(party)}: ${party.reason ? REASON_LABEL[party.reason] : "No longer on the list"}`,
+  );
+}
+
+/** The heading for a run's progress. "All sent" only when every party got it. */
+export function progressTitle(campaign: CampaignSummary, kind: EmailKind): string {
+  if (campaign.status === "sending") return `Sending ${KIND_NOUN[kind]}`;
+  if (campaign.status === "cancelled") return "Stopped";
+  return campaign.failed > 0 || campaign.skipped.length > 0 ? "Finished" : "All sent";
 }
 
 export function EmailComposerDialog({
@@ -418,17 +438,11 @@ function Progress({
     );
   }
 
-  const settled = campaign.sent + campaign.failed + campaign.cancelled;
-  const title =
-    campaign.status === "sending"
-      ? `Sending ${KIND_NOUN[kind]}`
-      : campaign.status === "cancelled"
-        ? "Stopped"
-        : "All sent";
+  const settled = campaign.sent + campaign.failed + campaign.stopped + campaign.skipped.length;
 
   return (
     <section aria-label="Progress" className="flex flex-col gap-3">
-      <p className="text-[15px] font-semibold">{title}</p>
+      <h3 className="text-[15px] font-semibold">{progressTitle(campaign, kind)}</h3>
       <div
         role="progressbar"
         aria-label="Sent so far"
@@ -442,14 +456,31 @@ function Progress({
           style={{ width: `${campaign.total === 0 ? 100 : (settled / campaign.total) * 100}%` }}
         />
       </div>
-      <dl className="grid grid-cols-3 gap-2 text-[12px]" style={{ fontVariantNumeric: "tabular-nums" }}>
+      <dl className="grid grid-cols-4 gap-1.5 text-[12px]" style={{ fontVariantNumeric: "tabular-nums" }}>
         <Count label="Sent" value={campaign.sent} />
+        <Count label="Skipped" value={campaign.skipped.length} />
         <Count label="Failed" value={campaign.failed} alarm />
-        <Count
-          label={campaign.status === "cancelled" ? "Not sent" : "Left"}
-          value={campaign.remaining + campaign.cancelled}
-        />
+        {campaign.status === "cancelled" ? (
+          <Count label="Stopped" value={campaign.stopped} />
+        ) : (
+          <Count label="Left" value={campaign.remaining} />
+        )}
       </dl>
+      {campaign.skipped.length > 0 ? (
+        <details className="group rounded-md border border-[#E4E4E7] px-2.5 py-1.5 text-[12.5px]">
+          <summary className="flex cursor-pointer list-none items-center justify-between gap-2 text-[#3F3F46] [&::-webkit-details-marker]:hidden">
+            {campaign.skipped.length} skipped at send time
+            <span aria-hidden className="text-[#71717A] transition-transform group-open:rotate-180">
+              ▾
+            </span>
+          </summary>
+          <ul className="mt-1.5 flex max-h-40 flex-col gap-0.5 overflow-y-auto text-[12px] text-[#52525B]">
+            {skippedLines(campaign).map((line, index) => (
+              <li key={index}>{line}</li>
+            ))}
+          </ul>
+        </details>
+      ) : null}
       {campaign.status === "sending" ? (
         <StopButton campaignId={campaignId} />
       ) : (

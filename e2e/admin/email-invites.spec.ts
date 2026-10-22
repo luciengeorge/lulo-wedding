@@ -117,7 +117,7 @@ test.describe("emailing invitations", () => {
     await confirm.getByRole("button", { name: "Yes, send to 2 parties" }).dblclick();
 
     const progress = dialog.getByRole("region", { name: "Progress" });
-    await expect(progress.getByText("All sent")).toBeVisible();
+    await expect(progress.getByRole("heading", { name: "All sent" })).toBeVisible();
     await expect(progress).toContainText("2 sent");
 
     const invite = await waitForEmail(AMAL.email);
@@ -177,7 +177,7 @@ test.describe("emailing invitations", () => {
     await dialog.getByRole("button", { name: "Stop sending" }).click();
 
     const progress = dialog.getByRole("region", { name: "Progress" });
-    await expect(progress.getByText("Stopped", { exact: true })).toBeVisible();
+    await expect(progress.getByRole("heading", { name: "Stopped" })).toBeVisible();
 
     // Long enough for every send of the run to have gone out had it not been stopped.
     await page.waitForTimeout(RUN * 600 + 1_500);
@@ -192,7 +192,42 @@ test.describe("emailing invitations", () => {
 
     const captured = await Promise.all(parties.map((seeded) => backend.emailCount(seeded.contactEmail ?? "")));
     expect(captured.reduce((sum, count) => sum + count, 0)).toBe(RUN - cancelled);
-    await expect(progress).toContainText(`Stopped: ${RUN - cancelled} sent, ${cancelled} not sent`);
+    await expect(progress).toContainText(`Stopped: ${RUN - cancelled} sent · ${cancelled} not sent`);
+    await expect(progress).not.toContainText("skipped at send time");
+  });
+
+  test("a reply landing mid-run skips that party, and says so apart from Stop", async ({ page }) => {
+    const parties = Array.from({ length: 8 }, (_, index) =>
+      party({
+        token: `e2e-mid-${index}`,
+        displayName: `Guest${index}`,
+        surname: "Mid",
+        contactEmail: `mid${index}@example.com`,
+      }),
+    );
+    await backend.seed(parties);
+
+    await openAdmin(page);
+    await page.getByRole("checkbox", { name: "Select all 8 matching parties" }).click();
+    const dialog = await openComposer(page);
+    await dialog.getByRole("button", { name: "Send to 8 parties" }).click();
+    await dialog.getByRole("button", { name: "Yes, send to 8 parties" }).click();
+    const progress = dialog.getByRole("region", { name: "Progress" });
+    await expect(progress.getByRole("heading", { name: "Sending the invitation" })).toBeVisible();
+    // Once the run has started, the last in line replies (by WhatsApp, say) before its turn about four seconds in.
+    await backend.markReplied("e2e-mid-7");
+
+    await expect(progress.getByRole("heading", { name: "Finished" })).toBeVisible({ timeout: 20_000 });
+    await expect(progress).toContainText("7 sent · 1 skipped at send time");
+    await progress.locator("summary", { hasText: "1 skipped at send time" }).click();
+    await expect(progress.getByText("Guest7 Mid: Already replied")).toBeVisible();
+    expect(await backend.emailCount("mid7@example.com")).toBe(0);
+    expect((await backend.activity("e2e-mid-7")).sends[0].status).toBe("cancelled");
+
+    await page.keyboard.press("Escape");
+    const recent = page.getByRole("region", { name: "Recent sends" });
+    await expect(recent).toContainText("7 sent · 1 skipped at send time");
+    await expect(recent.getByTitle("Guest7 Mid: Already replied")).toBeVisible();
   });
 });
 
@@ -247,7 +282,9 @@ test.describe("emailing reminders", () => {
 
     await dialog.getByRole("button", { name: "Send to 1 party" }).click();
     await dialog.getByRole("button", { name: "Yes, send to 1 party" }).click();
-    await expect(dialog.getByRole("region", { name: "Progress" }).getByText("All sent")).toBeVisible();
+    await expect(
+      dialog.getByRole("region", { name: "Progress" }).getByRole("heading", { name: "All sent" }),
+    ).toBeVisible();
 
     const reminder = await waitForEmail(AMAL.email);
     expect(reminder.subject).toBe(REMINDER_SUBJECT);

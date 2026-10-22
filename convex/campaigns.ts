@@ -4,6 +4,7 @@ import type { EventFlags } from "../src/lib/rsvp-rules";
 import type { Doc, Id } from "./_generated/dataModel";
 import type { QueryCtx } from "./_generated/server";
 
+import { SKIP_REASONS, type SkipReason } from "../src/lib/email-campaign";
 import { partyInvitedTo, RSVP_EVENTS } from "../src/lib/rsvp-rules";
 import { internal } from "./_generated/api";
 import { internalMutation, internalQuery } from "./_generated/server";
@@ -21,17 +22,7 @@ import { EVENT_DATES } from "./rsvp";
 export const campaignKind = v.union(v.literal("invite"), v.literal("reminder"));
 export type CampaignKind = "invite" | "reminder";
 
-export const SKIP_REASONS = [
-  "replied",
-  "declinedEarly",
-  "noEvents",
-  "noEmail",
-  "complained",
-  "bounced",
-  "alreadySent",
-  "notInvited",
-] as const;
-export type SkipReason = (typeof SKIP_REASONS)[number];
+export type { SkipReason };
 export const skipReason = v.union(...SKIP_REASONS.map((reason) => v.literal(reason)));
 
 /** Why a queued message was not sent after all, written on its row. */
@@ -242,13 +233,18 @@ export const dispatch = internalMutation({
 
     const campaign = send.campaignId ? await ctx.db.get(send.campaignId) : null;
     if (campaign?.status === "cancelled") {
-      await ctx.db.patch(sendId, { status: "cancelled", scheduledId: undefined, error: STOPPED });
+      await ctx.db.patch(sendId, { status: "cancelled", cancelKind: "stopped", scheduledId: undefined, error: STOPPED });
       return null;
     }
 
     const party = await ctx.db.get(send.partyId);
     if (!party) {
-      await ctx.db.patch(sendId, { status: "cancelled", scheduledId: undefined, error: "The party was deleted." });
+      await ctx.db.patch(sendId, {
+        status: "cancelled",
+        cancelKind: "skipped",
+        scheduledId: undefined,
+        error: "The party was deleted.",
+      });
       return null;
     }
 
@@ -265,6 +261,8 @@ export const dispatch = internalMutation({
     if (reason) {
       await ctx.db.patch(sendId, {
         status: "cancelled",
+        cancelKind: "skipped",
+        skipReason: reason,
         scheduledId: undefined,
         error: `Skipped at send time: ${SKIPPED_AT_SEND[reason]}.`,
       });

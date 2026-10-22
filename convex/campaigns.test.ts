@@ -351,13 +351,25 @@ describe("dispatch", () => {
     const after = await sendsTable(t);
     expect(after.find((row) => row.partyId === replier)).toMatchObject({
       status: "cancelled",
+      cancelKind: "skipped",
+      skipReason: "replied",
       error: "Skipped at send time: they replied.",
     });
     expect(after.find((row) => row.partyId === replier)?.scheduledId).toBeUndefined();
     const sent = await emailJobs(t);
     expect(sent).toHaveLength(1);
     expect((sent[0].args as [{ to: string }])[0].to).toBe("waiting@example.com");
-    // A stopped party does not count as invited.
+
+    // Counted as skipped, with who and why, not as stopped or still to go.
+    const [summary] = await t.query(api.admin.campaigns, {});
+    expect(summary).toMatchObject({
+      status: "sending",
+      stopped: 0,
+      // The other one has been handed over; the action that sends it has not run here.
+      remaining: 1,
+      skipped: [{ displayName: "Rae & Cherif", surname: "Haddad", reason: "replied" }],
+    });
+    // A skipped party does not count as invited.
     const pipeline = await t.query(api.admin.pipeline, {});
     expect(pipeline.find((row) => row.partyId === replier)).not.toHaveProperty("firstInvitedAt");
   });
@@ -424,7 +436,8 @@ describe("cancelCampaign", () => {
     expect(states).toEqual(["canceled", "canceled", "pending"]);
 
     const [summary] = await t.query(api.admin.campaigns, {});
-    expect(summary).toMatchObject({ status: "cancelled", total: 3, cancelled: 2, remaining: 1, sent: 0 });
+    expect(summary).toMatchObject({ status: "cancelled", total: 3, stopped: 2, skipped: [], remaining: 1, sent: 0 });
+    expect(after.filter((row) => row.status === "cancelled").every((row) => row.cancelKind === "stopped")).toBe(true);
 
     // The stopped parties are not counted as invited anywhere.
     const pipeline = await t.query(api.admin.pipeline, {});

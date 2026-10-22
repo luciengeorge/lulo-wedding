@@ -210,6 +210,7 @@ export const backend = {
   exhaustNameLookup: () => convexRun<null>("e2e:exhaustNameLookup"),
   exhaustSubmit: (token: string) => convexRun<null>("e2e:exhaustSubmit", { token }),
   emailCount: (to: string) => convexRun<number>("e2e:emailCount", { to }),
+  markReplied: (token: string) => convexRun<null>("e2e:markReplied", { token }),
 };
 
 /**

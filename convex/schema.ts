@@ -1,6 +1,8 @@
 import { defineSchema, defineTable } from "convex/server";
 import { v } from "convex/values";
 
+import { SKIP_REASONS } from "../src/lib/email-campaign";
+
 // App-level schema. Auth tables live in the betterAuth component
 // (see convex/betterAuth/schema.ts) and are not declared here.
 //
@@ -145,6 +147,12 @@ export default defineSchema({
      * is how stopping a run tells "not sent yet" from "already on its way".
      */
     scheduledId: v.optional(v.id("_scheduled_functions")),
+    /**
+     * Why a "cancelled" row did not go: the couple pressed Stop, or the party no
+     * longer qualified when its turn came (`skipReason` says how).
+     */
+    cancelKind: v.optional(v.union(v.literal("stopped"), v.literal("skipped"))),
+    skipReason: v.optional(v.union(...SKIP_REASONS.map((reason) => v.literal(reason)))),
   })
     .index("by_party", ["partyId", "sentAt"])
     .index("by_email_id", ["emailId"])

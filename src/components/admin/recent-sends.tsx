@@ -1,8 +1,9 @@
 import { useQuery } from "convex/react";
 
 import { api } from "@/../convex/_generated/api";
+import { cn } from "@/lib/utils";
 
-import { partyCount, progressText, StopButton } from "./email-composer";
+import { partyCount, progressText, skippedLines, StopButton } from "./email-composer";
 import { RelativeTime } from "./relative-time";
 
 const KIND_LABEL = { invite: "Invitation", reminder: "Reminder" } as const;
@@ -31,7 +32,15 @@ export function RecentSends() {
               {KIND_LABEL[campaign.kind]} to {partyCount(campaign.total)}
             </span>
             <RelativeTime at={campaign.createdAt} className="text-[#71717A]" />
-            <span className={campaign.failed > 0 ? "text-[#9F1239]" : "text-[#52525B]"}>{progressText(campaign)}</span>
+            <span
+              className={cn(
+                campaign.failed > 0 ? "text-[#9F1239]" : "text-[#52525B]",
+                campaign.skipped.length > 0 && "underline decoration-dotted underline-offset-4",
+              )}
+              title={campaign.skipped.length > 0 ? skippedLines(campaign).join("\n") : undefined}
+            >
+              {progressText(campaign)}
+            </span>
             {campaign.status === "sending" ? <StopButton campaignId={campaign.campaignId} className="h-7" /> : null}
           </li>
         ))}

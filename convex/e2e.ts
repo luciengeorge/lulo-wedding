@@ -497,3 +497,15 @@ export const exhaustSubmit = internalMutation({
     return null;
   },
 });
+
+/** A reply landing behind the form's back, for a party mid-way through an email run. */
+export const markReplied = internalMutation({
+  args: { token: v.string() },
+  returns: v.null(),
+  handler: async (ctx, { token }) => {
+    assertTestDeployment();
+    const party = await partyFor(ctx, token);
+    await ctx.db.patch(party._id, { respondedAt: Date.now() });
+    return null;
+  },
+});

@@ -1067,7 +1067,7 @@ export const cancelCampaign = mutation({
     for (const row of rows) {
       if (row.status !== "queued" || row.scheduledId === undefined) continue;
       await ctx.scheduler.cancel(row.scheduledId);
-      await ctx.db.patch(row._id, { status: "cancelled", scheduledId: undefined, error: STOPPED });
+      await ctx.db.patch(row._id, { status: "cancelled", cancelKind: "stopped", scheduledId: undefined, error: STOPPED });
       stopped++;
     }
 
@@ -1087,7 +1087,12 @@ const campaignSummary = v.object({
   /** Handed to Resend (or captured), whatever happened after. */
   sent: v.number(),
   failed: v.number(),
-  cancelled: v.number(),
+  /** Cancelled because the couple pressed Stop. */
+  stopped: v.number(),
+  /** Cancelled at their turn because the party no longer qualified, with who and why. */
+  skipped: v.array(
+    v.object({ displayName: v.string(), surname: v.string(), reason: v.optional(skipReason) }),
+  ),
   /** Not handed over yet: waiting their turn, or going out right now. */
   remaining: v.number(),
 });
@@ -1109,9 +1114,17 @@ export const campaigns = query({
           .query("sends")
           .withIndex("by_campaign", (q) => q.eq("campaignId", campaign._id))
           .collect();
-        const counts = { sent: 0, failed: 0, cancelled: 0, remaining: 0 };
+        const counts = { sent: 0, failed: 0, stopped: 0, remaining: 0 };
+        const skipped: { displayName: string; surname: string; reason?: SkipReason }[] = [];
         for (const row of rows) {
-          if (row.status === "cancelled") counts.cancelled++;
+          if (row.status === "cancelled" && row.cancelKind === "skipped") {
+            const party = await ctx.db.get(row.partyId);
+            skipped.push({
+              displayName: party?.displayName ?? "A deleted party",
+              surname: party?.surname ?? "",
+              ...(row.skipReason ? { reason: row.skipReason } : {}),
+            });
+          } else if (row.status === "cancelled") counts.stopped++;
           else if (row.status === "failed" || row.status === "bounced" || row.status === "complained") counts.failed++;
           else if (row.status === "queued" && row.emailId === undefined) counts.remaining++;
           else counts.sent++;
@@ -1129,6 +1142,7 @@ export const campaigns = query({
                 ? ("sending" as const)
                 : ("done" as const),
           ...counts,
+          skipped,
         };
       }),
     );
