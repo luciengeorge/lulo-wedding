@@ -68,6 +68,7 @@ const sendStatus = v.union(
   v.literal("bounced"),
   v.literal("complained"),
   v.literal("failed"),
+  v.literal("cancelled"),
 );
 
 /**
@@ -111,7 +112,11 @@ export const reset = internalMutation({
 
     // Tracking rows hang off parties and would outlive them otherwise. Not counted:
     // the specs only assert on the three tables below.
-    for (const table of ["sends", "visits"] as const) {
+    // A run still sending from the last test would mail this test's parties.
+    for (const send of await ctx.db.query("sends").collect()) {
+      if (send.scheduledId) await ctx.scheduler.cancel(send.scheduledId);
+    }
+    for (const table of ["sends", "visits", "campaigns"] as const) {
       for (const row of await ctx.db.query(table).collect()) await ctx.db.delete(row._id);
     }
 

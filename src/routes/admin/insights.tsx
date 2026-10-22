@@ -12,6 +12,7 @@ import type { InvitedToFilter, InvitedViaFilter, WaveFilter, WhoFilter } from "@
 
 import { api } from "@/../convex/_generated/api";
 import { AdminMultiSelect } from "@/components/admin/admin-multi-select";
+import { EmailComposerDialog } from "@/components/admin/email-composer";
 import { NO_EMAIL_INVITES_NOTE, percentOf } from "@/components/admin/funnel-strip";
 import { PartyTimelineSheet } from "@/components/admin/party-timeline";
 import { PipelineBoard, PipelineBoardSkeleton } from "@/components/admin/pipeline-board";
@@ -138,6 +139,8 @@ function InsightsPage() {
   const wide = useWide();
   const [filters, setFilters] = useState<Filters>(NO_FILTERS);
   const [open, setOpen] = useState<BoardParty | null>(null);
+  const [remindParties, setRemindParties] = useState<BoardParty["partyId"][]>([]);
+  const [remindOpen, setRemindOpen] = useState(false);
 
   const markInvited = useMutation(api.admin.markInvitedOnWhatsApp).withOptimisticUpdate(stampWhatsApp);
   const unmarkInvited = useMutation(api.admin.unmarkInvitedOnWhatsApp);
@@ -255,8 +258,24 @@ function InsightsPage() {
       {rows === undefined ? (
         <PipelineBoardSkeleton />
       ) : (
-        <PipelineBoard parties={visible} canDrag={wide} onOpen={setOpen} onMarkInvited={handleMarkInvited} />
+        <PipelineBoard
+          parties={visible}
+          canDrag={wide}
+          onOpen={setOpen}
+          onMarkInvited={handleMarkInvited}
+          onRemind={(lane) => {
+            setRemindParties(lane.map((party) => party.partyId));
+            setRemindOpen(true);
+          }}
+        />
       )}
+
+      <EmailComposerDialog
+        partyIds={remindParties}
+        initialKind="reminder"
+        open={remindOpen}
+        onOpenChange={setRemindOpen}
+      />
 
       <PartyTimelineSheet
         party={open ? { partyId: open.partyId, displayName: partyName(open) } : null}

@@ -13,7 +13,9 @@ import { resend } from "./resend";
 import AccountDeletedEmail from "./templates/accountDeleted";
 import ChangeEmail from "./templates/changeEmail";
 import DeleteAccount from "./templates/deleteAccount";
+import InviteEmail from "./templates/invite";
 import MagicLinkEmail from "./templates/magicLink";
+import ReminderEmail from "./templates/reminder";
 import ResetPasswordEmail from "./templates/resetPassword";
 import RsvpConfirmationEmail from "./templates/rsvpConfirmation";
 import VerifyEmail from "./templates/verify";
@@ -28,11 +30,16 @@ const TEMPLATES = {
   deleteAccount: DeleteAccount,
   accountDeleted: AccountDeletedEmail,
   rsvpConfirmation: RsvpConfirmationEmail,
+  invite: InviteEmail,
+  reminder: ReminderEmail,
 } as const;
 
-type TemplateName = keyof typeof TEMPLATES;
+export type TemplateName = keyof typeof TEMPLATES;
 
-function buildTemplate(name: TemplateName, props: Record<string, unknown>): ReactElement {
+/** Guests answer these, so a reply should reach the couple rather than the sending address. */
+const REPLYABLE: ReadonlySet<TemplateName> = new Set(["invite", "reminder"]);
+
+export function buildTemplate(name: TemplateName, props: Record<string, unknown>): ReactElement {
   const Template = TEMPLATES[name] as (props: Record<string, unknown>) => ReactElement;
   return Template(props);
 }
@@ -84,6 +91,8 @@ export const sendEmail = internalAction({
       v.literal("deleteAccount"),
       v.literal("accountDeleted"),
       v.literal("rsvpConfirmation"),
+      v.literal("invite"),
+      v.literal("reminder"),
     ),
     props: v.any(),
     sendId: v.optional(v.id("sends")),
@@ -119,21 +128,26 @@ export const sendEmail = internalAction({
       // endpoint takes no attachments, and the monogram travels as one. The
       // component still records the email, so status and webhooks work as before.
       const sdk = new ResendSdk(apiKey);
-      emailId = await resend.sendEmailManually(ctx, { from, to, subject }, (id) =>
-        sendWithRetry(
-          sdk,
-          {
-            from,
-            to,
-            subject,
-            html,
-            text,
-            attachments: html.includes(`cid:${MONOGRAM_CID}`)
-              ? [{ filename: "monogram.png", content: MONOGRAM_PNG_BASE64, contentId: MONOGRAM_CID }]
-              : undefined,
-          },
-          id,
-        ),
+      const replyTo = REPLYABLE.has(template) ? process.env.SUPPORT_EMAIL : undefined;
+      emailId = await resend.sendEmailManually(
+        ctx,
+        { from, to, subject, ...(replyTo ? { replyTo: [replyTo] } : {}) },
+        (id) =>
+          sendWithRetry(
+            sdk,
+            {
+              from,
+              to,
+              subject,
+              html,
+              text,
+              ...(replyTo ? { replyTo } : {}),
+              attachments: html.includes(`cid:${MONOGRAM_CID}`)
+                ? [{ filename: "monogram.png", content: MONOGRAM_PNG_BASE64, contentId: MONOGRAM_CID }]
+                : undefined,
+            },
+            id,
+          ),
       );
     } catch (error) {
       // Otherwise the row sits at "queued" forever and /admin reads it as in flight.

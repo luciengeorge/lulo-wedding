@@ -17,6 +17,7 @@ import type {
 import { api } from "@/../convex/_generated/api";
 import { AdminMultiSelect } from "@/components/admin/admin-multi-select";
 import { BulkActionsBar } from "@/components/admin/bulk-actions-bar";
+import { EmailComposerDialog } from "@/components/admin/email-composer";
 import { FunnelStrip } from "@/components/admin/funnel-strip";
 import {
   GuestListTable,
@@ -26,6 +27,7 @@ import {
 } from "@/components/admin/guest-list-table";
 import { ImportCsvDialog } from "@/components/admin/import-csv-dialog";
 import { PartyFormDialog } from "@/components/admin/party-form-dialog";
+import { RecentSends } from "@/components/admin/recent-sends";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -100,6 +102,8 @@ function GuestListPage() {
   const [formOpen, setFormOpen] = useState(false);
   const [importOpen, setImportOpen] = useState(false);
   const [bulkBusy, setBulkBusy] = useState(false);
+  const [emailParties, setEmailParties] = useState<PartyRow["_id"][]>([]);
+  const [emailOpen, setEmailOpen] = useState(false);
   const bulkUpdateParties = useMutation(api.admin.bulkUpdateParties);
   const bulkDeleteParties = useMutation(api.admin.bulkDeleteParties);
   const markInvitedOnWhatsApp = useMutation(api.admin.markInvitedOnWhatsApp);
@@ -275,6 +279,7 @@ function GuestListPage() {
           <GuestListTableSkeleton />
         ) : (
           <>
+            <RecentSends />
             <BulkActionsBar
               table={table}
               busy={bulkBusy}
@@ -283,6 +288,10 @@ function GuestListPage() {
               deleteParties={bulkDeleteParties}
               markWhatsApp={markInvitedOnWhatsApp}
               unmarkWhatsApp={unmarkInvitedOnWhatsApp}
+              onEmail={(parties) => {
+                setEmailParties(parties.map((party) => party._id));
+                setEmailOpen(true);
+              }}
             />
             <GuestListTable table={table} rowWindow={rowWindow} />
 
@@ -302,6 +311,7 @@ function GuestListPage() {
 
       <PartyFormDialog party={editing} open={formOpen} onOpenChange={setFormOpen} />
       <ImportCsvDialog open={importOpen} onOpenChange={setImportOpen} />
+      <EmailComposerDialog partyIds={emailParties} open={emailOpen} onOpenChange={setEmailOpen} />
     </div>
   );
 }

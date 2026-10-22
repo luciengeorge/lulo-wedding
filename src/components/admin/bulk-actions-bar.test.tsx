@@ -58,6 +58,7 @@ const markWhatsApp =
     (args: { partyIds: PartyRow["_id"][] }) => Promise<{ marked: number; alreadyMarked: number; missing: number }>
   >();
 const unmarkWhatsApp = vi.fn<(args: { partyIds: PartyRow["_id"][] }) => Promise<{ unmarked: number }>>();
+const onEmail = vi.fn<(parties: PartyRow[]) => void>();
 
 function Harness({ data = rows }: { data?: PartyRow[] }) {
   const [busy, setBusy] = useState(false);
@@ -79,6 +80,7 @@ function Harness({ data = rows }: { data?: PartyRow[] }) {
         deleteParties={deleteParties}
         markWhatsApp={markWhatsApp}
         unmarkWhatsApp={unmarkWhatsApp}
+        onEmail={onEmail}
       />
     </>
   );
@@ -110,6 +112,15 @@ beforeEach(() => {
 });
 
 describe("BulkActionsBar", () => {
+  it("opens the email composer with every selected party, hidden ones included", () => {
+    render(<Harness data={rows.slice(0, 12)} />);
+    fireEvent.click(screen.getByRole("button", { name: "Select rows" }));
+    fireEvent.click(screen.getByRole("button", { name: "Only Laura" }));
+    fireEvent.click(screen.getByRole("button", { name: "Email…" }));
+    expect(onEmail).toHaveBeenCalledTimes(1);
+    expect(onEmail.mock.calls[0][0]).toHaveLength(12);
+  });
+
   it("appears only for a selection, reports hidden selections and clears them", () => {
     render(<Harness data={rows.slice(0, 12)} />);
     expect(screen.queryByLabelText("Bulk actions")).not.toBeInTheDocument();

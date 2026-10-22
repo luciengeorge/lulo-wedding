@@ -8,7 +8,21 @@ import { MAX_BULK } from "../src/lib/party-bulk";
 import { deriveRsvp, type RsvpState } from "../src/lib/party-filters";
 import { replyOutcome } from "../src/lib/pipeline";
 import { type EventFlags, partyInvitedTo } from "../src/lib/rsvp-rules";
+import { internal } from "./_generated/api";
 import { mutation, query } from "./_generated/server";
+import {
+  type CampaignKind,
+  campaignKind,
+  guestsOf,
+  invitationMessage,
+  MAX_CAMPAIGN,
+  SEND_SPACING_MS,
+  sendsOf,
+  skipReason,
+  type SkipReason,
+  skipReasonFor,
+  STOPPED,
+} from "./campaigns";
 import { requireAdmin } from "./lib/adminAuth";
 import { generateToken } from "./parties";
 
@@ -77,6 +91,7 @@ const sendStatus = v.union(
   v.literal("bounced"),
   v.literal("complained"),
   v.literal("failed"),
+  v.literal("cancelled"),
 );
 
 const rsvpSummary = v.object({
@@ -157,7 +172,9 @@ async function loadAll(ctx: QueryCtx) {
   return {
     parties,
     guestsByParty: bucketByParty(guests),
-    sendsByParty: bucketByParty(sends),
+    // A message stopped before it went out never reached the party. It shows on
+    // their timeline, and nowhere that counts what was sent.
+    sendsByParty: bucketByParty(sends.filter((send) => send.status !== "cancelled")),
     visitsByParty: bucketByParty(visits),
   };
 }
@@ -884,5 +901,255 @@ export const pipeline = query({
             : undefined,
       };
     });
+  },
+});
+
+function validateCampaignIds(partyIds: readonly Id<"parties">[]) {
+  if (partyIds.length === 0) throw new ConvexError("Select at least one party");
+  if (partyIds.length > MAX_CAMPAIGN) throw new ConvexError(`Choose no more than ${MAX_CAMPAIGN} parties per send`);
+}
+
+/** Splits a selection into who gets the email and who is left out, and why. */
+async function sortRecipients(
+  ctx: QueryCtx,
+  kind: CampaignKind,
+  partyIds: readonly Id<"parties">[],
+  includeAlreadySent: boolean,
+) {
+  const recipients: Doc<"parties">[] = [];
+  const skipped: { party: Doc<"parties">; reason: SkipReason }[] = [];
+  let missing = 0;
+  for (const partyId of new Set(partyIds)) {
+    const party = await ctx.db.get(partyId);
+    if (!party) {
+      missing++;
+      continue;
+    }
+    const guests = await guestsOf(ctx, partyId);
+    const reason = skipReasonFor(kind, party, guests, await sendsOf(ctx, partyId), includeAlreadySent);
+    if (reason) skipped.push({ party, reason });
+    else recipients.push(party);
+  }
+  return { recipients, skipped, missing };
+}
+
+const campaignArgs = {
+  kind: campaignKind,
+  partyIds: v.array(v.id("parties")),
+  /** Invitations only: email parties that already had one. */
+  includeAlreadySent: v.optional(v.boolean()),
+};
+
+/**
+ * Who a send would reach, without sending anything. The composer shows this
+ * before the couple confirm, and `startCampaign` applies the same rules.
+ */
+export const prepareCampaign = query({
+  args: campaignArgs,
+  returns: v.object({
+    recipients: v.array(
+      v.object({ partyId: v.id("parties"), displayName: v.string(), surname: v.string(), email: v.string() }),
+    ),
+    skipped: v.array(
+      v.object({ partyId: v.id("parties"), displayName: v.string(), surname: v.string(), reason: skipReason }),
+    ),
+    missing: v.number(),
+  }),
+  handler: async (ctx, { kind, partyIds, includeAlreadySent }) => {
+    await requireAdmin(ctx);
+    validateCampaignIds(partyIds);
+
+    const { recipients, skipped, missing } = await sortRecipients(ctx, kind, partyIds, includeAlreadySent === true);
+    return {
+      recipients: recipients.map((party) => ({
+        partyId: party._id,
+        displayName: party.displayName,
+        surname: party.surname,
+        email: party.contactEmail?.trim() ?? "",
+      })),
+      skipped: skipped.map(({ party, reason }) => ({
+        partyId: party._id,
+        displayName: party.displayName,
+        surname: party.surname,
+        reason,
+      })),
+      missing,
+    };
+  },
+});
+
+/**
+ * Emails an invitation or a reminder to every eligible party in the selection.
+ *
+ * Writes one queued `sends` row per party up front and schedules each to go
+ * SEND_SPACING_MS after the one before, so a run of 400 takes about four
+ * minutes and stays under Resend's rate limit. The scheduled ids are kept on
+ * the rows, which is what lets `cancelCampaign` stop the rest.
+ *
+ * Idempotent on `clientRequestId`: a second call with the same id, from a
+ * double click or a retried request, returns the first run and sends nothing.
+ */
+export const startCampaign = mutation({
+  args: { ...campaignArgs, clientRequestId: v.string() },
+  returns: v.object({ campaignId: v.id("campaigns"), total: v.number(), duplicate: v.boolean() }),
+  handler: async (ctx, { kind, partyIds, includeAlreadySent, clientRequestId }) => {
+    const admin = await requireAdmin(ctx);
+    validateCampaignIds(partyIds);
+    if (clientRequestId.length === 0 || clientRequestId.length > 100) throw new ConvexError("Bad request id");
+
+    const existing = await ctx.db
+      .query("campaigns")
+      .withIndex("by_client_request", (q) => q.eq("clientRequestId", clientRequestId))
+      .unique();
+    if (existing) return { campaignId: existing._id, total: existing.total, duplicate: true };
+
+    const { recipients } = await sortRecipients(ctx, kind, partyIds, includeAlreadySent === true);
+    if (recipients.length === 0) throw new ConvexError("Nobody in this selection can be sent this email.");
+
+    const now = Date.now();
+    const campaignId = await ctx.db.insert("campaigns", {
+      kind,
+      createdAt: now,
+      createdBy: admin.email,
+      total: recipients.length,
+      status: "sending",
+      clientRequestId,
+    });
+
+    for (const [index, party] of recipients.entries()) {
+      const sendId = await ctx.db.insert("sends", {
+        partyId: party._id,
+        channel: "email",
+        kind,
+        to: party.contactEmail?.trim(),
+        status: "queued",
+        sentAt: now,
+        openCount: 0,
+        clickCount: 0,
+        campaignId,
+      });
+      const scheduledId = await ctx.scheduler.runAfter(index * SEND_SPACING_MS, internal.campaigns.dispatch, {
+        sendId,
+      });
+      await ctx.db.patch(sendId, { scheduledId });
+    }
+
+    return { campaignId, total: recipients.length, duplicate: false };
+  },
+});
+
+/**
+ * Stops a run: every message not yet handed to Resend is cancelled and marked
+ * so. Ones already on their way cannot be called back and are left to finish.
+ */
+export const cancelCampaign = mutation({
+  args: { campaignId: v.id("campaigns") },
+  returns: v.object({ stopped: v.number() }),
+  handler: async (ctx, { campaignId }) => {
+    await requireAdmin(ctx);
+
+    const campaign = await ctx.db.get(campaignId);
+    if (!campaign) throw new ConvexError("That send no longer exists");
+    if (campaign.status === "cancelled") return { stopped: 0 };
+
+    const rows = await ctx.db
+      .query("sends")
+      .withIndex("by_campaign", (q) => q.eq("campaignId", campaignId))
+      .collect();
+
+    let stopped = 0;
+    for (const row of rows) {
+      if (row.status !== "queued" || row.scheduledId === undefined) continue;
+      await ctx.scheduler.cancel(row.scheduledId);
+      await ctx.db.patch(row._id, { status: "cancelled", scheduledId: undefined, error: STOPPED });
+      stopped++;
+    }
+
+    // A run that had already gone out in full is finished, not stopped.
+    if (stopped > 0) await ctx.db.patch(campaignId, { status: "cancelled", cancelledAt: Date.now() });
+    return { stopped };
+  },
+});
+
+const campaignSummary = v.object({
+  campaignId: v.id("campaigns"),
+  kind: campaignKind,
+  createdAt: v.number(),
+  createdBy: v.string(),
+  total: v.number(),
+  status: v.union(v.literal("sending"), v.literal("done"), v.literal("cancelled")),
+  /** Handed to Resend (or captured), whatever happened after. */
+  sent: v.number(),
+  failed: v.number(),
+  cancelled: v.number(),
+  /** Not handed over yet: waiting their turn, or going out right now. */
+  remaining: v.number(),
+});
+
+/** How many recent runs the composer and the panel on /admin read. */
+const RECENT_CAMPAIGNS = 10;
+
+/** The latest runs with their progress, read off their `sends` rows. */
+export const campaigns = query({
+  args: {},
+  returns: v.array(campaignSummary),
+  handler: async (ctx) => {
+    await requireAdmin(ctx);
+
+    const recent = await ctx.db.query("campaigns").withIndex("by_created").order("desc").take(RECENT_CAMPAIGNS);
+    return await Promise.all(
+      recent.map(async (campaign) => {
+        const rows = await ctx.db
+          .query("sends")
+          .withIndex("by_campaign", (q) => q.eq("campaignId", campaign._id))
+          .collect();
+        const counts = { sent: 0, failed: 0, cancelled: 0, remaining: 0 };
+        for (const row of rows) {
+          if (row.status === "cancelled") counts.cancelled++;
+          else if (row.status === "failed" || row.status === "bounced" || row.status === "complained") counts.failed++;
+          else if (row.status === "queued" && row.emailId === undefined) counts.remaining++;
+          else counts.sent++;
+        }
+        return {
+          campaignId: campaign._id,
+          kind: campaign.kind,
+          createdAt: campaign.createdAt,
+          createdBy: campaign.createdBy,
+          total: campaign.total,
+          status:
+            campaign.status === "cancelled"
+              ? ("cancelled" as const)
+              : counts.remaining > 0
+                ? ("sending" as const)
+                : ("done" as const),
+          ...counts,
+        };
+      }),
+    );
+  },
+});
+
+/**
+ * Sends one party's email to the signed-in admin instead of the party, marked
+ * "[Test]". Not a send to the party: no `sends` row, nothing on the pipeline.
+ * The link opens the party's real form, tagged so opening it is not counted.
+ */
+export const sendTestEmail = mutation({
+  args: { kind: campaignKind, partyId: v.id("parties") },
+  returns: v.object({ to: v.string() }),
+  handler: async (ctx, { kind, partyId }) => {
+    const admin = await requireAdmin(ctx);
+
+    const party = await ctx.db.get(partyId);
+    if (!party) throw new ConvexError("That party no longer exists");
+
+    const message = invitationMessage(kind, party, await guestsOf(ctx, partyId), { test: true });
+    await ctx.scheduler.runAfter(0, internal.email.send.sendEmail, {
+      to: admin.email,
+      subject: `[Test] ${message.subject}`,
+      template: message.template,
+      props: message.props,
+    });
+    return { to: admin.email };
   },
 });

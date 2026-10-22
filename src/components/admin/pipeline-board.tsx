@@ -134,12 +134,15 @@ export function PipelineBoard({
   canDrag,
   onOpen,
   onMarkInvited,
+  onRemind,
 }: {
   parties: readonly BoardParty[];
   /** Off on a phone, where only one lane shows and there is nowhere to drop. */
   canDrag: boolean;
   onOpen: (party: BoardParty) => void;
   onMarkInvited: (party: BoardParty) => void;
+  /** Opens the email composer on a reminder for the parties in one lane. */
+  onRemind?: (parties: readonly BoardParty[]) => void;
 }) {
   const lanes = groupLanes(parties);
   const counts = countStages(parties.map((party) => party.stage));
@@ -287,6 +290,18 @@ export function PipelineBoard({
               }
               mobileActive={mobileLane === stage}
               dragging={dragging !== null}
+              action={
+                onRemind && (stage === "invited" || stage === "seen") && lanes[stage].length > 0 ? (
+                  <button
+                    type="button"
+                    onClick={() => onRemind(lanes[stage])}
+                    aria-label={`Remind this lane: ${LANE_LABEL[stage]}`}
+                    className="ml-auto rounded-sm text-[11.5px] text-muted-foreground underline-offset-4 outline-none hover:text-foreground hover:underline focus-visible:ring-2 focus-visible:ring-ring"
+                  >
+                    Remind
+                  </button>
+                ) : undefined
+              }
             >
               {stage === "replied" ? (
                 <RepliedGroups parties={lanes.replied} render={(cards) => renderCards(cards, "replied")} />
@@ -340,6 +355,7 @@ function LaneColumn({
   conversion,
   mobileActive,
   dragging,
+  action,
   children,
 }: {
   lane: Lane;
@@ -347,6 +363,8 @@ function LaneColumn({
   conversion?: string;
   mobileActive: boolean;
   dragging: boolean;
+  /** Sits at the far end of the lane's title row. */
+  action?: ReactNode;
   children: ReactNode;
 }) {
   const accepts = lane === DROP_LANE;
@@ -383,6 +401,7 @@ function LaneColumn({
           <span className="text-[12.5px] text-muted-foreground" style={{ fontVariantNumeric: "tabular-nums" }}>
             {count}
           </span>
+          {action}
         </div>
         <p className="text-[11.5px] text-muted-foreground md:min-h-4">
           {dragging && accepts ? (

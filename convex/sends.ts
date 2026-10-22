@@ -19,7 +19,7 @@ import { resend } from "./email/resend";
 type SendStatus = Doc<"sends">["status"];
 
 /** Once one of these is recorded nothing later replaces it, whatever order events arrive in. */
-const TERMINAL: ReadonlySet<SendStatus> = new Set(["bounced", "complained", "failed"]);
+const TERMINAL: ReadonlySet<SendStatus> = new Set(["bounced", "complained", "failed", "cancelled"]);
 
 /**
  * How far along a message is. Webhook events can arrive out of order, and a late
@@ -33,6 +33,7 @@ const PROGRESS: Record<SendStatus, number> = {
   bounced: 4,
   complained: 4,
   failed: 4,
+  cancelled: 4,
 };
 
 function advance(current: SendStatus, next: SendStatus): SendStatus {

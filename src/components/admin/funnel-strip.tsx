@@ -15,7 +15,7 @@ export function percentOf(part: number, whole: number): string | undefined {
  * Shown while no invitation or update has been emailed, so a row of zeros reads
  * as "nothing sent yet" rather than "nothing landed".
  */
-export const NO_EMAIL_INVITES_NOTE = "Email invites aren't sent from here yet, so the email numbers stay at zero.";
+export const NO_EMAIL_INVITES_NOTE = "No invitations emailed yet, so the email numbers are at zero.";
 
 function ofInvited(part: number, invited: number) {
   const percent = percentOf(part, invited);

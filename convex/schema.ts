@@ -121,7 +121,10 @@ export default defineSchema({
       v.literal("bounced"),
       v.literal("complained"),
       v.literal("failed"),
+      /** Part of a send run the couple stopped before this one went out. Never reached Resend. */
+      v.literal("cancelled"),
     ),
+    /** When it was handed to Resend. A campaign row is written early and restamped when it goes. */
     sentAt: v.number(),
     deliveredAt: v.optional(v.number()),
     firstOpenedAt: v.optional(v.number()),
@@ -135,11 +138,39 @@ export default defineSchema({
     complainedAt: v.optional(v.number()),
     failedAt: v.optional(v.number()),
     error: v.optional(v.string()),
+    /** The send run this message belongs to, for one sent from the /admin composer. */
+    campaignId: v.optional(v.id("campaigns")),
+    /**
+     * The pending job that will send it. Present only until that job runs, which
+     * is how stopping a run tells "not sent yet" from "already on its way".
+     */
+    scheduledId: v.optional(v.id("_scheduled_functions")),
   })
     .index("by_party", ["partyId", "sentAt"])
     .index("by_email_id", ["emailId"])
     .index("by_channel", ["channel", "sentAt"])
-    .index("by_status", ["status", "sentAt"]),
+    .index("by_status", ["status", "sentAt"])
+    .index("by_campaign", ["campaignId"]),
+
+  /**
+   * One run of invitations or reminders from the /admin composer. Its progress is
+   * read off its `sends` rows rather than kept here, so the two cannot disagree.
+   */
+  campaigns: defineTable({
+    kind: v.union(v.literal("invite"), v.literal("reminder")),
+    createdAt: v.number(),
+    /** The admin who started it, by email address. */
+    createdBy: v.string(),
+    /** Parties it is going to, after the skipped ones were left out. */
+    total: v.number(),
+    /** "Done" is not stored: it is a run with nothing left to send. */
+    status: v.union(v.literal("sending"), v.literal("cancelled")),
+    cancelledAt: v.optional(v.number()),
+    /** Minted by the composer per confirm, so a double click starts one run, not two. */
+    clientRequestId: v.string(),
+  })
+    .index("by_client_request", ["clientRequestId"])
+    .index("by_created", ["createdAt"]),
 
   /** A party's link being opened. The receiving end of every channel, WhatsApp included. */
   visits: defineTable({

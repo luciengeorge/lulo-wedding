@@ -138,7 +138,15 @@ export type SeedGuest = {
   brunch?: RsvpStatus;
 };
 
-export type SendStatus = "queued" | "sent" | "delivered" | "delivery_delayed" | "bounced" | "complained" | "failed";
+export type SendStatus =
+  | "queued"
+  | "sent"
+  | "delivered"
+  | "delivery_delayed"
+  | "bounced"
+  | "complained"
+  | "failed"
+  | "cancelled";
 
 export type Activity = {
   visits: { source: "link" | "email" | "lookup" | "remembered"; sendId?: string }[];
