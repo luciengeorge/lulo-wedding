@@ -67,10 +67,10 @@ const SCENARIOS: Scenario[] = [
 
 const HEAD_COUNT = 5;
 
-test.beforeAll(() => {
-  backend.reset();
+test.beforeAll(async () => {
+  await backend.reset();
   for (const scenario of SCENARIOS) {
-    backend.seed([
+    await backend.seed([
       party({
         token: scenario.token,
         displayName: `Family ${scenario.token}`,
@@ -81,7 +81,7 @@ test.beforeAll(() => {
         invitedToBrunch: scenario.partyEvents.includes("brunch"),
       }),
     ]);
-    backend.seedGuests(
+    await backend.seedGuests(
       scenario.token,
       scenario.named.map((guest) => ({
         firstName: guest.first,
@@ -144,9 +144,11 @@ for (const scenario of SCENARIOS) {
       ...present.map((guest) => ({ firstName: guest.first, ...statuses(guest.events, guest.events) })),
       ...(extraSeat === null ? [] : [{ firstName: "Guest", ...statuses(scenario.partyEvents, scenario.partyEvents) }]),
     ];
-    expect(backend.replyFor(scenario.token)?.guests).toEqual(expected.map((guest) => expect.objectContaining(guest)));
+    expect((await backend.replyFor(scenario.token))?.guests).toEqual(
+      expected.map((guest) => expect.objectContaining(guest)),
+    );
     // The guest's reply never wrote anyone's invite.
-    const stored = backend.replyFor(scenario.token)?.guests ?? [];
+    const stored = (await backend.replyFor(scenario.token))?.guests ?? [];
     for (const [seat, guest] of scenario.named.entries())
       expect(stored[seat].invitedTo).toEqual(flags(...guest.events));
 

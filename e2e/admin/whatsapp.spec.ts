@@ -18,12 +18,12 @@ async function select(page: Page, name: string, surname: string) {
   await page.getByRole("checkbox", { name: `Select ${name} ${surname}` }).click();
 }
 
-function whatsappSends(token: string) {
-  return backend.activity(token).sends.filter((send) => send.channel === "whatsapp" && send.kind === "invite");
+async function whatsappSends(token: string) {
+  return (await backend.activity(token)).sends.filter((send) => send.channel === "whatsapp" && send.kind === "invite");
 }
 
-test.beforeEach(() => {
-  backend.seed([
+test.beforeEach(async () => {
+  await backend.seed([
     party({ token: "e2e-amal", displayName: "Amal", surname: "Khalil" }),
     party({ token: "e2e-bassam", displayName: "Bassam", surname: "Aoun" }),
     party({ token: "e2e-chadi", displayName: "Chadi", surname: "Mrad" }),
@@ -33,7 +33,7 @@ test.beforeEach(() => {
 test.describe("marking parties invited on WhatsApp", () => {
   test("stamps the selection, and Undo takes back only what this click added", async ({ page }) => {
     // Amal was stamped on an earlier evening.
-    backend.seedSend({ token: "e2e-amal", channel: "whatsapp", kind: "invite" });
+    await backend.seedSend({ token: "e2e-amal", channel: "whatsapp", kind: "invite" });
     await openAdmin(page);
     await expect(row(page, "Amal").getByText("WhatsApp")).toBeVisible();
 
@@ -47,17 +47,17 @@ test.describe("marking parties invited on WhatsApp", () => {
     await expect(
       page.getByRole("region", { name: "Invitation funnel" }).getByText("Invited", { exact: true }).locator(".."),
     ).toContainText("Invited2parties");
-    expect(whatsappSends("e2e-amal")).toHaveLength(1);
-    expect(whatsappSends("e2e-bassam")).toHaveLength(1);
+    expect(await whatsappSends("e2e-amal")).toHaveLength(1);
+    expect(await whatsappSends("e2e-bassam")).toHaveLength(1);
 
     await page.getByRole("button", { name: "Undo" }).click();
     await expect(page.getByText("Undone: 1 party no longer marked as invited on WhatsApp")).toBeVisible();
     await expect(row(page, "Bassam").getByText("Not yet")).toBeVisible();
     // The earlier stamp survives the undo.
     await expect(row(page, "Amal").getByText("WhatsApp")).toBeVisible();
-    expect(whatsappSends("e2e-amal")).toHaveLength(1);
-    expect(whatsappSends("e2e-bassam")).toHaveLength(0);
-    expect(whatsappSends("e2e-chadi")).toHaveLength(0);
+    expect(await whatsappSends("e2e-amal")).toHaveLength(1);
+    expect(await whatsappSends("e2e-bassam")).toHaveLength(0);
+    expect(await whatsappSends("e2e-chadi")).toHaveLength(0);
   });
 
   test("does not count a party twice when marked twice", async ({ page }) => {
@@ -72,7 +72,7 @@ test.describe("marking parties invited on WhatsApp", () => {
     await expect(page.getByText("Marked 0 parties as invited on WhatsApp")).toBeVisible();
     await expect(page.getByText("1 party already was.")).toBeVisible();
 
-    expect(whatsappSends("e2e-chadi")).toHaveLength(1);
+    expect(await whatsappSends("e2e-chadi")).toHaveLength(1);
   });
 
   test("selects everyone a filter shows and stamps them all", async ({ page }) => {
@@ -82,6 +82,6 @@ test.describe("marking parties invited on WhatsApp", () => {
     await page.getByRole("button", { name: "Mark invited on WhatsApp" }).click();
 
     await expect(page.getByText("Marked 3 parties as invited on WhatsApp")).toBeVisible();
-    for (const token of ["e2e-amal", "e2e-bassam", "e2e-chadi"]) expect(whatsappSends(token)).toHaveLength(1);
+    for (const token of ["e2e-amal", "e2e-bassam", "e2e-chadi"]) expect(await whatsappSends(token)).toHaveLength(1);
   });
 });

@@ -15,7 +15,7 @@ function row(page: Page, name: string) {
 
 test.describe("the guest list", () => {
   test("shows an online reply over the sheet's early decline", async ({ page }) => {
-    backend.seed([
+    await backend.seed([
       party({
         token: "e2e-chadi",
         displayName: "Chadi",
@@ -25,7 +25,7 @@ test.describe("the guest list", () => {
       }),
       party({ token: "e2e-dalia", displayName: "Dalia", surname: "Saab", earlyDecline: true, headCount: 3 }),
     ]);
-    backend.seedGuests("e2e-chadi", [{ firstName: "Chadi", lastName: "Mrad", wedding: "yes" }]);
+    await backend.seedGuests("e2e-chadi", [{ firstName: "Chadi", lastName: "Mrad", wedding: "yes" }]);
     await openAdmin(page);
 
     await expect(row(page, "Chadi")).toContainText("1 coming, 1 not yet said");
@@ -37,7 +37,7 @@ test.describe("the guest list", () => {
   });
 
   test("flags a party invited to no events before its link goes out", async ({ page }) => {
-    backend.seed([
+    await backend.seed([
       party({ token: "e2e-nadim", displayName: "Nadim", surname: "Aoun", invitedToWedding: false }),
       party({ token: "e2e-rania", displayName: "Rania", surname: "Aoun" }),
     ]);

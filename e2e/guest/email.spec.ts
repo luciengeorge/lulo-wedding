@@ -29,7 +29,7 @@ async function replyYes(page: Page) {
 
 test.describe("the reply receipt", () => {
   test("says what was stored, and links back to this party's own page", async ({ page }) => {
-    backend.seed([party({ token: TOKEN, headCount: 2 })]);
+    await backend.seed([party({ token: TOKEN, headCount: 2 })]);
     await replyYes(page);
 
     const email = await waitForEmail(EMAIL);
@@ -43,17 +43,17 @@ test.describe("the reply receipt", () => {
 
     // One send row for the receipt, and the link carries its id so the visit it
     // produces can be joined back to this email.
-    const [receipt] = backend.activity(TOKEN).sends;
+    const [receipt] = (await backend.activity(TOKEN)).sends;
     expect(receipt).toEqual(expect.objectContaining({ channel: "email", kind: "receipt", to: EMAIL }));
     const link = linkFromEmail(email.html, `/rsvp/${TOKEN}`);
     expect(new URL(link).searchParams.get("s")).toBe(receipt._id);
   });
 
   test("records a visit from the email when the guest follows its link, on any device", async ({ page, browser }) => {
-    backend.seed([party({ token: TOKEN, headCount: 1 })]);
+    await backend.seed([party({ token: TOKEN, headCount: 1 })]);
     await replyYes(page);
     const email = await waitForEmail(EMAIL);
-    const [receipt] = backend.activity(TOKEN).sends;
+    const [receipt] = (await backend.activity(TOKEN)).sends;
 
     // Opened from a mail app: no gate cookie, nothing remembered.
     const context = await browser.newContext();
@@ -62,11 +62,14 @@ test.describe("the reply receipt", () => {
     await expect(fresh.getByText("Thank you")).toBeVisible();
     await context.close();
 
-    expect(backend.activity(TOKEN).visits).toEqual([{ source: "link" }, { source: "email", sendId: receipt._id }]);
+    expect((await backend.activity(TOKEN)).visits).toEqual([
+      { source: "link" },
+      { source: "email", sendId: receipt._id },
+    ]);
   });
 
   test("sends the declined wording to a party who declined", async ({ page }) => {
-    backend.seed([party({ token: TOKEN, headCount: 1 })]);
+    await backend.seed([party({ token: TOKEN, headCount: 1 })]);
     await visit(page, `/rsvp/${TOKEN}`);
     await page.getByRole("button", { name: "REGRETFULLY DECLINE" }).click();
     await page.getByLabel("Your email").fill(EMAIL);
@@ -87,22 +90,24 @@ test.describe("when email cannot be sent", () => {
    */
   test("still saves the reply, and marks the receipt as failed", async ({ page, deploymentEnv }) => {
     // Without this the "outage" would be a real send.
-    expect(deploymentEnv.get("RESEND_API_KEY")).toBeNull();
-    backend.seed([party({ token: TOKEN, headCount: 1 })]);
-    deploymentEnv.remove("E2E_CAPTURE_EMAILS");
+    expect(await deploymentEnv.get("RESEND_API_KEY")).toBeNull();
+    await backend.seed([party({ token: TOKEN, headCount: 1 })]);
+    await deploymentEnv.remove("E2E_CAPTURE_EMAILS");
 
     await replyYes(page);
 
     await expect
-      .poll(() => backend.activity(TOKEN).sends.map((send) => [send.kind, send.status]), { timeout: 15_000 })
+      .poll(async () => (await backend.activity(TOKEN)).sends.map((send) => [send.kind, send.status]), {
+        timeout: 15_000,
+      })
       .toEqual([["receipt", "failed"]]);
-    expect(backend.activity(TOKEN).sends[0].error).toMatch(/RESEND_API_KEY/);
-    expect(backend.replyFor(TOKEN)).toEqual(
+    expect((await backend.activity(TOKEN)).sends[0].error).toMatch(/RESEND_API_KEY/);
+    expect(await backend.replyFor(TOKEN)).toEqual(
       expect.objectContaining({
         declined: false,
         guests: [expect.objectContaining({ firstName: "Rae", wedding: "yes" })],
       }),
     );
-    expect(backend.latestEmail(EMAIL)).toBeNull();
+    expect(await backend.latestEmail(EMAIL)).toBeNull();
   });
 });

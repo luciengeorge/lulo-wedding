@@ -31,11 +31,11 @@ test.use({ storageState: ADMIN_STATE });
 const TOKEN = "e2e-tracking";
 const EMAIL = "amal@example.com";
 
-function seedEmailedInvite(): { sendId: string; resendId: string } {
-  backend.seed([party({ token: TOKEN, displayName: "Amal", surname: "Khalil", contactEmail: EMAIL })]);
-  const sendId = backend.seedSend({ token: TOKEN, channel: "email", kind: "invite", to: EMAIL });
+async function seedEmailedInvite(): Promise<{ sendId: string; resendId: string }> {
+  await backend.seed([party({ token: TOKEN, displayName: "Amal", surname: "Khalil", contactEmail: EMAIL })]);
+  const sendId = await backend.seedSend({ token: TOKEN, channel: "email", kind: "invite", to: EMAIL });
   const resendId = `re_${randomUUID()}`;
-  backend.linkSendToResend(sendId, resendId);
+  await backend.linkSendToResend(sendId, resendId);
   return { sendId, resendId };
 }
 
@@ -65,7 +65,7 @@ async function openTimeline(page: Page, lane: string) {
 
 test.describe("an emailed invitation", () => {
   test("shows delivery, two opens and a click to the couple", async ({ page, request }) => {
-    const { resendId } = seedEmailedInvite();
+    const { resendId } = await seedEmailedInvite();
     await openAdmin(page, "/admin/insights");
     await expect(emailStat(page, "delivered")).toHaveText("0 delivered");
 
@@ -78,7 +78,7 @@ test.describe("an emailed invitation", () => {
     await expect(emailStat(page, "opened")).toHaveText("1 opened");
     await expect(emailStat(page, "clicked")).toHaveText("1 clicked");
     await expect
-      .poll(() => backend.activity(TOKEN).sends[0])
+      .poll(async () => (await backend.activity(TOKEN)).sends[0])
       .toEqual(expect.objectContaining({ status: "delivered", openCount: 2, clickCount: 1 }));
 
     const sheet = await openTimeline(page, "Invited");
@@ -92,8 +92,8 @@ test.describe("an emailed invitation", () => {
   });
 
   test("flags a bounce for follow-up, and a late delivery does not clear it", async ({ page, request }) => {
-    const { resendId } = seedEmailedInvite();
-    backend.seed([party({ token: "e2e-fine", displayName: "Bassam", surname: "Aoun" })]);
+    const { resendId } = await seedEmailedInvite();
+    await backend.seed([party({ token: "e2e-fine", displayName: "Bassam", surname: "Aoun" })]);
     await openAdmin(page);
 
     expect((await postResendEvent(request, resendEvent("email.bounced", resendId, EMAIL))).ok()).toBe(true);
@@ -103,8 +103,8 @@ test.describe("an emailed invitation", () => {
     // recorded (it stamps `deliveredAt`, which is the barrier here), but it must
     // not turn a bounced address back into a good one.
     expect((await postResendEvent(request, resendEvent("email.delivered", resendId, EMAIL))).ok()).toBe(true);
-    await expect.poll(() => backend.activity(TOKEN).sends[0].deliveredAt).toBeDefined();
-    expect(backend.activity(TOKEN).sends[0].status).toBe("bounced");
+    await expect.poll(async () => (await backend.activity(TOKEN)).sends[0].deliveredAt).toBeDefined();
+    expect((await backend.activity(TOKEN)).sends[0].status).toBe("bounced");
     await expect(partyRow(page, "Amal").getByText("Email bounced")).toBeVisible();
 
     await expect(funnelStep(page, "Email bounced")).toHaveText("Email bounced1party");
@@ -124,7 +124,7 @@ test.describe("an emailed invitation", () => {
     page,
     request,
   }) => {
-    const { resendId } = seedEmailedInvite();
+    const { resendId } = await seedEmailedInvite();
     await openAdmin(page, "/admin/insights");
 
     const forged = resendEvent("email.opened", resendId, EMAIL);
@@ -149,11 +149,13 @@ test.describe("an emailed invitation", () => {
     expect((await postResendEvent(request, resendEvent("email.delivered", resendId, EMAIL))).ok()).toBe(true);
     await expect(emailStat(page, "delivered")).toHaveText("1 delivered");
     await expect(emailStat(page, "opened")).toHaveText("0 opened");
-    expect(backend.activity(TOKEN).sends[0]).toEqual(expect.objectContaining({ openCount: 0, status: "delivered" }));
+    expect((await backend.activity(TOKEN)).sends[0]).toEqual(
+      expect.objectContaining({ openCount: 0, status: "delivered" }),
+    );
   });
 
   test("accepts and ignores an event for an email it never sent", async ({ page, request }) => {
-    const { resendId } = seedEmailedInvite();
+    const { resendId } = await seedEmailedInvite();
     await openAdmin(page, "/admin/insights");
 
     const stranger = await postResendEvent(request, resendEvent("email.bounced", `re_${randomUUID()}`, EMAIL));
@@ -171,7 +173,7 @@ test.describe("a reply receipt", () => {
    * replied, so they must not count towards the invitation funnel.
    */
   test("is tracked on the party's timeline without inflating the funnel", async ({ page, request, browser }) => {
-    backend.seed([party({ token: TOKEN, displayName: "Amal", surname: "Khalil", headCount: 1 })]);
+    await backend.seed([party({ token: TOKEN, displayName: "Amal", surname: "Khalil", headCount: 1 })]);
 
     const guestContext = await browser.newContext({ storageState: GUEST_STATE });
     const guest = await guestContext.newPage();
@@ -182,9 +184,9 @@ test.describe("a reply receipt", () => {
     await expect(guest.getByRole("heading", { name: "We will miss you" })).toBeVisible();
     await guestContext.close();
 
-    await expect.poll(() => backend.activity(TOKEN).sends.map((send) => send.kind)).toEqual(["receipt"]);
+    await expect.poll(async () => (await backend.activity(TOKEN)).sends.map((send) => send.kind)).toEqual(["receipt"]);
     const resendId = `re_${randomUUID()}`;
-    backend.linkSendToResend(backend.activity(TOKEN).sends[0]._id, resendId);
+    await backend.linkSendToResend((await backend.activity(TOKEN)).sends[0]._id, resendId);
     for (const type of ["email.delivered", "email.opened"] as const) {
       expect((await postResendEvent(request, resendEvent(type, resendId, EMAIL))).ok()).toBe(true);
     }

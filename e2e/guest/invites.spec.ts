@@ -17,8 +17,8 @@ const TOKEN = "e2e-invites";
 const CONVEX_URL = "http://127.0.0.1:3210";
 const BRUNCH_AND_WEDDING = { preWedding: false, wedding: true, brunch: true };
 
-function seedFamily() {
-  backend.seed([
+async function seedFamily() {
+  await backend.seed([
     party({
       token: TOKEN,
       displayName: "Nadia & Omar et famille",
@@ -28,7 +28,7 @@ function seedFamily() {
       invitedToBrunch: false,
     }),
   ]);
-  backend.seedGuests(TOKEN, [
+  await backend.seedGuests(TOKEN, [
     { firstName: "Nadia", lastName: "Haddad", addedByCouple: true, invitedTo: BRUNCH_AND_WEDDING },
     { firstName: "Omar", lastName: "Haddad", addedByCouple: true, invitedTo: BRUNCH_AND_WEDDING },
   ]);
@@ -44,7 +44,7 @@ function chip(page: Page, legend: string, day: string) {
 
 test.describe("a family where the couple asked two people to the brunch", () => {
   test("shows the brunch on those two cards only, and stores it that way", async ({ page }) => {
-    seedFamily();
+    await seedFamily();
     await visit(page, `/rsvp/${TOKEN}`);
 
     // Screen one is for the household: the brunch is part of this invitation.
@@ -76,18 +76,18 @@ test.describe("a family where the couple asked two people to the brunch", () => 
     await page.getByRole("button", { name: "SEND OUR REPLY" }).click();
 
     await expect(page.getByText("Thank you")).toBeVisible();
-    expect(backend.replyFor(TOKEN)?.guests).toEqual([
+    expect((await backend.replyFor(TOKEN))?.guests).toEqual([
       expect.objectContaining({ firstName: "Nadia", wedding: "yes", brunch: "yes", invitedTo: BRUNCH_AND_WEDDING }),
       expect.objectContaining({ firstName: "Omar", wedding: "yes", brunch: "no", invitedTo: BRUNCH_AND_WEDDING }),
       // Never asked about the brunch, so it is not a "no": it stays unanswered.
       expect.objectContaining({ firstName: "Sara", wedding: "yes", brunch: "pending" }),
     ]);
     // And a guest's own card never becomes a per-person invite.
-    expect(backend.replyFor(TOKEN)?.guests[2]).not.toHaveProperty("invitedTo");
+    expect((await backend.replyFor(TOKEN))?.guests[2]).not.toHaveProperty("invitedTo");
   });
 
   test("never lets a guest remove someone the couple named, only mark them not coming", async ({ page }) => {
-    seedFamily();
+    await seedFamily();
     await visit(page, `/rsvp/${TOKEN}`);
     await page.getByRole("button", { name: "JOYFULLY ACCEPT" }).click();
 
@@ -102,7 +102,7 @@ test.describe("a family where the couple asked two people to the brunch", () => 
     await page.getByRole("button", { name: "SEND OUR REPLY" }).click();
     await expect(page.getByText("Thank you")).toBeVisible();
 
-    const nadia = backend.replyFor(TOKEN)?.guests.find((guest) => guest.firstName === "Nadia");
+    const nadia = (await backend.replyFor(TOKEN))?.guests.find((guest) => guest.firstName === "Nadia");
     // Still on the list, by name, with a "no" for each event she was asked to and
     // nothing at all for the one she was not.
     expect(nadia).toEqual(
@@ -149,7 +149,7 @@ const seat = { isPlusOne: false, preWedding: false, wedding: true, brunch: false
 
 test.describe("a crafted reply sent straight to the backend", () => {
   test("cannot give a guest their own invite", async ({ request }) => {
-    seedFamily();
+    await seedFamily();
     const [nadia] = await storedGuests(request);
 
     const result = await submitDirect(
@@ -166,12 +166,12 @@ test.describe("a crafted reply sent straight to the backend", () => {
     );
 
     expect(result.status).toBe("error");
-    expect(backend.replyFor(TOKEN)?.respondedAt).toBeUndefined();
-    expect(backend.replyFor(TOKEN)?.guests[0].invitedTo).toEqual(BRUNCH_AND_WEDDING);
+    expect((await backend.replyFor(TOKEN))?.respondedAt).toBeUndefined();
+    expect((await backend.replyFor(TOKEN))?.guests[0].invitedTo).toEqual(BRUNCH_AND_WEDDING);
   });
 
   test("cannot say yes to an event the seat was never asked to", async ({ request }) => {
-    seedFamily();
+    await seedFamily();
     const [nadia, omar] = await storedGuests(request);
 
     const result = await submitDirect(
@@ -186,18 +186,18 @@ test.describe("a crafted reply sent straight to the backend", () => {
     );
 
     expect(result.status).toBe("success");
-    expect(backend.replyFor(TOKEN)?.guests).toEqual([
+    expect((await backend.replyFor(TOKEN))?.guests).toEqual([
       expect.objectContaining({ firstName: "Nadia", preWedding: "pending", invitedTo: BRUNCH_AND_WEDDING }),
       expect.objectContaining({ firstName: "Omar", preWedding: "pending", brunch: "no" }),
       expect.objectContaining({ firstName: "Sara", wedding: "yes", brunch: "pending" }),
     ]);
-    expect(backend.replyFor(TOKEN)?.guests[2]).not.toHaveProperty("invitedTo");
+    expect((await backend.replyFor(TOKEN))?.guests[2]).not.toHaveProperty("invitedTo");
   });
 
   test("cannot rewrite another family's guest by naming their row", async ({ request }) => {
-    seedFamily();
-    backend.seed([party({ token: "e2e-neighbours", displayName: "Lina", surname: "Saad", headCount: 1 })]);
-    backend.seedGuests("e2e-neighbours", [{ firstName: "Lina", lastName: "Saad", wedding: "yes" }]);
+    await seedFamily();
+    await backend.seed([party({ token: "e2e-neighbours", displayName: "Lina", surname: "Saad", headCount: 1 })]);
+    await backend.seedGuests("e2e-neighbours", [{ firstName: "Lina", lastName: "Saad", wedding: "yes" }]);
     const neighbours = await request.post(`${CONVEX_URL}/api/query`, {
       data: { path: "rsvp:getByToken", args: { token: "e2e-neighbours" }, format: "json" },
     });
@@ -209,7 +209,7 @@ test.describe("a crafted reply sent straight to the backend", () => {
     );
 
     expect(result.status).toBe("error");
-    expect(backend.replyFor("e2e-neighbours")?.guests).toEqual([
+    expect((await backend.replyFor("e2e-neighbours"))?.guests).toEqual([
       expect.objectContaining({ firstName: "Lina", wedding: "yes" }),
     ]);
   });

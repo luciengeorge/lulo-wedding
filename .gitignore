@@ -25,3 +25,4 @@ tools/monogram/.g_*.png
 test-results
 playwright-report
 playwright-report-smoke
+blob-report

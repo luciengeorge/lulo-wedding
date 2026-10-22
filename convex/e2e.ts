@@ -13,8 +13,8 @@ import { rateLimiter } from "./rateLimiter";
  * Fixtures for the browser tests.
  *
  * Every function here is `internal`, so none of it is reachable from a browser on
- * any deployment, production included. The only caller is `npx convex run` from
- * the E2E harness, which authenticates with the deployment's admin key. Anyone
+ * any deployment, production included. The only caller is the E2E harness
+ * (e2e/fixtures.ts), which authenticates with the local deployment's admin key. Anyone
  * holding that key could already do all of this and more, so these add no
  * surface; they exist so the tests do not have to drive 400 rows through the UI
  * to arrange a scenario.

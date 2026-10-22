@@ -41,7 +41,8 @@ export default defineConfig({
   workers: 1,
   forbidOnly: !!process.env.CI,
   retries: process.env.CI ? 2 : 0,
-  reporter: process.env.CI ? [["github"], ["html", { open: "never" }]] : [["list"]],
+  // CI runs the suite in shards and merges their blob reports into one HTML report.
+  reporter: process.env.CI ? [["github"], ["blob"]] : [["list"]],
   timeout: 60_000,
   expect: { timeout: 10_000 },
 

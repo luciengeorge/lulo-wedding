@@ -1,5 +1,5 @@
 import { test as base, expect, type APIRequestContext, type Page } from "@playwright/test";
-import { execFileSync } from "node:child_process";
+import { convexToJson, jsonToConvex, type JSONValue, type Value } from "convex/values";
 import { createHmac, randomUUID } from "node:crypto";
 import { readFileSync } from "node:fs";
 import { readFile } from "node:fs/promises";
@@ -7,12 +7,91 @@ import { readFile } from "node:fs/promises";
 /**
  * Talking to the throwaway backend from a spec.
  *
- * Everything goes through `npx convex run` against the mirror, which authenticates
- * with the local deployment's admin key. That is deliberate: it means the fixtures
- * are `internalMutation`/`internalQuery` and add no surface a browser could reach,
- * on this deployment or any other. A public "reset the database" endpoint would.
+ * Everything goes to the mirror's local deployment over HTTP, authenticated with
+ * its admin key, the same request `npx convex run` makes without the seconds of
+ * CLI start-up. That is deliberate: it means the fixtures are
+ * `internalMutation`/`internalQuery` and add no surface a browser could reach, on
+ * this deployment or any other. A public "reset the database" endpoint would.
  */
 const MIRROR = ".e2e/app";
+/** Written by `convex dev` in the mirror; holds the local deployment's port and admin key. */
+const LOCAL_CONFIG = `${MIRROR}/.convex/local/default/config.json`;
+/** A wedged call should fail the one test loudly, not stall the run. */
+const CALL_TIMEOUT_MS = 30_000;
+
+let localDeployment: { url: string; adminKey: string } | undefined;
+
+/** The mirror's local backend, and never anything else: the admin key only ever goes to loopback. */
+function deployment() {
+  if (localDeployment) return localDeployment;
+  const config = JSON.parse(readFileSync(LOCAL_CONFIG, "utf8")) as { ports: { cloud: number }; adminKey: string };
+  const url = new URL(`http://127.0.0.1:${config.ports.cloud}`);
+  if (url.hostname !== "127.0.0.1") throw new Error(`e2e fixtures refuse to target ${url.origin}`);
+  localDeployment = { url: url.origin, adminKey: config.adminKey };
+  return localDeployment;
+}
+
+async function adminPost(path: string, body: unknown, attempt = 0): Promise<Response> {
+  const { url, adminKey } = deployment();
+  try {
+    return await fetch(`${url}${path}`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json", Authorization: `Convex ${adminKey}` },
+      body: JSON.stringify(body),
+      signal: AbortSignal.timeout(CALL_TIMEOUT_MS),
+    });
+  } catch (error) {
+    // `convex dev` reloads the local backend when it notices a file change, and a
+    // call landing in that window fails to connect. Retrying is right; the
+    // backend is coming back, not broken. Only a refused connection proves the
+    // call never arrived: every network error is "fetch failed", and retrying a
+    // dropped one could run a seeding mutation twice.
+    const transient = (error as { cause?: { code?: string } }).cause?.code === "ECONNREFUSED";
+    if (!transient || attempt >= 4) throw error;
+    await new Promise((resolve) => setTimeout(resolve, 1_000));
+    return adminPost(path, body, attempt + 1);
+  }
+}
+
+/**
+ * Runs a function by name, as `npx convex run` does. A function that returns
+ * nothing gives null. System functions (`_system/...`) are only served on
+ * `/api/query`, not on the generic `/api/function`.
+ */
+async function convexRun<T>(
+  name: string,
+  args: Record<string, unknown> = {},
+  endpoint: "/api/function" | "/api/query" = "/api/function",
+): Promise<T> {
+  const response = await adminPost(endpoint, {
+    path: name,
+    format: "convex_encoded_json",
+    args: convexToJson(args as Value),
+  });
+  // 560 is a function that threw; its message is in the body.
+  if (!response.ok && response.status !== 560) {
+    throw new Error(`${name} failed: ${response.status} ${await response.text()}`);
+  }
+  const result = (await response.json()) as
+    | { status: "success"; value: JSONValue }
+    | { status: "error"; errorMessage: string };
+  if (result.status !== "success") throw new Error(`${name} failed: ${result.errorMessage}`);
+  return (jsonToConvex(result.value) ?? null) as T;
+}
+
+async function getDeploymentEnv(name: string): Promise<string | null> {
+  const found = await convexRun<{ value: string } | null>(
+    "_system/cli/queryEnvironmentVariables:get",
+    { name },
+    "/api/query",
+  );
+  return found?.value ?? null;
+}
+
+async function setDeploymentEnv(name: string, value: string | null): Promise<void> {
+  const response = await adminPost("/api/update_environment_variables", { changes: [{ name, value }] });
+  if (!response.ok) throw new Error(`Setting ${name} failed: ${response.status} ${await response.text()}`);
+}
 
 export const GUEST_PASSWORD = "e2e-guest-password";
 export const ADMIN_EMAIL = "admin@e2e.test";
@@ -24,47 +103,6 @@ export const ADMIN_STATE = ".e2e/admin-state.json";
 export const CONVEX_SITE_URL = "http://127.0.0.1:3211";
 /** RESEND_WEBHOOK_SECRET for this run, written by scripts/e2e/backend.mjs before the tests start. */
 const webhookSecret = () => readFileSync(".e2e/webhook-secret", "utf8");
-
-function convexRun<T>(name: string, args: Record<string, unknown> = {}, attempt = 0): T {
-  let stdout: string;
-  try {
-    stdout = execFileSync("npx", ["convex", "run", name, JSON.stringify(args)], {
-      cwd: MIRROR,
-      encoding: "utf8",
-      stdio: ["ignore", "pipe", "pipe"],
-      // A wedged CLI call should fail the one test loudly, not stall the run.
-      timeout: 60_000,
-    });
-  } catch (error) {
-    // `convex dev` reloads the local backend when it notices a file change, and a
-    // CLI call landing in that window fails to connect. Retrying is right; the
-    // backend is coming back, not broken.
-    const transient = String(error).includes("fetch failed") || String(error).includes("ECONNREFUSED");
-    if (!transient || attempt >= 4) throw error;
-    execFileSync("sleep", ["1"]);
-    return convexRun<T>(name, args, attempt + 1);
-  }
-
-  // The value is the whole of stdout; progress goes to stderr. A function that
-  // returns null prints nothing at all.
-  const text = stdout.trim();
-  if (text === "") return null as T;
-  try {
-    return JSON.parse(text) as T;
-  } catch {
-    // Older CLIs printed progress lines first: skip to wherever the value starts.
-    // Whichever of "[" or "{" comes first, or an array result parses from inside
-    // its first element and trips over the closing "]".
-    const brace = text.indexOf("{");
-    const bracket = text.indexOf("[");
-    const start = brace === -1 ? bracket : bracket === -1 ? brace : Math.min(brace, bracket);
-    return start === -1 ? (null as T) : (JSON.parse(text.slice(start)) as T);
-  }
-}
-
-function convexCli(args: string[]): void {
-  execFileSync("npx", ["convex", ...args], { cwd: MIRROR, stdio: ["ignore", "pipe", "pipe"], timeout: 60_000 });
-}
 
 export type SeedParty = {
   displayName: string;
@@ -176,7 +214,7 @@ export const backend = {
 export async function waitForEmail(to: string, timeoutMs = 10_000): Promise<CapturedEmail> {
   const deadline = Date.now() + timeoutMs;
   for (;;) {
-    const email = backend.latestEmail(to);
+    const email = await backend.latestEmail(to);
     if (email) return email;
     if (Date.now() > deadline) throw new Error(`No email captured for ${to} within ${timeoutMs}ms`);
     await new Promise((resolve) => setTimeout(resolve, 250));
@@ -186,7 +224,7 @@ export async function waitForEmail(to: string, timeoutMs = 10_000): Promise<Capt
 /** Asserts nothing arrives. Needs its own settle time, or it passes before the send would have happened. */
 export async function expectNoEmail(to: string, settleMs = 2_000): Promise<void> {
   await new Promise((resolve) => setTimeout(resolve, settleMs));
-  if (backend.latestEmail(to)) throw new Error(`An email was captured for ${to}, and none should have been`);
+  if (await backend.latestEmail(to)) throw new Error(`An email was captured for ${to}, and none should have been`);
 }
 
 export type ReplyForToken = {
@@ -301,9 +339,9 @@ export async function showLane(page: Page, lane: string) {
  * after it for a reason nowhere near the failure.
  */
 type DeploymentEnv = {
-  get: (name: string) => string | null;
-  set: (name: string, value: string) => void;
-  remove: (name: string) => void;
+  get: (name: string) => Promise<string | null>;
+  set: (name: string, value: string) => Promise<void>;
+  remove: (name: string) => Promise<void>;
 };
 
 /** Every spec starts from an empty database; the signed-in admin is shared. */
@@ -316,7 +354,7 @@ export const test = base.extend<{ resetPerTest: boolean; cleanDatabase: void; de
   resetPerTest: [true, { option: true }],
   cleanDatabase: [
     async ({ resetPerTest }, use) => {
-      if (resetPerTest) backend.reset();
+      if (resetPerTest) await backend.reset();
       await use();
     },
     { auto: true },
@@ -329,31 +367,19 @@ export const test = base.extend<{ resetPerTest: boolean; cleanDatabase: void; de
     const remember = (name: string, previous: string | null) => {
       if (!restore.has(name)) restore.set(name, previous);
     };
-    const current = (name: string): string | null => {
-      const listed = execFileSync("npx", ["convex", "env", "get", name], {
-        cwd: MIRROR,
-        encoding: "utf8",
-        stdio: ["ignore", "pipe", "pipe"],
-      }).trim();
-      return listed === "" ? null : listed;
-    };
-
     await provide({
-      get: current,
-      set: (name, value) => {
-        remember(name, current(name));
-        convexCli(["env", "set", name, value]);
+      get: getDeploymentEnv,
+      set: async (name, value) => {
+        remember(name, await getDeploymentEnv(name));
+        await setDeploymentEnv(name, value);
       },
-      remove: (name) => {
-        remember(name, current(name));
-        convexCli(["env", "remove", name]);
+      remove: async (name) => {
+        remember(name, await getDeploymentEnv(name));
+        await setDeploymentEnv(name, null);
       },
     });
 
-    for (const [name, previous] of restore) {
-      if (previous === null) convexCli(["env", "remove", name]);
-      else convexCli(["env", "set", name, previous]);
-    }
+    for (const [name, previous] of restore) await setDeploymentEnv(name, previous);
   },
 });
 

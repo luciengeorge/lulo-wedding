@@ -44,9 +44,18 @@ jobs:
       - run: pnpm auth:check
 
   e2e:
-    name: Browser tests (Playwright)
+    # One runner per shard, so each keeps the suite's isolation: its own throwaway
+    # Convex backend, rate-limit buckets and tables. With fullyParallel off,
+    # Playwright shards by file, so a file's beforeAll seeding stays in one shard.
+    # The setup project is a dependency and runs on every shard.
+    name: Browser tests (shard ${{ matrix.shard }}/${{ strategy.job-total }})
     runs-on: ubuntu-latest
-    timeout-minutes: 60
+    timeout-minutes: 30
+    strategy:
+      fail-fast: false
+      matrix:
+        # Four balances best by measured time; the split is by test count, file by file.
+        shard: [1, 2, 3, 4]
     env:
       CI: "1"
     steps:
@@ -90,19 +99,56 @@ jobs:
       # Convex backend in .e2e/app (see scripts/e2e/backend.mjs). No deploy key,
       # no real deployment. The run's commit and snapshot hash are printed at the
       # start and recorded in the report's metadata.
-      - run: pnpm e2e
+      - run: pnpm e2e --shard=${{ matrix.shard }}/${{ strategy.job-total }}
 
-      - name: Upload Playwright report
+      # Merged into one HTML report by the job below.
+      - name: Upload blob report
+        if: ${{ !cancelled() }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: blob-report-${{ matrix.shard }}
+          path: blob-report
+          retention-days: 1
+      - name: Upload traces and screenshots
         if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: playwright-test-results-${{ matrix.shard }}
+          path: test-results
+          retention-days: 14
+
+  e2e-report:
+    # The one check that says whether the whole browser suite passed.
+    name: Browser tests (Playwright)
+    needs: e2e
+    if: ${{ !cancelled() }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 10
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - uses: actions/download-artifact@v4
+        with:
+          path: all-blob-reports
+          pattern: blob-report-*
+          merge-multiple: true
+      - name: Merge shard reports
+        run: npx playwright merge-reports --reporter html ./all-blob-reports
+      - name: Upload Playwright report
         uses: actions/upload-artifact@v4
         with:
           name: playwright-report
           path: playwright-report
           retention-days: 14
-      - name: Upload traces and screenshots
-        if: failure()
-        uses: actions/upload-artifact@v4
-        with:
-          name: playwright-test-results
-          path: test-results
-          retention-days: 14
+      - name: Fail if any shard failed
+        if: ${{ needs.e2e.result != 'success' }}
+        run: |
+          echo "Browser test shards ended with: ${{ needs.e2e.result }}"
+          exit 1
