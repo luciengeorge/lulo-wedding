@@ -13,6 +13,7 @@ import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } f
 import { Skeleton } from "@/components/ui/skeleton";
 import { Spinner } from "@/components/ui/spinner";
 import { convexErrorMessage } from "@/lib/convex-error";
+import { FREE_PLAN_DAILY_LIMIT, MAX_CAMPAIGN, SEND_SPACING_MS } from "@/lib/email-campaign";
 import { cn } from "@/lib/utils";
 
 export type EmailKind = "invite" | "reminder";
@@ -33,11 +34,6 @@ const REASON_LABEL: Record<SkipReason, string> = {
   notInvited: "Not invited yet",
 };
 
-/** Resend's free plan. A bigger run is warned about, not refused: the couple may be on a paid plan. */
-const FREE_PLAN_DAILY = 100;
-/** Matches SEND_SPACING_MS in convex/campaigns.ts, for the "takes about" line. */
-const SPACING_MS = 600;
-
 const CONTROL_CLASS =
   "inline-flex h-8 items-center justify-center gap-1.5 rounded-md border border-[#E4E4E7] bg-[#FFFFFF] px-3 text-[12.5px] text-[#18181B] outline-none hover:bg-[#F4F4F5] focus-visible:ring-2 focus-visible:ring-[#A1A1AA] disabled:pointer-events-none disabled:opacity-50";
 const PRIMARY_CLASS =
@@ -52,7 +48,7 @@ function partyName(party: { displayName: string; surname: string }) {
 }
 
 function duration(count: number) {
-  const seconds = Math.max(1, Math.ceil((count * SPACING_MS) / 1000));
+  const seconds = Math.max(1, Math.ceil((count * SEND_SPACING_MS) / 1000));
   if (seconds < 90) return `about ${seconds} ${seconds === 1 ? "second" : "seconds"}`;
   return `about ${Math.round(seconds / 60)} minutes`;
 }
@@ -80,7 +76,16 @@ export function EmailComposerDialog({
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="max-h-[calc(100svh-2rem)] gap-0 overflow-y-auto bg-[#FFFFFF] p-0 text-[13px] text-[#18181B] ring-[#E4E4E7] sm:max-w-[980px]">
         {/* Mounted only while open, so every opening starts from a clean slate. */}
-        {open ? <Composer partyIds={partyIds} initialKind={initialKind} onClose={() => onOpenChange(false)} /> : null}
+        {!open ? null : partyIds.length > MAX_CAMPAIGN ? (
+          <DialogHeader className="px-5 py-4 pr-12">
+            <DialogTitle className="font-sans text-[15px]">Too many for one send</DialogTitle>
+            <DialogDescription className="text-[12.5px] text-[#71717A]">
+              Choose no more than {MAX_CAMPAIGN} parties at a time. You chose {partyIds.length}.
+            </DialogDescription>
+          </DialogHeader>
+        ) : (
+          <Composer partyIds={partyIds} initialKind={initialKind} onClose={() => onOpenChange(false)} />
+        )}
       </DialogContent>
     </Dialog>
   );
@@ -169,13 +174,13 @@ function Composer({
                   disabled={requestId !== null}
                 />
               )}
-              {recipients > FREE_PLAN_DAILY ? (
+              {recipients > FREE_PLAN_DAILY_LIMIT ? (
                 <p
                   role="note"
                   className="rounded-md border border-[#FDE68A] bg-[#FFFBEB] px-3 py-2 text-[12px] text-[#92400E]"
                 >
-                  Resend's free plan sends at most {FREE_PLAN_DAILY} emails a day. If you are on it, the rest of these
-                  will fail.
+                  Resend's free plan sends at most {FREE_PLAN_DAILY_LIMIT} emails a day. If you are on it, the rest of
+                  these will fail.
                 </p>
               ) : null}
 

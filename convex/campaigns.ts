@@ -21,14 +21,6 @@ import { EVENT_DATES } from "./rsvp";
 export const campaignKind = v.union(v.literal("invite"), v.literal("reminder"));
 export type CampaignKind = "invite" | "reminder";
 
-/**
- * Resend allows two requests a second unless asked for more. One every 600 ms
- * stays under that with room for a reply receipt going out at the same moment.
- */
-export const SEND_SPACING_MS = 600;
-
-/** The whole guest list with room to spare, and well inside a mutation's 1,000 scheduled jobs. */
-export const MAX_CAMPAIGN = 500;
 
 export const SKIP_REASONS = ["replied", "declinedEarly", "noEvents", "noEmail", "alreadySent", "notInvited"] as const;
 export type SkipReason = (typeof SKIP_REASONS)[number];

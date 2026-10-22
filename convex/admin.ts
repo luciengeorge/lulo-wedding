@@ -3,6 +3,7 @@ import { ConvexError, v, type ObjectType } from "convex/values";
 import type { Doc, Id } from "./_generated/dataModel";
 import type { MutationCtx, QueryCtx } from "./_generated/server";
 
+import { MAX_CAMPAIGN, SEND_SPACING_MS } from "../src/lib/email-campaign";
 import { buildImportKey } from "../src/lib/guest-csv";
 import { MAX_BULK } from "../src/lib/party-bulk";
 import { deriveRsvp, type RsvpState } from "../src/lib/party-filters";
@@ -15,8 +16,6 @@ import {
   campaignKind,
   guestsOf,
   invitationMessage,
-  MAX_CAMPAIGN,
-  SEND_SPACING_MS,
   sendsOf,
   skipReason,
   type SkipReason,

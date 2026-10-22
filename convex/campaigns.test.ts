@@ -6,7 +6,8 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { Doc, Id } from "./_generated/dataModel";
 
 import { api, internal } from "./_generated/api";
-import { invitationMessage, replyByDate, SEND_SPACING_MS, skipReasonFor } from "./campaigns";
+import { SEND_SPACING_MS } from "../src/lib/email-campaign";
+import { invitationMessage, replyByDate, skipReasonFor } from "./campaigns";
 import schema from "./schema";
 
 const ADMIN_EMAIL = "laura@example.com";
