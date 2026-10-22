@@ -36,7 +36,7 @@ function seatsLabel(party: PipelineRow): string {
 }
 
 /**
- * Where the latest invitation or update email got to. Only the steps it reached
+ * Where the latest invitation, update or reminder email got to. Only the steps it reached
  * are shown, so a card says "Delivered, Opened" rather than a row of greyed-out
  * maybes. Opened is dashed: it is the one step a mail app can fake.
  */
@@ -48,7 +48,7 @@ function EmailProgress({ email }: { email: NonNullable<PipelineRow["latestEmail"
     const label = email.status === "complained" ? "Marked as spam" : email.status === "failed" ? "Failed" : "Bounced";
     return (
       <span className={cn(base, "border-destructive/30 bg-destructive/5 text-destructive")}>
-        {email.kind === "update" ? `Update ${label.toLowerCase()}` : label}
+        {email.kind === "invite" ? label : `${email.kind === "update" ? "Update" : "Reminder"} ${label.toLowerCase()}`}
       </span>
     );
   }

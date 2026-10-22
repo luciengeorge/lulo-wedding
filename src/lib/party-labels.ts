@@ -53,7 +53,15 @@ export const INVITED_VIA_LABEL: Record<"email" | "whatsapp" | "both", string> = 
   both: "Email + WhatsApp",
 };
 
-export type SendStatus = "queued" | "sent" | "delivered" | "delivery_delayed" | "bounced" | "complained" | "failed";
+export type SendStatus =
+  | "queued"
+  | "sent"
+  | "delivered"
+  | "delivery_delayed"
+  | "bounced"
+  | "complained"
+  | "failed"
+  | "cancelled";
 
 /** Resend's statuses in the couple's words. "complained" is someone pressing "spam". */
 export const SEND_STATUS_LABEL: Record<SendStatus, string> = {
@@ -64,6 +72,7 @@ export const SEND_STATUS_LABEL: Record<SendStatus, string> = {
   bounced: "Bounced",
   complained: "Marked as spam",
   failed: "Failed",
+  cancelled: "Stopped before it was sent",
 };
 
 /** The statuses that mean the email did not land and the address needs a look. */

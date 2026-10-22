@@ -49,6 +49,8 @@ type BulkActionsBarProps = {
   }) => Promise<{ deletedParties: number; deletedGuests: number; missing: number }>;
   markWhatsApp: (args: { partyIds: PartyId[] }) => Promise<{ marked: number; alreadyMarked: number; missing: number }>;
   unmarkWhatsApp: (args: { partyIds: PartyId[] }) => Promise<{ unmarked: number }>;
+  /** Opens the email composer for the selection. */
+  onEmail: (parties: PartyRow[]) => void;
 };
 
 const CONTROL_CLASS =
@@ -117,6 +119,7 @@ export function BulkActionsBar({
   deleteParties,
   markWhatsApp,
   unmarkWhatsApp,
+  onEmail,
 }: BulkActionsBarProps) {
   const running = useRef(false);
   const [deleteTarget, setDeleteTarget] = useState<PartyRow[] | null>(null);
@@ -324,6 +327,10 @@ export function BulkActionsBar({
             ))}
           </DropdownMenuContent>
         </DropdownMenu>
+
+        <button type="button" className={CONTROL_CLASS} disabled={busy} onClick={() => onEmail(selected)}>
+          Email…
+        </button>
 
         <button type="button" className={CONTROL_CLASS} disabled={busy} onClick={() => void applyMarkWhatsApp()}>
           Mark invited on WhatsApp

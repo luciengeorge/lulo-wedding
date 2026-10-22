@@ -76,7 +76,7 @@ test.describe("the funnel above the guest list", () => {
     await expect(funnelStep(page, "Replied")).toHaveText("Replied2parties· 100% of invited");
     await expect(funnelStep(page, "Email bounced")).toHaveText("Email bounced0parties");
     // Amal was emailed an invitation, so the zeros mean something and need no excuse.
-    await expect(page.getByText(/Email invites aren't sent from here yet/)).toHaveCount(0);
+    await expect(page.getByText(/No invitations emailed yet/)).toHaveCount(0);
   });
 
   test("shows each party's channel and when it was last seen", async ({ page, request }) => {

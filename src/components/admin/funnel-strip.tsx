@@ -12,10 +12,10 @@ export function percentOf(part: number, whole: number): string | undefined {
 }
 
 /**
- * Shown while no invitation or update has been emailed, so a row of zeros reads
+ * Shown while no invitation, update or reminder has been emailed, so a row of zeros reads
  * as "nothing sent yet" rather than "nothing landed".
  */
-export const NO_EMAIL_INVITES_NOTE = "Email invites aren't sent from here yet, so the email numbers stay at zero.";
+export const NO_EMAIL_INVITES_NOTE = "No invitations emailed yet, so the email numbers are at zero.";
 
 function ofInvited(part: number, invited: number) {
   const percent = percentOf(part, invited);
@@ -49,7 +49,7 @@ export function FunnelStrip({ funnel }: { funnel: Funnel | undefined }) {
       <Step
         label="Opened email"
         value={funnel?.email.opened}
-        hint={funnel ? `of ${funnel.invited.email} emailed` : undefined}
+        hint={funnel ? `of ${funnel.email.sent} emailed` : undefined}
       />
       <Step label="Seen link" value={funnel?.visited} hint={funnel ? ofInvited(funnel.visited, invited) : undefined} />
       <Step label="Replied" value={funnel?.replied} hint={funnel ? ofInvited(funnel.replied, invited) : undefined} />

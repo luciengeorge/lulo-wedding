@@ -42,6 +42,8 @@ const GetRsvpSchema = z.object({
   /** The send id an email link carries, so the visit can be joined back to that email. */
   s: z.string().max(64).optional(),
   via: VisitViaSchema.optional(),
+  /** A test copy the couple sent themselves. Opening it is not the party seeing it. */
+  test: z.boolean().optional(),
 });
 
 const SubmitSchema = z.object({
@@ -80,7 +82,9 @@ export const getRsvp = createServerFn({ method: "GET" })
     return Sentry.startSpan({ name: "getRsvp" }, async () => {
       const result = await fetchAuthQuery(api.rsvp.getByToken, { token: data.token });
 
-      if (result) {
+      // A test copy opened on a phone the couple are not signed in on must not
+      // count as the party seeing it, nor leave the phone remembering the party.
+      if (result && !data.test) {
         const session = await useGuestSession();
         // `unlocked` as well as the token: a valid link is as good as the password
         // (see `unlockWithToken`). On a first, server-rendered arrival that unlock

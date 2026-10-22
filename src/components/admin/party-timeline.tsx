@@ -33,6 +33,7 @@ const VISIT_SOURCE: Record<VisitItem["source"], string> = {
 function sendTitle(send: SendItem): string {
   const kind = KIND_LABEL[send.kind];
   if (send.channel === "whatsapp") return `${kind} sent on WhatsApp`;
+  if (send.status === "cancelled") return send.to ? `${kind} to ${send.to} not sent` : `${kind} not sent`;
   return send.to ? `${kind} emailed to ${send.to}` : `${kind} emailed`;
 }
 

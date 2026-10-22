@@ -202,8 +202,6 @@ test.describe("a reply receipt", () => {
     ).toHaveCount(0);
     // A receipt is not an invitation: nothing has been emailed in the funnel's terms.
     await expect(page.getByRole("group", { name: "Emails" })).toHaveCount(0);
-    await expect(
-      page.getByText("Email invites aren't sent from here yet, so the email numbers stay at zero."),
-    ).toBeVisible();
+    await expect(page.getByText("No invitations emailed yet, so the email numbers are at zero.")).toBeVisible();
   });
 });

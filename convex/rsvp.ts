@@ -393,7 +393,7 @@ export const submit = mutation({
 });
 
 /** The three dates, which are fixed even though the venues and times are not yet. */
-const EVENT_DATES: Record<RsvpEventKey, string> = {
+export const EVENT_DATES: Record<RsvpEventKey, string> = {
   preWedding: "Thursday 15 July 2027",
   wedding: "Saturday 17 July 2027",
   brunch: "Sunday 18 July 2027",

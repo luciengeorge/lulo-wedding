@@ -29,10 +29,16 @@ const EVENT_DATE: Record<RsvpEventKey, string> = {
 /**
  * `s` is the send an email link came from; `via` is how a guest without a link
  * got here. Both only label the visit, so junk in either is dropped, not refused.
+ * `test` marks a test copy the couple emailed themselves, whose visits are not counted.
  */
 const RsvpSearchSchema = z.object({
   s: z.string().max(64).optional().catch(undefined),
   via: VisitViaSchema.optional().catch(undefined),
+  // The router reads `?test=1` as the number 1.
+  test: z
+    .union([z.literal(1), z.literal("1")])
+    .optional()
+    .catch(undefined),
 });
 
 export const Route = createFileRoute("/rsvp/$token")({
@@ -46,7 +52,7 @@ export const Route = createFileRoute("/rsvp/$token")({
     if (await unlockWithToken({ data: { token: params.token } })) return;
     return requireGuestUnlocked(location.href);
   },
-  loaderDeps: ({ search }) => ({ s: search.s, via: search.via }),
+  loaderDeps: ({ search }) => ({ s: search.s, via: search.via, test: search.test !== undefined }),
   // Loaded on the server, so the invitation is in the first response rather than
   // a round trip later, and so the page does not depend on the browser's Convex
   // client, which holds queries until an auth token a guest will never have.

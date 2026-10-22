@@ -138,7 +138,15 @@ export type SeedGuest = {
   brunch?: RsvpStatus;
 };
 
-export type SendStatus = "queued" | "sent" | "delivered" | "delivery_delayed" | "bounced" | "complained" | "failed";
+export type SendStatus =
+  | "queued"
+  | "sent"
+  | "delivered"
+  | "delivery_delayed"
+  | "bounced"
+  | "complained"
+  | "failed"
+  | "cancelled";
 
 export type Activity = {
   visits: { source: "link" | "email" | "lookup" | "remembered"; sendId?: string }[];
@@ -202,6 +210,7 @@ export const backend = {
   exhaustNameLookup: () => convexRun<null>("e2e:exhaustNameLookup"),
   exhaustSubmit: (token: string) => convexRun<null>("e2e:exhaustSubmit", { token }),
   emailCount: (to: string) => convexRun<number>("e2e:emailCount", { to }),
+  markReplied: (token: string) => convexRun<null>("e2e:markReplied", { token }),
 };
 
 /**
