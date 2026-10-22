@@ -32,9 +32,9 @@
  */
 import { spawn, spawnSync } from "node:child_process";
 import { createHash, randomBytes } from "node:crypto";
-import { existsSync, mkdirSync, readdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { cpSync, existsSync, mkdirSync, readdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { createServer } from "node:http";
-import { dirname, join, resolve } from "node:path";
+import { basename, dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
 const repoRoot = resolve(dirname(fileURLToPath(import.meta.url)), "../..");
@@ -110,25 +110,51 @@ function capture(command, args, options = {}) {
   return result.stdout.trim();
 }
 
+/** Kept in the mirror across runs, so the backend and env are not rebuilt each time. */
+const MIRROR_KEEPS = [".convex", ".env.local", "node_modules"];
+
 function mirrorRepo() {
   mkdirSync(mirror, { recursive: true });
-  run("rsync", [
-    "-a",
-    "--delete",
-    // Keep the mirror's own Convex state and env across runs, or every run pays
-    // for a fresh backend download and a full push.
-    "--filter=protect .convex",
-    "--filter=protect .env.local",
-    "--filter=protect node_modules",
-    ...EXCLUDES.map((path) => `--exclude=${path}`),
-    `${repoRoot}/`,
-    `${mirror}/`,
-  ]);
+  if (spawnSync("rsync", ["--version"]).error) copyMirror();
+  else syncMirror();
 
   // Symlinked, not copied: it is the same lockfile, and copying it is gigabytes.
   const modules = join(mirror, "node_modules");
   if (!existsSync(modules)) {
     run("ln", ["-s", join(repoRoot, "node_modules"), modules]);
+  }
+}
+
+function syncMirror() {
+  run("rsync", [
+    "-a",
+    "--delete",
+    // Keep the mirror's own Convex state and env across runs, or every run pays
+    // for a fresh backend download and a full push.
+    ...MIRROR_KEEPS.map((path) => `--filter=protect ${path}`),
+    ...EXCLUDES.map((path) => `--exclude=${path}`),
+    `${repoRoot}/`,
+    `${mirror}/`,
+  ]);
+}
+
+/**
+ * The same result without rsync, which CI's Playwright container does not ship:
+ * clear the mirror except what it keeps, then copy, skipping excluded names at
+ * any depth as rsync's --exclude does. No incremental copy, but CI's mirror
+ * starts empty anyway.
+ */
+function copyMirror() {
+  for (const entry of readdirSync(mirror)) {
+    if (!MIRROR_KEEPS.includes(entry)) rmSync(join(mirror, entry), { recursive: true, force: true });
+  }
+  for (const entry of readdirSync(repoRoot)) {
+    if (EXCLUDES.includes(entry)) continue;
+    cpSync(join(repoRoot, entry), join(mirror, entry), {
+      recursive: true,
+      verbatimSymlinks: true,
+      filter: (source) => !EXCLUDES.includes(basename(source)),
+    });
   }
 }
 
@@ -146,6 +172,8 @@ function stopStrayBackend() {
   const found = spawnSync("lsof", ["-t", "-i", `tcp:${CLOUD_PORT}`, "-i", `tcp:${READY_PORT}`, "-sTCP:LISTEN"], {
     encoding: "utf8",
   });
+  // No lsof (CI's Playwright container) means a fresh machine with nothing to reclaim.
+  if (found.error) return;
   const pids = found.stdout
     .split("\n")
     .map((line) => line.trim())
@@ -283,9 +311,10 @@ function snapshotHash() {
 }
 
 function stampRun() {
-  const git = (...args) => spawnSync("git", args, { cwd: repoRoot, encoding: "utf8" }).stdout.trim();
+  // CI's container may have no git, and its checkout no .git; GitHub names the commit.
+  const git = (...args) => spawnSync("git", args, { cwd: repoRoot, encoding: "utf8" }).stdout?.trim() ?? "";
   const stamp = {
-    commit: git("rev-parse", "--short=12", "HEAD"),
+    commit: git("rev-parse", "--short=12", "HEAD") || process.env.GITHUB_SHA?.slice(0, 12) || "unknown",
     dirty: git("status", "--porcelain") !== "",
     snapshot: DEV_MODE ? "live working tree (e2e:dev)" : snapshotHash(),
     app: DEV_MODE ? "vite dev" : "production build",

@@ -50,6 +50,13 @@ jobs:
     # The setup project is a dependency and runs on every shard.
     name: Browser tests (shard ${{ matrix.shard }}/${{ strategy.job-total }})
     runs-on: ubuntu-latest
+    # Playwright's own image ships the browsers and every system package they
+    # need. Installing those with apt on each run took 1 to 24 minutes depending
+    # on the mirror, and once ran a shard into its timeout. The tag must match
+    # @playwright/test in pnpm-lock.yaml (a test in the e2e step checks it).
+    container:
+      image: mcr.microsoft.com/playwright:v1.64.1-noble
+      options: --ipc=host
     timeout-minutes: 30
     strategy:
       fail-fast: false
@@ -75,18 +82,12 @@ jobs:
           echo "playwright=$(node -p "require('@playwright/test/package.json').version")" >> "$GITHUB_OUTPUT"
           echo "convex=$(node -p "require('convex/package.json').version")" >> "$GITHUB_OUTPUT"
 
-      - name: Cache Playwright browsers
-        id: browsers
-        uses: actions/cache@v4
-        with:
-          path: ~/.cache/ms-playwright
-          key: playwright-${{ runner.os }}-${{ steps.versions.outputs.playwright }}-chromium-webkit
-      - name: Install Playwright browsers
-        if: steps.browsers.outputs.cache-hit != 'true'
-        run: npx playwright install --with-deps chromium webkit
-      - name: Install Playwright system dependencies
-        if: steps.browsers.outputs.cache-hit == 'true'
-        run: npx playwright install-deps chromium webkit
+      - name: Playwright matches the container image
+        run: |
+          test "${{ steps.versions.outputs.playwright }}" = "1.64.1" || {
+            echo "::error::@playwright/test is ${{ steps.versions.outputs.playwright }} but the job runs in the v1.64.1 image. Update container.image in .github/workflows/ci.yml."
+            exit 1
+          }
 
       # The local Convex backend binary the harness downloads on first run.
       - name: Cache Convex local backend
