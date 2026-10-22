@@ -637,6 +637,39 @@ describe("WhatsApp invites and the funnel", () => {
     await insertSend(t, party, { kind: "update" });
     expect((await t.query(api.admin.funnel, {})).email.sent).toBe(1);
   });
+
+  it("counts reminders in the email numbers without making anyone invited by email", async () => {
+    const t = setup();
+    const whatsapped = await insertParty(t, { token: "w", importKey: "w" });
+    const remindedOnly = await insertParty(t, { token: "r", importKey: "r" });
+    await t.mutation(api.admin.markInvitedOnWhatsApp, { partyIds: [whatsapped] });
+    await insertSend(t, whatsapped, {
+      kind: "reminder",
+      status: "delivered",
+      deliveredAt: 2,
+      openCount: 1,
+      firstOpenedAt: 3,
+      clickCount: 1,
+    });
+    await insertSend(t, remindedOnly, { kind: "reminder", status: "bounced", bouncedAt: 2 });
+
+    const funnel = await t.query(api.admin.funnel, {});
+    expect(funnel.email).toEqual({ sent: 2, delivered: 1, opened: 1, clicked: 1, bounced: 1, complained: 0 });
+    // Who was invited, and how first, is still the invitations' business.
+    expect(funnel.invited).toEqual({ email: 0, whatsapp: 1, any: 1 });
+    expect(funnel.byFirstChannel.email.parties).toBe(0);
+    expect(funnel.byFirstChannel.whatsapp.parties).toBe(1);
+
+    const rows = await t.query(api.admin.pipeline, {});
+    expect(rows.find((row) => row.partyId === whatsapped)).toMatchObject({
+      invitedVia: "whatsapp",
+      latestEmail: { kind: "reminder", status: "delivered", delivered: true, opened: true, clicked: true },
+    });
+    const reminded = rows.find((row) => row.partyId === remindedOnly);
+    expect(reminded).toMatchObject({ latestEmail: { kind: "reminder", status: "bounced" }, emailTrouble: "bounced" });
+    expect(reminded).not.toHaveProperty("firstInvitedAt");
+    expect(reminded).not.toHaveProperty("invitedVia");
+  });
 });
 
 describe("the pipeline board's query", () => {

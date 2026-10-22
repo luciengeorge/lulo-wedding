@@ -354,7 +354,7 @@ function ChannelRow({ label, counts }: { label: string; counts: Funnel["byFirstC
   );
 }
 
-/** Counted in parties, of those emailed an invitation or update. */
+/** Counted in parties, of those emailed an invitation, update or reminder. */
 function EmailRow({ funnel }: { funnel: Funnel }) {
   const steps = [
     { label: "delivered", value: funnel.email.delivered },

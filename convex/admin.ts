@@ -178,8 +178,9 @@ async function loadAll(ctx: QueryCtx) {
   };
 }
 
-const isEmailInvite = (send: Doc<"sends">) =>
-  send.channel === "email" && (send.kind === "invite" || send.kind === "update");
+/** The emails the funnel and the board count. Not receipts: those go to people who already replied. */
+const isFunnelEmail = (send: Doc<"sends">) =>
+  send.channel === "email" && (send.kind === "invite" || send.kind === "update" || send.kind === "reminder");
 
 function engagementOf(sends: readonly Doc<"sends">[], visits: readonly Doc<"visits">[]) {
   const invites = sends.filter((send) => send.kind === "invite");
@@ -646,7 +647,7 @@ const channelConversion = v.object({ parties: v.number(), visited: v.number(), r
 /**
  * The invitation funnel, counted in parties throughout.
  *
- * Email engagement counts invites and updates only: a receipt is opened by people
+ * Email engagement counts invitations, updates and reminders: a receipt is opened by people
  * who have already replied, and would flatter the numbers.
  *
  * `byFirstChannel` splits parties by whichever invite reached them first, so a
@@ -658,7 +659,7 @@ export const funnel = query({
     parties: v.number(),
     invited: v.object({ email: v.number(), whatsapp: v.number(), any: v.number() }),
     email: v.object({
-      /** Parties with any invitation or update email. Zero until the app sends them. */
+      /** Parties with any invitation, update or reminder email. */
       sent: v.number(),
       delivered: v.number(),
       opened: v.number(),
@@ -690,7 +691,7 @@ export const funnel = query({
     for (const party of parties) {
       const sends = sendsByParty.get(party._id) ?? [];
       const invites = sends.filter((send) => send.kind === "invite").sort((a, b) => a.sentAt - b.sentAt);
-      const emails = sends.filter(isEmailInvite);
+      const emails = sends.filter(isFunnelEmail);
       const visited = (visitsByParty.get(party._id)?.length ?? 0) > 0;
       const replied = party.respondedAt !== undefined || party.earlyDecline;
 
@@ -803,7 +804,7 @@ export const partyActivity = query({
 });
 
 const emailProgress = v.object({
-  kind: v.union(v.literal("invite"), v.literal("update")),
+  kind: v.union(v.literal("invite"), v.literal("update"), v.literal("reminder")),
   status: sendStatus,
   delivered: v.boolean(),
   opened: v.boolean(),
@@ -853,7 +854,7 @@ export const pipeline = query({
       lastActivityAt: v.optional(v.number()),
       reply: v.optional(v.union(v.literal("coming"), v.literal("partly"), v.literal("declined"))),
       emailTrouble: v.optional(v.union(v.literal("bounced"), v.literal("complained"), v.literal("failed"))),
-      /** The latest invitation or update email. Receipts go to people who already replied. */
+      /** The latest invitation, update or reminder email. Receipts go to people who already replied. */
       latestEmail: v.optional(emailProgress),
     }),
   ),
@@ -869,7 +870,7 @@ export const pipeline = query({
       const { invitedVia: via } = engagementOf(sends, visits);
       const invites = sends.filter((send) => send.kind === "invite");
       const emails = sends.filter((send) => send.channel === "email").sort((a, b) => b.sentAt - a.sentAt);
-      const latest = emails.find(isEmailInvite);
+      const latest = emails.find(isFunnelEmail);
       const trouble = emails[0]?.status;
 
       return {
@@ -888,7 +889,7 @@ export const pipeline = query({
         reply: replyOutcome(party, guests),
         emailTrouble: trouble === "bounced" || trouble === "complained" || trouble === "failed" ? trouble : undefined,
         latestEmail:
-          latest && (latest.kind === "invite" || latest.kind === "update")
+          latest && (latest.kind === "invite" || latest.kind === "update" || latest.kind === "reminder")
             ? {
                 kind: latest.kind,
                 status: latest.status,

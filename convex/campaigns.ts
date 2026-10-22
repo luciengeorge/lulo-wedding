@@ -70,7 +70,7 @@ export type InvitationProps = {
 export type InvitationMessage = { subject: string; template: CampaignKind; props: InvitationProps };
 
 export const SUBJECTS: Record<CampaignKind, string> = {
-  invite: "You are invited: Laura & Lucien, July 2027",
+  invite: "You are invited: Laura & Lucien, 17 July 2027",
   reminder: "A gentle reminder from Laura & Lucien",
 };
 

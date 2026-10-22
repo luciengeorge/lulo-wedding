@@ -373,7 +373,7 @@ describe("sendTestEmail", () => {
     const [job] = await jobs(t);
     const [args] = job.args as [{ to: string; subject: string; sendId?: string; props: { rsvpUrl: string } }];
     expect(args.to).toBe(ADMIN_EMAIL);
-    expect(args.subject).toBe("[Test] You are invited: Laura & Lucien, July 2027");
+    expect(args.subject).toBe("[Test] You are invited: Laura & Lucien, 17 July 2027");
     expect(args.sendId).toBeUndefined();
     expect(args.props.rsvpUrl).toMatch(/\?test=1$/);
   });

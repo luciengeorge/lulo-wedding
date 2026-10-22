@@ -25,7 +25,7 @@ test.use({ storageState: ADMIN_STATE });
 
 const AMAL = { token: "e2e-amal", email: "amal@example.com" };
 const BASSAM = { token: "e2e-bassam", email: "bassam@example.com" };
-const INVITE_SUBJECT = "You are invited: Laura & Lucien, July 2027";
+const INVITE_SUBJECT = "You are invited: Laura & Lucien, 17 July 2027";
 const REMINDER_SUBJECT = "A gentle reminder from Laura & Lucien";
 /**
  * A phone's mail app: no cookies at all. A bare `browser.newContext()` would
@@ -232,6 +232,12 @@ test.describe("emailing reminders", () => {
     expect(new URL(linkFromEmail(reminder.html, `/rsvp/${AMAL.token}`)).searchParams.get("s")).toBe(sent?._id);
     expect(await backend.emailCount(BASSAM.email)).toBe(0);
     expect(await backend.emailCount("chadi@example.com")).toBe(0);
+
+    // The reminder counts in the email numbers; it does not make Amal invited by email.
+    await openAdmin(page, "/admin/insights");
+    await expect(page.getByRole("group", { name: "Emails" })).toContainText("1 sent");
+    await expect(page.getByRole("group", { name: "Email first" })).toContainText("0 invited");
+    await expect(page.getByText(/No invitations emailed yet/)).toHaveCount(0);
   });
 
   test("can be started from a lane of the pipeline", async ({ page }) => {

@@ -129,6 +129,28 @@ describe("PipelineBoard", () => {
     expect(cardNames(within(replied).getByRole("region", { name: "Declined" }))).toEqual(["Ghada Haddad"]);
   });
 
+  it("says when it was a reminder that bounced", () => {
+    renderBoard([
+      party("Iman", {
+        stage: "invited",
+        invitedVia: "whatsapp",
+        firstInvitedAt: now - DAY,
+        emailTrouble: "bounced",
+        latestEmail: { kind: "reminder", status: "bounced", delivered: false, opened: false, clicked: false },
+      }),
+    ]);
+    expect(within(lane("Invited")).getByText("Reminder bounced")).toBeInTheDocument();
+  });
+
+  it("offers a reminder for the Invited and Seen lanes only", () => {
+    const onRemind = vi.fn();
+    render(<PipelineBoard parties={board} canDrag onOpen={vi.fn()} onMarkInvited={vi.fn()} onRemind={onRemind} />);
+    expect(screen.queryByRole("button", { name: "Remind this lane: Not invited" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Remind this lane: Replied" })).not.toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Remind this lane: Invited" }));
+    expect(onRemind.mock.calls[0][0].map((p: BoardParty) => p.displayName)).toEqual(["Bassam", "Chadi"]);
+  });
+
   it("spells out why in the attention lane, and keeps the card in its stage too", () => {
     renderBoard();
     const attention = lane("Needs attention");
