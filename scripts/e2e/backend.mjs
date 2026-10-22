@@ -146,6 +146,8 @@ function stopStrayBackend() {
   const found = spawnSync("lsof", ["-t", "-i", `tcp:${CLOUD_PORT}`, "-i", `tcp:${READY_PORT}`, "-sTCP:LISTEN"], {
     encoding: "utf8",
   });
+  // No lsof (CI's Playwright container) means a fresh machine with nothing to reclaim.
+  if (found.error) return;
   const pids = found.stdout
     .split("\n")
     .map((line) => line.trim())
@@ -283,9 +285,10 @@ function snapshotHash() {
 }
 
 function stampRun() {
-  const git = (...args) => spawnSync("git", args, { cwd: repoRoot, encoding: "utf8" }).stdout.trim();
+  // CI's container may have no git, and its checkout no .git; GitHub names the commit.
+  const git = (...args) => spawnSync("git", args, { cwd: repoRoot, encoding: "utf8" }).stdout?.trim() ?? "";
   const stamp = {
-    commit: git("rev-parse", "--short=12", "HEAD"),
+    commit: git("rev-parse", "--short=12", "HEAD") || process.env.GITHUB_SHA?.slice(0, 12) || "unknown",
     dirty: git("status", "--porcelain") !== "",
     snapshot: DEV_MODE ? "live working tree (e2e:dev)" : snapshotHash(),
     app: DEV_MODE ? "vite dev" : "production build",
