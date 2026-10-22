@@ -3,6 +3,7 @@ import { ConvexError, v, type ObjectType } from "convex/values";
 import type { Doc, Id } from "./_generated/dataModel";
 import type { MutationCtx, QueryCtx } from "./_generated/server";
 
+import { buildDashboard } from "../src/lib/dashboard";
 import { MAX_CAMPAIGN, SEND_SPACING_MS } from "../src/lib/email-campaign";
 import { buildImportKey } from "../src/lib/guest-csv";
 import { MAX_BULK } from "../src/lib/party-bulk";
@@ -902,6 +903,112 @@ export const pipeline = query({
             : undefined,
       };
     });
+  },
+});
+
+const eventKey = v.union(v.literal("preWedding"), v.literal("wedding"), v.literal("brunch"));
+const groupRate = v.object({ group: v.string(), base: v.number(), replied: v.number(), coming: v.number() });
+const channelFunnel = v.object({ parties: v.number(), visited: v.number(), replied: v.number() });
+
+/**
+ * Every number on /admin/dashboard, in one pass over the tables `loadAll` reads.
+ *
+ * Aggregated here rather than in the browser so nothing per-party leaves the
+ * server: no tokens, no addresses, no notes. The one list is the dietary notes
+ * of guests who are coming, which is what the caterer needs.
+ */
+export const dashboard = query({
+  args: {},
+  returns: v.object({
+    parties: v.number(),
+    replies: v.number(),
+    seats: v.array(
+      v.object({
+        event: eventKey,
+        seats: v.number(),
+        coming: v.number(),
+        notComing: v.number(),
+        noAnswer: v.number(),
+        plusOnesComing: v.number(),
+      }),
+    ),
+    projection: v.object({
+      minReplies: v.number(),
+      shown: v.boolean(),
+      events: v.array(
+        v.object({
+          event: eventKey,
+          confirmed: v.number(),
+          pending: v.number(),
+          answered: v.number(),
+          projected: v.optional(v.number()),
+          yesRate: v.optional(v.number()),
+        }),
+      ),
+    }),
+    plusOnes: v.object({ allowed: v.number(), named: v.number(), coming: v.number() }),
+    dietary: v.array(v.object({ name: v.string(), note: v.string() })),
+    repliesOverTime: v.object({
+      days: v.array(v.object({ day: v.string(), coming: v.number(), declined: v.number() })),
+      campaigns: v.array(v.object({ day: v.string(), kind: campaignKind })),
+      undatedDeclines: v.number(),
+    }),
+    groups: v.object({
+      who: v.array(groupRate),
+      link: v.array(groupRate),
+      wave: v.array(groupRate),
+      whereFrom: v.array(groupRate),
+    }),
+    timeToReply: v.object({
+      bins: v.array(v.object({ label: v.string(), parties: v.number() })),
+      medianDays: v.optional(v.number()),
+      unprompted: v.number(),
+    }),
+    channels: v.object({ email: channelFunnel, whatsapp: channelFunnel }),
+    campaigns: v.array(
+      v.object({
+        kind: campaignKind,
+        createdAt: v.number(),
+        sent: v.number(),
+        delivered: v.number(),
+        opened: v.number(),
+        clicked: v.number(),
+        bounced: v.number(),
+        failed: v.number(),
+        complained: v.number(),
+      }),
+    ),
+    visits: v.object({
+      days: v.array(
+        v.object({
+          day: v.string(),
+          link: v.number(),
+          email: v.number(),
+          lookup: v.number(),
+          remembered: v.number(),
+        }),
+      ),
+      total: v.number(),
+      earlierDays: v.number(),
+    }),
+  }),
+  handler: async (ctx) => {
+    await requireAdmin(ctx);
+
+    const [{ parties, guestsByParty, sendsByParty, visitsByParty }, campaigns] = await Promise.all([
+      loadAll(ctx),
+      ctx.db.query("campaigns").collect(),
+    ]);
+
+    return buildDashboard(
+      parties.map((party) => ({
+        party,
+        guests: guestsByParty.get(party._id) ?? [],
+        sends: sendsByParty.get(party._id) ?? [],
+        visits: visitsByParty.get(party._id) ?? [],
+      })),
+      campaigns.map((campaign) => ({ id: campaign._id, kind: campaign.kind, createdAt: campaign.createdAt })),
+    );
   },
 });
 
