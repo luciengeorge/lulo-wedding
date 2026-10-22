@@ -1,5 +1,5 @@
 import { fireEvent, render, screen, within } from "@testing-library/react";
-import { describe, expect, it, vi } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import type { BoardParty } from "./pipeline-card";
 
@@ -110,6 +110,8 @@ describe("groupLanes", () => {
 });
 
 describe("PipelineBoard", () => {
+  beforeEach(() => window.localStorage.clear());
+
   it("shows each lane with its count, and what share of the stage before got this far", () => {
     renderBoard();
     expect(cardNames(lane("Not invited"))).toEqual(["Amal Haddad", "Hana Haddad", "Zeina Haddad"]);
@@ -126,6 +128,23 @@ describe("PipelineBoard", () => {
     const replied = lane("Replied");
     expect(cardNames(within(replied).getByRole("region", { name: "Coming" }))).toEqual(["Elie Haddad"]);
     expect(cardNames(within(replied).getByRole("region", { name: "Partly" }))).toEqual(["Fadi Haddad"]);
+    expect(cardNames(within(replied).getByRole("region", { name: "Declined" }))).toEqual(["Ghada Haddad"]);
+  });
+
+  it("folds each reply group on its own, from a button that says whether it is open", () => {
+    renderBoard();
+    const replied = lane("Replied");
+    const declined = within(replied).getByRole("button", { name: "Declined 1" });
+    expect(declined).toHaveAttribute("aria-expanded", "true");
+
+    fireEvent.click(declined);
+    expect(declined).toHaveAttribute("aria-expanded", "false");
+    expect(cardNames(within(replied).getByRole("region", { name: "Declined" }))).toEqual([]);
+    expect(cardNames(within(replied).getByRole("region", { name: "Coming" }))).toEqual(["Elie Haddad"]);
+    expect(window.localStorage.getItem("admin.pipeline.repliedFolded")).toBe('["declined"]');
+
+    fireEvent.click(declined);
+    expect(declined).toHaveAttribute("aria-expanded", "true");
     expect(cardNames(within(replied).getByRole("region", { name: "Declined" }))).toEqual(["Ghada Haddad"]);
   });
 

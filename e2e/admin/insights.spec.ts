@@ -320,6 +320,119 @@ test.describe("the pipeline board", () => {
   });
 });
 
+/** Enough Not invited cards to overflow a lane, named so they sort in seeding order. */
+function crowd(count: number) {
+  return Array.from({ length: count }, (_, index) =>
+    party({
+      token: `e2e-crowd-${index}`,
+      displayName: `Guest ${String(index + 1).padStart(2, "0")}`,
+      surname: "Crowd",
+    }),
+  );
+}
+
+test("folds a reply group away, and remembers it after a reload", async ({ page }) => {
+  await backend.seed([
+    party({ token: "e2e-chadi", displayName: "Chadi", surname: "Mrad", earlyDecline: true }),
+    party({ token: "e2e-ghada", displayName: "Ghada", surname: "Azar", headCount: 1, respondedAt: Date.now() - HOUR }),
+  ]);
+  await backend.seedGuests("e2e-ghada", [{ firstName: "Ghada", lastName: "Azar", wedding: "yes" }]);
+  await openAdmin(page, "/admin/insights");
+
+  let replied = await showLane(page, "Replied");
+  const toggle = (group: string) => replied.getByRole("button", { name: new RegExp(`^${group} \\d+$`) });
+  const chadi = () => replied.getByRole("button", { name: "Chadi Mrad", exact: true });
+  const ghada = () => replied.getByRole("button", { name: "Ghada Azar", exact: true });
+
+  for (const group of ["Coming", "Partly", "Declined"]) {
+    await expect(toggle(group)).toHaveAttribute("aria-expanded", "true");
+  }
+  await expect(chadi()).toBeVisible();
+
+  await toggle("Declined").click();
+  await expect(toggle("Declined")).toHaveAttribute("aria-expanded", "false");
+  await expect(toggle("Declined")).toHaveText("Declined 1");
+  await expect(chadi()).toHaveCount(0);
+  await expect(ghada()).toBeVisible();
+
+  await openAdmin(page, "/admin/insights");
+  replied = await showLane(page, "Replied");
+  await expect(toggle("Declined")).toHaveAttribute("aria-expanded", "false");
+  await expect(chadi()).toHaveCount(0);
+  await expect(toggle("Coming")).toHaveAttribute("aria-expanded", "true");
+  await expect(ghada()).toBeVisible();
+
+  await toggle("Declined").focus();
+  await page.keyboard.press("Enter");
+  await expect(toggle("Declined")).toHaveAttribute("aria-expanded", "true");
+  await expect(chadi()).toBeVisible();
+});
+
+test.describe("on a wide screen", () => {
+  test.use({ viewport: { width: 1440, height: 900 }, isMobile: false, hasTouch: false });
+
+  test("scrolls each lane on its own, and never the page", async ({ page }) => {
+    await backend.seed(crowd(36));
+    await openAdmin(page, "/admin/insights");
+
+    const pageScroll = () => page.evaluate(() => window.scrollY);
+    const pageOverflow = () =>
+      page.evaluate(() => ({
+        down: document.documentElement.scrollHeight - window.innerHeight,
+        across: document.documentElement.scrollWidth - window.innerWidth,
+      }));
+    expect(await pageOverflow()).toEqual({ down: 0, across: 0 });
+
+    const notInvited = page.getByRole("region", { name: "Not invited", exact: true });
+    const list = notInvited.locator(":scope > div");
+    const box = await list.boundingBox();
+    if (!box) throw new Error("The lane is not on screen");
+    expect(box.y + box.height).toBeLessThanOrEqual(900);
+
+    await page.mouse.move(box.x + box.width / 2, box.y + box.height / 2);
+    await page.mouse.wheel(0, 900);
+    await expect.poll(() => list.evaluate((node) => node.scrollTop)).toBeGreaterThan(0);
+    expect(await pageScroll()).toBe(0);
+    await expect(notInvited.getByRole("button", { name: "Guest 01 Crowd", exact: true })).not.toBeInViewport();
+
+    // Everything above the cards stays put.
+    for (const fixed of [
+      page.getByRole("navigation", { name: "Admin" }),
+      page.getByRole("region", { name: "Funnel by channel" }),
+      page.getByRole("searchbox", { name: "Search name or surname" }),
+      notInvited.locator("header"),
+      page.getByRole("region", { name: "Replied", exact: true }).locator("header"),
+    ]) {
+      await expect(fixed).toBeInViewport({ ratio: 1 });
+    }
+
+    // The rest of a long lane is still a click away, at the foot of its own scroll.
+    await notInvited.getByRole("button", { name: "Show 6 more of 6" }).click();
+    await expect(notInvited.locator("[data-party]")).toHaveCount(36);
+    // Off-screen cards are laid out lazily, so the lane's height settles as it scrolls.
+    await expect(async () => {
+      await list.evaluate((node) => (node.scrollTop = node.scrollHeight));
+      await expect(notInvited.getByRole("button", { name: "Guest 36 Crowd", exact: true })).toBeInViewport({
+        timeout: 1_000,
+      });
+    }).toPass({ timeout: 10_000 });
+    expect(await pageScroll()).toBe(0);
+    expect(await pageOverflow()).toEqual({ down: 0, across: 0 });
+
+    // A card from deep in a scrolled lane still drops on Invited.
+    const card = await notInvited.getByRole("button", { name: "Guest 36 Crowd", exact: true }).boundingBox();
+    const invited = await page.getByRole("region", { name: "Invited", exact: true }).boundingBox();
+    if (!card || !invited) throw new Error("The card or the lane is not on screen");
+    await page.mouse.move(card.x + card.width / 2, card.y + 20);
+    await page.mouse.down();
+    await page.mouse.move(card.x + card.width / 2 + 20, card.y + 20, { steps: 4 });
+    await page.mouse.move(invited.x + invited.width / 2, invited.y + 120, { steps: 12 });
+    await page.mouse.up();
+    await expect(page.getByText("Marked Guest 36 Crowd as invited on WhatsApp")).toBeVisible();
+    expect(await pageScroll()).toBe(0);
+  });
+});
+
 /** Dragging needs the lanes side by side, so these run at desktop size on every engine. */
 test.describe("dragging a party to Invited", () => {
   test.use({ viewport: { width: 1440, height: 900 }, isMobile: false, hasTouch: false });
@@ -475,5 +588,19 @@ test.describe("on a 375px phone", () => {
       await showLane(page, lane);
       expect(await overflow()).toBeLessThanOrEqual(0);
     }
+  });
+
+  test("scrolls the page, not the lane, and never sideways", async ({ page }) => {
+    await backend.seed(crowd(20));
+    await openAdmin(page, "/admin/insights");
+
+    const notInvited = await showLane(page, "Not invited");
+    const list = notInvited.locator(":scope > div");
+    expect(await list.evaluate((node) => node.scrollHeight - node.clientHeight)).toBeLessThanOrEqual(0);
+    expect(await page.evaluate(() => document.documentElement.scrollHeight - window.innerHeight)).toBeGreaterThan(0);
+
+    await page.evaluate(() => window.scrollTo(0, 600));
+    await expect.poll(() => page.evaluate(() => window.scrollY)).toBeGreaterThan(0);
+    expect(await page.evaluate(() => document.documentElement.scrollWidth - window.innerWidth)).toBeLessThanOrEqual(0);
   });
 });

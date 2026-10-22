@@ -178,12 +178,14 @@ function InsightsPage() {
   return (
     // On a wide screen the board owns the rest of the viewport and each lane
     // scrolls on its own, the way a pipeline is read: across, then down one lane.
-    <div className="flex flex-1 flex-col md:h-[calc(100svh-60px)] md:min-h-0">
+    // The height is fixed below the 60px admin header, and flex-none, because
+    // flex-1's zero basis lets the content's height win over it and the page scrolls.
+    <div className="flex flex-1 flex-col md:h-[calc(100dvh-60px)] md:flex-none md:overflow-hidden">
       <ChannelStrip funnel={funnel} />
 
       <section
         aria-label="Filters"
-        className="flex flex-col gap-2 px-4 py-3 sm:px-6 md:flex-row md:flex-wrap md:items-center"
+        className="flex shrink-0 flex-col gap-2 px-4 py-3 sm:px-6 md:flex-row md:flex-wrap md:items-center"
       >
         {/* Title and count share a line on a phone; on a wide screen the count moves to the far end. */}
         <div className="flex items-baseline justify-between gap-3 md:contents">
@@ -294,7 +296,7 @@ function ChannelStrip({ funnel }: { funnel: Funnel | undefined }) {
   return (
     <section
       aria-label="Funnel by channel"
-      className="flex flex-wrap items-center gap-x-6 gap-y-1.5 border-b border-border px-4 py-2.5 text-[12px] sm:px-6"
+      className="flex shrink-0 flex-wrap items-center gap-x-6 gap-y-1.5 border-b border-border px-4 py-2.5 text-[12px] sm:px-6"
     >
       {funnel === undefined ? (
         <>
