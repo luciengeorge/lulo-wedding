@@ -35,9 +35,29 @@ export type DashboardParty = RsvpParty & {
   link: PartyLink;
   wave: PartyWave;
   whereFrom?: string;
+  firstRespondedAt?: number;
 };
 
-export type DashboardGuest = RsvpGuest & { firstName: string; lastName: string; dietaryNotes?: string };
+export type DashboardGuest = RsvpGuest & {
+  firstName: string;
+  lastName: string;
+  dietaryNotes?: string;
+  preWeddingAt?: number;
+  weddingAt?: number;
+  brunchAt?: number;
+};
+
+/**
+ * When the party first replied. `respondedAt` moves on every edit, so it is the
+ * last resort. Replies from before `firstRespondedAt` existed fall back to the
+ * earliest per-event answer, which only moves when that answer changes.
+ */
+function firstReplyAt(party: DashboardParty, guests: readonly DashboardGuest[]): number | undefined {
+  if (party.firstRespondedAt !== undefined) return party.firstRespondedAt;
+  if (party.respondedAt === undefined) return undefined;
+  const answered = guests.flatMap((guest) => [guest.preWeddingAt, guest.weddingAt, guest.brunchAt]);
+  return Math.min(party.respondedAt, ...answered.filter((at): at is number => at !== undefined));
+}
 
 export type DashboardSend = {
   channel: "email" | "whatsapp";
@@ -265,8 +285,9 @@ export function buildDashboard(entries: readonly DashboardEntry[], campaigns: re
       if (coming && note) dietary.push({ name: `${guest.firstName} ${guest.lastName}`.trim(), note });
     }
 
-    if (party.respondedAt !== undefined && (rsvp.state === "attending" || declined)) {
-      const day = dayKey(party.respondedAt);
+    const repliedAt = firstReplyAt(party, guests);
+    if (repliedAt !== undefined && (rsvp.state === "attending" || declined)) {
+      const day = dayKey(repliedAt);
       const counts = replyDays.get(day) ?? { coming: 0, declined: 0 };
       if (declined) counts.declined++;
       else counts.coming++;
@@ -295,9 +316,9 @@ export function buildDashboard(entries: readonly DashboardEntry[], campaigns: re
       }
     }
 
-    if (party.respondedAt !== undefined) {
-      if (firstInvite && party.respondedAt >= firstInvite.sentAt) {
-        replyDelays.push((party.respondedAt - firstInvite.sentAt) / DAY);
+    if (repliedAt !== undefined) {
+      if (firstInvite && repliedAt >= firstInvite.sentAt) {
+        replyDelays.push((repliedAt - firstInvite.sentAt) / DAY);
       } else {
         unprompted++;
       }
@@ -327,7 +348,11 @@ export function buildDashboard(entries: readonly DashboardEntry[], campaigns: re
     }
   }
 
-  const orderedCampaigns = [...campaigns].sort((a, b) => a.createdAt - b.createdAt);
+  // A run stopped before anything went out has no rows left here: no line on the
+  // replies chart, no "0 emails" row, no slot taken from runs that did send.
+  const orderedCampaigns = campaigns
+    .filter((campaign) => campaignSends.has(campaign.id))
+    .sort((a, b) => a.createdAt - b.createdAt);
 
   const sortedReplyDays = [...replyDays.keys()].sort();
   let days: DayCount[] = [];

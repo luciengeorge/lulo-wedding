@@ -58,6 +58,11 @@ export default defineSchema({
      */
     respondedAt: v.optional(v.number()),
     /**
+     * When the party first submitted the form. `respondedAt` moves on every edit,
+     * so a dietary fix a month later would look like a late reply on the dashboard.
+     */
+    firstRespondedAt: v.optional(v.number()),
+    /**
      * Stored rather than derived. A party that accepts and then ticks nothing is
      * also a decline, and "no guest row says yes" cannot tell that apart from
      * "has not replied yet".

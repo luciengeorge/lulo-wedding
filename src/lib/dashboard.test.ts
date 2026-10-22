@@ -165,4 +165,35 @@ describe("buildDashboard groups and timing", () => {
     expect(dashboard.timeToReply.unprompted).toBe(1);
     expect(dashboard.timeToReply.medianDays).toBeCloseTo(6, 3);
   });
+
+  it("dates a reply by its first submission, so a later edit does not move it", () => {
+    const yes = [guest({ wedding: "yes", weddingAt: T0 + 2 * DAY + 1 })];
+    const dashboard = buildDashboard(
+      [
+        entry({
+          party: party({ firstRespondedAt: T0 + 2 * DAY + 1, respondedAt: T0 + 30 * DAY }),
+          guests: yes,
+          sends: [invite(T0)],
+        }),
+        // Replied before firstRespondedAt was recorded: the earliest answer stands in.
+        entry({ party: party({ respondedAt: T0 + 30 * DAY }), guests: yes, sends: [invite(T0)] }),
+      ],
+      [],
+    );
+    expect(dashboard.timeToReply.bins.filter((bin) => bin.parties > 0)).toEqual([{ label: "2", parties: 2 }]);
+    expect(dashboard.repliesOverTime.days[0]?.day).toBe(new Date(T0 + 2 * DAY).toISOString().slice(0, 10));
+  });
+
+  it("leaves out a run that was stopped before anything went out", () => {
+    const sent = { ...invite(T0), campaignId: "sent-run" };
+    const dashboard = buildDashboard(
+      [entry({ sends: [sent] })],
+      [
+        { id: "sent-run", kind: "invite", createdAt: T0 },
+        { id: "stopped-run", kind: "reminder", createdAt: T0 + DAY },
+      ],
+    );
+    expect(dashboard.campaigns).toHaveLength(1);
+    expect(dashboard.repliesOverTime.campaigns.map((run) => run.kind)).toEqual(["invite"]);
+  });
 });

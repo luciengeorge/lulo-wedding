@@ -182,6 +182,33 @@ describe("sendConfirmation", () => {
   });
 });
 
+describe("submit", () => {
+  const reply = (declined: boolean) => ({
+    token: PARTY.token,
+    declined,
+    contactEmail: "rae@example.com",
+    guests: declined
+      ? []
+      : [{ firstName: "Rae", lastName: "Haddad", isPlusOne: false, preWedding: false, wedding: true, brunch: false }],
+  });
+
+  it("stamps the first reply once and leaves it alone on later edits", async () => {
+    const t = setup();
+    const partyId = await insertParty(t);
+
+    await t.mutation(api.rsvp.submit, reply(false));
+    const first = await t.run((ctx) => ctx.db.get(partyId));
+    expect(first?.firstRespondedAt).toBe(first?.respondedAt);
+
+    // As if that first reply had come in long ago; an edit (here a change of heart) must not move it.
+    await t.run((ctx) => ctx.db.patch(partyId, { firstRespondedAt: 1_000 }));
+    await t.mutation(api.rsvp.submit, reply(true));
+    const edited = await t.run((ctx) => ctx.db.get(partyId));
+    expect(edited?.firstRespondedAt).toBe(1_000);
+    expect(edited?.respondedAt).toBeGreaterThan(1_000);
+  });
+});
+
 describe("recordVisit", () => {
   const visit = (t: T, args: { source?: "link" | "email" | "lookup" | "remembered"; sendId?: string } = {}) =>
     t.mutation(api.rsvp.recordVisit, { token: PARTY.token, source: args.source ?? "link", sendId: args.sendId });

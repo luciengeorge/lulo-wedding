@@ -331,6 +331,7 @@ export const submit = mutation({
       await ctx.db.patch(party._id, {
         declined: true,
         respondedAt: now,
+        firstRespondedAt: party.firstRespondedAt ?? now,
         contactEmail: email,
         guestNote: trimmed(guestNote),
       });
@@ -378,6 +379,7 @@ export const submit = mutation({
     await ctx.db.patch(party._id, {
       declined: isEffectiveDecline(party, reply.filter((guest) => !isBlankCard(guest))),
       respondedAt: now,
+      firstRespondedAt: party.firstRespondedAt ?? now,
       contactEmail: email,
       guestNote: trimmed(guestNote),
     });
