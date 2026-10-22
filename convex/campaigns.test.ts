@@ -147,7 +147,7 @@ describe("skipReasonFor", () => {
 
   it("does not email an invitation twice unless asked to", () => {
     expect(skipReasonFor("invite", party, [], [sent()])).toBe("alreadySent");
-    expect(skipReasonFor("invite", party, [], [sent()], true)).toBeNull();
+    expect(skipReasonFor("invite", party, [], [sent()], { includeAlreadySent: true })).toBeNull();
     // Stopped or failed: it never reached them.
     expect(skipReasonFor("invite", party, [], [sent({ status: "cancelled" }), sent({ status: "failed" })])).toBeNull();
     // A WhatsApp invite is not an email one.
@@ -161,6 +161,34 @@ describe("skipReasonFor", () => {
     expect(
       skipReasonFor("invite", noEvents, [{ invitedTo: { preWedding: false, wedding: false, brunch: true } }], []),
     ).toBeNull();
+  });
+
+  it("never mails an address that bounced, for an invitation or a reminder, whoever it bounced for", () => {
+    const suppression = { bounced: new Set(["rae@example.com"]), complained: new Set<string>() };
+    const shouting = { ...party, contactEmail: "  Rae@Example.com " };
+    const whatsapp = sent({ channel: "whatsapp", to: undefined, status: "sent" });
+    expect(skipReasonFor("invite", shouting, [], [], { suppression })).toBe("bounced");
+    expect(skipReasonFor("reminder", shouting, [], [whatsapp], { suppression })).toBe("bounced");
+    // The party's own bounce to this address counts without the shared list.
+    expect(skipReasonFor("invite", party, [], [sent({ status: "bounced", to: "RAE@example.com" })])).toBe("bounced");
+    // A bounce to an address they have since replaced does not.
+    expect(skipReasonFor("invite", party, [], [sent({ status: "bounced", to: "old@example.com" })])).toBeNull();
+  });
+
+  it("never mails a party, or an address, that reported us as spam", () => {
+    const suppression = { bounced: new Set<string>(), complained: new Set(["rae@example.com"]) };
+    expect(skipReasonFor("invite", party, [], [], { suppression })).toBe("complained");
+    const reportedAtOldAddress = sent({ status: "complained", to: "old@example.com" });
+    expect(skipReasonFor("reminder", party, [], [reportedAtOldAddress])).toBe("complained");
+  });
+
+  it("only reminds a party whose invitation reached them", () => {
+    for (const status of ["bounced", "complained", "failed", "cancelled"] as const) {
+      const missed = sent({ status, to: "old@example.com" });
+      const reason = skipReasonFor("reminder", party, [], [missed]);
+      expect(reason).toBe(status === "complained" ? "complained" : "notInvited");
+    }
+    expect(skipReasonFor("reminder", party, [], [sent({ status: "queued" })])).toBeNull();
   });
 });
 
@@ -191,6 +219,25 @@ describe("prepareCampaign", () => {
       includeAlreadySent: true,
     });
     expect(again.recipients).toHaveLength(1);
+  });
+
+  it("leaves out addresses that bounced or reported us, even for another party", async () => {
+    const t = setup();
+    const shared = await insertParty(t, { displayName: "Amal", contactEmail: "family@example.com" });
+    const sibling = await insertParty(t, { displayName: "Bassam", contactEmail: "FAMILY@example.com" });
+    const reporter = await insertParty(t, { displayName: "Carla", contactEmail: "carla@example.com" });
+    await insertSend(t, sibling, { kind: "receipt", to: "family@example.com", status: "bounced" });
+    await insertSend(t, reporter, { to: "carla@example.com", status: "complained" });
+
+    for (const kind of ["invite", "reminder"] as const) {
+      const result = await t.query(api.admin.prepareCampaign, { kind, partyIds: [shared, sibling, reporter] });
+      expect(result.recipients).toEqual([]);
+      expect(result.skipped.map((party) => [party.displayName, party.reason])).toEqual([
+        ["Amal", "bounced"],
+        ["Bassam", "bounced"],
+        ["Carla", "complained"],
+      ]);
+    }
   });
 });
 
@@ -283,6 +330,72 @@ describe("dispatch", () => {
     // Running it twice sends once.
     await t.mutation(internal.campaigns.dispatch, { sendId: row._id });
     expect((await jobs(t)).filter((job) => job.name === "email/send:sendEmail")).toHaveLength(1);
+  });
+
+  const emailJobs = async (t: T) => (await jobs(t)).filter((job) => job.name === "email/send:sendEmail");
+
+  async function startOne(t: T, kind: "invite" | "reminder", partyIds: Id<"parties">[], extra = {}) {
+    await t.mutation(api.admin.startCampaign, { kind, partyIds, clientRequestId: `${kind}-${count}`, ...extra });
+    return (await sendsTable(t)).filter((send) => send.campaignId !== undefined && send.status === "queued");
+  }
+
+  it("skips a party that replied while the run was waiting, and says why", async () => {
+    const t = setup();
+    const replier = await insertParty(t, { contactEmail: "replier@example.com" });
+    const waiting = await insertParty(t, { contactEmail: "waiting@example.com" });
+    const rows = await startOne(t, "invite", [replier, waiting]);
+
+    await t.run((ctx) => ctx.db.patch(replier, { respondedAt: Date.now() }));
+    for (const row of rows) await t.mutation(internal.campaigns.dispatch, { sendId: row._id });
+
+    const after = await sendsTable(t);
+    expect(after.find((row) => row.partyId === replier)).toMatchObject({
+      status: "cancelled",
+      error: "Skipped at send time: they replied.",
+    });
+    expect(after.find((row) => row.partyId === replier)?.scheduledId).toBeUndefined();
+    const sent = await emailJobs(t);
+    expect(sent).toHaveLength(1);
+    expect((sent[0].args as [{ to: string }])[0].to).toBe("waiting@example.com");
+    // A stopped party does not count as invited.
+    const pipeline = await t.query(api.admin.pipeline, {});
+    expect(pipeline.find((row) => row.partyId === replier)).not.toHaveProperty("firstInvitedAt");
+  });
+
+  it("skips an address that bounced for someone else mid-run, invite or reminder", async () => {
+    for (const kind of ["invite", "reminder"] as const) {
+      const t = setup();
+      const a = await insertParty(t, { contactEmail: "shared@example.com" });
+      const other = await insertParty(t, { contactEmail: "other@example.com" });
+      if (kind === "reminder") await insertSend(t, a, { channel: "whatsapp", to: undefined });
+      const [row] = await startOne(t, kind, [a]);
+
+      await insertSend(t, other, { kind: "receipt", to: "Shared@example.com", status: "bounced" });
+      await t.mutation(internal.campaigns.dispatch, { sendId: row._id });
+
+      expect(await t.run((ctx) => ctx.db.get(row._id))).toMatchObject({
+        status: "cancelled",
+        error: "Skipped at send time: their address bounced before.",
+      });
+      expect(await emailJobs(t)).toHaveLength(0);
+    }
+  });
+
+  it("sends again to a party already emailed when the run was started to", async () => {
+    const t = setup();
+    const a = await insertParty(t);
+    await insertSend(t, a, { status: "delivered" });
+    const rows = await startOne(t, "invite", [a], { includeAlreadySent: true });
+    await t.mutation(internal.campaigns.dispatch, { sendId: rows[0]._id });
+    expect(await emailJobs(t)).toHaveLength(1);
+  });
+
+  it("does not count its own row as the invitation already sent", async () => {
+    const t = setup();
+    const a = await insertParty(t);
+    const [row] = await startOne(t, "invite", [a]);
+    await t.mutation(internal.campaigns.dispatch, { sendId: row._id });
+    expect(await emailJobs(t)).toHaveLength(1);
   });
 });
 

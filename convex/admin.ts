@@ -15,6 +15,7 @@ import {
   type CampaignKind,
   campaignKind,
   guestsOf,
+  loadSuppression,
   invitationMessage,
   sendsOf,
   skipReason,
@@ -919,6 +920,7 @@ async function sortRecipients(
   const recipients: Doc<"parties">[] = [];
   const skipped: { party: Doc<"parties">; reason: SkipReason }[] = [];
   let missing = 0;
+  const suppression = await loadSuppression(ctx);
   for (const partyId of new Set(partyIds)) {
     const party = await ctx.db.get(partyId);
     if (!party) {
@@ -926,7 +928,10 @@ async function sortRecipients(
       continue;
     }
     const guests = await guestsOf(ctx, partyId);
-    const reason = skipReasonFor(kind, party, guests, await sendsOf(ctx, partyId), includeAlreadySent);
+    const reason = skipReasonFor(kind, party, guests, await sendsOf(ctx, partyId), {
+      includeAlreadySent,
+      suppression,
+    });
     if (reason) skipped.push({ party, reason });
     else recipients.push(party);
   }
@@ -1014,6 +1019,7 @@ export const startCampaign = mutation({
       total: recipients.length,
       status: "sending",
       clientRequestId,
+      ...(kind === "invite" && includeAlreadySent ? { includeAlreadySent: true } : {}),
     });
 
     for (const [index, party] of recipients.entries()) {

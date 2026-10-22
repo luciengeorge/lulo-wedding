@@ -21,39 +21,94 @@ import { EVENT_DATES } from "./rsvp";
 export const campaignKind = v.union(v.literal("invite"), v.literal("reminder"));
 export type CampaignKind = "invite" | "reminder";
 
-
-export const SKIP_REASONS = ["replied", "declinedEarly", "noEvents", "noEmail", "alreadySent", "notInvited"] as const;
+export const SKIP_REASONS = [
+  "replied",
+  "declinedEarly",
+  "noEvents",
+  "noEmail",
+  "complained",
+  "bounced",
+  "alreadySent",
+  "notInvited",
+] as const;
 export type SkipReason = (typeof SKIP_REASONS)[number];
 export const skipReason = v.union(...SKIP_REASONS.map((reason) => v.literal(reason)));
 
-/** A send that never reached anyone does not count as having sent it. */
-const reachedResend = (send: Doc<"sends">) => send.status !== "failed" && send.status !== "cancelled";
+/** Why a queued message was not sent after all, written on its row. */
+const SKIPPED_AT_SEND: Record<SkipReason, string> = {
+  replied: "they replied",
+  declinedEarly: "they declined on the sheet",
+  noEvents: "they are invited to no events",
+  noEmail: "they have no email address",
+  complained: "they marked our email as spam",
+  bounced: "their address bounced before",
+  alreadySent: "they were already emailed this invitation",
+  notInvited: "their invitation never reached them",
+};
+
+export function normaliseEmail(address: string): string {
+  return address.trim().toLowerCase();
+}
 
 /**
- * Why a party is left out of a run, or null when it should get the email.
+ * Addresses never to email again, from every party's sends. A bounce means the
+ * address does not work; a complaint means its owner asked us to stop. Both are
+ * by address, so a second party sharing a dead address is spared too.
+ */
+export type Suppression = { bounced: ReadonlySet<string>; complained: ReadonlySet<string> };
+
+export async function loadSuppression(ctx: QueryCtx): Promise<Suppression> {
+  const addresses = async (status: "bounced" | "complained") => {
+    const rows = await ctx.db
+      .query("sends")
+      .withIndex("by_status", (q) => q.eq("status", status))
+      .collect();
+    return new Set(rows.flatMap((row) => (row.to ? [normaliseEmail(row.to)] : [])));
+  };
+  return { bounced: await addresses("bounced"), complained: await addresses("complained") };
+}
+
+/** An invitation that actually reached the party: not stopped, failed, bounced or reported as spam. */
+const reachedThem = (send: Doc<"sends">) =>
+  send.status !== "failed" && send.status !== "cancelled" && send.status !== "bounced" && send.status !== "complained";
+
+/**
+ * Why a party is left out of a run, or null when it should get the email. The
+ * one rule set for the composer's breakdown, the start of a run and the moment
+ * each message goes, so the three cannot disagree.
  *
  * A reply of any kind ends both emails: the sheet's early "No" as much as one
- * given on the form. A reminder only follows an invitation, on either channel,
- * and an invitation already emailed is not sent twice unless the couple say so.
+ * given on the form. An address that bounced or reported us as spam is never
+ * mailed again, and a party that reported us is not mailed at any address. A
+ * reminder only follows an invitation that reached them, on either channel, and
+ * an invitation already emailed is not sent twice unless the couple say so.
  */
 export function skipReasonFor(
   kind: CampaignKind,
   party: Doc<"parties">,
   guests: readonly { invitedTo?: EventFlags }[],
   sends: readonly Doc<"sends">[],
-  includeAlreadySent = false,
+  options: { includeAlreadySent?: boolean; suppression?: Suppression } = {},
 ): SkipReason | null {
   if (party.respondedAt !== undefined) return "replied";
   if (party.earlyDecline) return "declinedEarly";
 
   const invited = partyInvitedTo(party, guests);
   if (!RSVP_EVENTS.some((event) => invited[event.key])) return "noEvents";
-  if (!party.contactEmail?.trim()) return "noEmail";
+  const address = party.contactEmail ? normaliseEmail(party.contactEmail) : "";
+  if (!address) return "noEmail";
+
+  const suppression = options.suppression;
+  if (sends.some((send) => send.status === "complained") || suppression?.complained.has(address)) {
+    return "complained";
+  }
+  const bouncedHere = sends.some((send) => send.status === "bounced" && send.to && normaliseEmail(send.to) === address);
+  if (bouncedHere || suppression?.bounced.has(address)) return "bounced";
 
   if (kind === "invite") {
-    const emailed = sends.some((send) => send.channel === "email" && send.kind === "invite" && reachedResend(send));
-    if (emailed && !includeAlreadySent) return "alreadySent";
-  } else if (!sends.some((send) => send.kind === "invite" && reachedResend(send))) {
+    const emailed = sends.some((send) => send.channel === "email" && send.kind === "invite" && reachedThem(send));
+    if (emailed && !options.includeAlreadySent) return "alreadySent";
+  } else if (!sends.some((send) => send.kind === "invite" && reachedThem(send))) {
     return "notInvited";
   }
   return null;
@@ -174,7 +229,8 @@ export const STOPPED = "Stopped before it was sent.";
  * every SEND_SPACING_MS.
  *
  * The email is built here, not when the run started: a party that fixed its
- * address or got a new event in the minutes since gets the current version.
+ * address or got a new event in the minutes since gets the current version,
+ * and one that no longer qualifies is skipped, its row cancelled with the reason.
  * A row that is no longer waiting (stopped, or already gone) is left alone.
  */
 export const dispatch = internalMutation({
@@ -191,19 +247,32 @@ export const dispatch = internalMutation({
     }
 
     const party = await ctx.db.get(send.partyId);
-    const to = party?.contactEmail?.trim();
-    if (!party || !to) {
+    if (!party) {
+      await ctx.db.patch(sendId, { status: "cancelled", scheduledId: undefined, error: "The party was deleted." });
+      return null;
+    }
+
+    // The same rules the run started with, asked again now: minutes have passed,
+    // and a party may have replied or an address bounced in the meantime. This
+    // row is left out, or it would count as the invitation already sent.
+    const kind = send.kind === "reminder" ? "reminder" : "invite";
+    const guests = await guestsOf(ctx, party._id);
+    const sends = (await sendsOf(ctx, party._id)).filter((row) => row._id !== sendId);
+    const reason = skipReasonFor(kind, party, guests, sends, {
+      includeAlreadySent: campaign?.includeAlreadySent === true,
+      suppression: await loadSuppression(ctx),
+    });
+    if (reason) {
       await ctx.db.patch(sendId, {
-        status: "failed",
+        status: "cancelled",
         scheduledId: undefined,
-        failedAt: Date.now(),
-        error: "The party no longer has an email address.",
+        error: `Skipped at send time: ${SKIPPED_AT_SEND[reason]}.`,
       });
       return null;
     }
 
-    const kind = send.kind === "reminder" ? "reminder" : "invite";
-    const message = invitationMessage(kind, party, await guestsOf(ctx, party._id), { sendId });
+    const to = (party.contactEmail ?? "").trim();
+    const message = invitationMessage(kind, party, guests, { sendId });
     await ctx.scheduler.runAfter(0, internal.email.send.sendEmail, { to, ...message, sendId });
     await ctx.db.patch(sendId, { scheduledId: undefined, sentAt: Date.now(), to });
     return null;

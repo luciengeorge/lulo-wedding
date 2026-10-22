@@ -166,6 +166,8 @@ export default defineSchema({
     /** "Done" is not stored: it is a run with nothing left to send. */
     status: v.union(v.literal("sending"), v.literal("cancelled")),
     cancelledAt: v.optional(v.number()),
+    /** Invitations only: the couple chose to send again to parties already emailed one. */
+    includeAlreadySent: v.optional(v.boolean()),
     /** Minted by the composer per confirm, so a double click starts one run, not two. */
     clientRequestId: v.string(),
   })

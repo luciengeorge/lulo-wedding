@@ -49,7 +49,7 @@ export function FunnelStrip({ funnel }: { funnel: Funnel | undefined }) {
       <Step
         label="Opened email"
         value={funnel?.email.opened}
-        hint={funnel ? `of ${funnel.invited.email} emailed` : undefined}
+        hint={funnel ? `of ${funnel.email.sent} emailed` : undefined}
       />
       <Step label="Seen link" value={funnel?.visited} hint={funnel ? ofInvited(funnel.visited, invited) : undefined} />
       <Step label="Replied" value={funnel?.replied} hint={funnel ? ofInvited(funnel.replied, invited) : undefined} />

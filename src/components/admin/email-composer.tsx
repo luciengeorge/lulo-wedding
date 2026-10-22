@@ -32,6 +32,8 @@ const REASON_LABEL: Record<SkipReason, string> = {
   replied: "Already replied",
   declinedEarly: "Declined on the sheet",
   notInvited: "Not invited yet",
+  bounced: "Email bounced before",
+  complained: "Marked our email as spam",
 };
 
 const CONTROL_CLASS =

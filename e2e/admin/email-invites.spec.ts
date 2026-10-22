@@ -194,6 +194,28 @@ test.describe("emailing invitations", () => {
   });
 });
 
+test("leaves out an address that bounced before, and says so", async ({ page }) => {
+  await backend.seed([
+    party({ token: AMAL.token, displayName: "Amal", surname: "Khalil", contactEmail: AMAL.email }),
+    party({ token: BASSAM.token, displayName: "Bassam", surname: "Aoun", contactEmail: BASSAM.email }),
+  ]);
+  await backend.seedSend({
+    token: BASSAM.token,
+    channel: "email",
+    kind: "receipt",
+    to: BASSAM.email,
+    status: "bounced",
+  });
+
+  await openAdmin(page);
+  await page.getByRole("checkbox", { name: "Select all 2 matching parties" }).click();
+  const dialog = await openComposer(page);
+  const recipients = dialog.getByRole("region", { name: "Recipients" });
+  await expect(recipients).toContainText("1 party will get the invitation");
+  await recipients.getByText("Email bounced before").click();
+  await expect(recipients.getByText("Bassam Aoun")).toBeVisible();
+});
+
 test.describe("emailing reminders", () => {
   test("go only to invited parties who have not replied", async ({ page }) => {
     await backend.seed([
