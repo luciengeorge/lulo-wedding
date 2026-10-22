@@ -48,11 +48,13 @@ export const Route = createRootRouteWithContext<RouterContext>()({
       // but simply concatenates `links`, so a root canonical plus a page
       // canonical renders BOTH and a page with two canonicals has none that
       // counts. Each route declares its own.
-      // The mark is intricate, so the .ico carries a thickened 16px variant
-      // alongside the full artwork at 32 and 48 — see tools/monogram.
-      { rel: "icon", href: "/favicon.ico", sizes: "any" },
-      { rel: "icon", type: "image/png", sizes: "32x32", href: "/favicon-32x32.png" },
-      { rel: "icon", type: "image/png", sizes: "16x16", href: "/favicon-16x16.png" },
+      // Transparent, so the mark sits on the tab itself. The SVG turns paper-cream
+      // in dark mode, where ink red would vanish against a dark tab; browsers
+      // without SVG icons use the .ico, which carries a thickened 16px variant
+      // alongside the full artwork at 32 and 48. The touch icon keeps its paper
+      // ground: iOS fills transparency with black.
+      { rel: "icon", href: "/favicon.ico", sizes: "32x32" },
+      { rel: "icon", type: "image/svg+xml", href: "/favicon.svg" },
       { rel: "apple-touch-icon", sizes: "180x180", href: "/apple-touch-icon.png" },
     ],
   }),
