@@ -133,6 +133,7 @@ export type SeedGuest = {
   isPlusOne?: boolean;
   invitedTo?: EventFlags;
   addedByCouple?: boolean;
+  dietaryNotes?: string;
   preWedding?: RsvpStatus;
   wedding?: RsvpStatus;
   brunch?: RsvpStatus;
@@ -200,7 +201,13 @@ export const backend = {
     to?: string;
     status?: SendStatus;
     sentAt?: number;
+    campaignId?: string;
+    deliveredAt?: number;
+    openCount?: number;
+    clickCount?: number;
   }) => convexRun<string>("e2e:seedSend", args),
+  seedCampaign: (args: { kind: "invite" | "reminder"; createdAt: number; total: number }) =>
+    convexRun<string>("e2e:seedCampaign", args),
   seedVisit: (args: { token: string; source: "link" | "email" | "lookup" | "remembered"; at: number }) =>
     convexRun<null>("e2e:seedVisit", args),
   linkSendToResend: (sendId: string, resendId: string) => convexRun<null>("e2e:linkSendToResend", { sendId, resendId }),
@@ -321,9 +328,14 @@ export async function enterPassword(page: Page, password: string) {
 }
 
 /** Opens an admin page and waits for its data, so the first click lands on a settled layout. */
-export async function openAdmin(page: Page, path: "/admin" | "/admin/insights" = "/admin"): Promise<void> {
+export async function openAdmin(
+  page: Page,
+  path: "/admin" | "/admin/insights" | "/admin/dashboard" = "/admin",
+): Promise<void> {
   await visit(page, path);
   if (path === "/admin") await expect(page.getByText(/^No parties$|^Showing all/)).toBeVisible();
+  else if (path === "/admin/dashboard")
+    await expect(page.getByRole("region", { name: "Seats per event" })).toBeVisible();
   else await expect(page.getByRole("region", { name: "Pipeline board" })).toBeVisible();
 }
 

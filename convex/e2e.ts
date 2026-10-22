@@ -298,6 +298,7 @@ export const seedGuests = internalMutation({
         isPlusOne: v.optional(v.boolean()),
         invitedTo: v.optional(eventFlags),
         addedByCouple: v.optional(v.boolean()),
+        dietaryNotes: v.optional(v.string()),
         preWedding: v.optional(rsvpStatus),
         wedding: v.optional(rsvpStatus),
         brunch: v.optional(rsvpStatus),
@@ -331,9 +332,13 @@ export const seedSend = internalMutation({
     to: v.optional(v.string()),
     status: v.optional(sendStatus),
     sentAt: v.optional(v.number()),
+    campaignId: v.optional(v.id("campaigns")),
+    deliveredAt: v.optional(v.number()),
+    openCount: v.optional(v.number()),
+    clickCount: v.optional(v.number()),
   },
   returns: v.id("sends"),
-  handler: async (ctx, { token, status, sentAt, ...send }) => {
+  handler: async (ctx, { token, status, sentAt, openCount, clickCount, ...send }) => {
     assertTestDeployment();
     const party = await partyFor(ctx, token);
     return await ctx.db.insert("sends", {
@@ -341,8 +346,23 @@ export const seedSend = internalMutation({
       partyId: party._id,
       status: status ?? "sent",
       sentAt: sentAt ?? Date.now(),
-      openCount: 0,
-      clickCount: 0,
+      openCount: openCount ?? 0,
+      clickCount: clickCount ?? 0,
+    });
+  },
+});
+
+/** A send run, for the dashboard's per-run email health. Its rows come from `seedSend`. */
+export const seedCampaign = internalMutation({
+  args: { kind: v.union(v.literal("invite"), v.literal("reminder")), createdAt: v.number(), total: v.number() },
+  returns: v.id("campaigns"),
+  handler: async (ctx, args) => {
+    assertTestDeployment();
+    return await ctx.db.insert("campaigns", {
+      ...args,
+      createdBy: "admin@e2e.test",
+      status: "sending",
+      clientRequestId: `e2e-${args.kind}-${args.createdAt}`,
     });
   },
 });
