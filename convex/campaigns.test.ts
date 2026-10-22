@@ -486,6 +486,23 @@ describe("campaigns", () => {
       createdBy: ADMIN_EMAIL,
     });
   });
+
+  it("drops a run once every party it reached is deleted, and keeps it while any remain", async () => {
+    const t = setup();
+    const [a, b] = [await insertParty(t), await insertParty(t)];
+    await t.mutation(api.admin.startCampaign, { kind: "invite", partyIds: [a, b], clientRequestId: "cleanup" });
+    await t.run(async (ctx) => {
+      for (const row of await ctx.db.query("sends").collect()) {
+        await ctx.db.patch(row._id, { status: "delivered", scheduledId: undefined });
+      }
+    });
+
+    await t.mutation(api.admin.deleteParty, { partyId: a });
+    expect(await t.query(api.admin.campaigns, {})).toMatchObject([{ total: 2, sent: 1 }]);
+
+    await t.mutation(api.admin.deleteParty, { partyId: b });
+    expect(await t.query(api.admin.campaigns, {})).toEqual([]);
+  });
 });
 
 describe("sendTestEmail", () => {

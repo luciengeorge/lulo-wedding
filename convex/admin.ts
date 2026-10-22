@@ -299,6 +299,18 @@ async function deleteDependents(ctx: MutationCtx, partyId: Id<"parties">): Promi
     .collect();
 
   for (const row of [...guests, ...sends, ...visits]) await ctx.db.delete(row._id);
+
+  // A run whose only recipients were deleted would linger in Recent sends as an
+  // empty "0 sent". One that still reaches other parties stays, with true counts.
+  const campaignIds = new Set(sends.flatMap((send) => (send.campaignId ? [send.campaignId] : [])));
+  for (const campaignId of campaignIds) {
+    const left = await ctx.db
+      .query("sends")
+      .withIndex("by_campaign", (q) => q.eq("campaignId", campaignId))
+      .first();
+    if (!left) await ctx.db.delete(campaignId);
+  }
+
   return guests.length;
 }
 
