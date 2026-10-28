@@ -1,10 +1,10 @@
 import { useForm } from "@tanstack/react-form";
-import { createFileRoute } from "@tanstack/react-router";
+import { createFileRoute, Link } from "@tanstack/react-router";
 import { useState } from "react";
 
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { Field, FieldError, FieldGroup, FieldLabel } from "@/components/ui/field";
+import { Field, FieldDescription, FieldError, FieldGroup, FieldLabel } from "@/components/ui/field";
 import { Input } from "@/components/ui/input";
 import { Spinner } from "@/components/ui/spinner";
 import { AnalyticsEvent, useAnalytics } from "@/lib/analytics";
@@ -88,10 +88,7 @@ function LoginPage() {
     <Card>
       <CardHeader>
         <CardTitle>Sign in</CardTitle>
-        <CardDescription>
-          For Laura, Lucien and the people helping them plan. Guests do not need an account: they use the password from
-          their invitation.
-        </CardDescription>
+        <CardDescription>Enter your email and we'll send you a link to sign in.</CardDescription>
       </CardHeader>
       <CardContent>
         <form onSubmit={onSubmit}>
@@ -128,6 +125,9 @@ function LoginPage() {
                     {isSubmitting ? "Sending" : "Email me a sign-in link"}
                   </Button>
                   {errorMap.onSubmit?.form ? <FieldError>{String(errorMap.onSubmit.form)}</FieldError> : null}
+                  <FieldDescription className="text-center">
+                    Here for the invitation? <Link to="/enter">Enter the password instead</Link>
+                  </FieldDescription>
                 </Field>
               )}
             </form.Subscribe>
