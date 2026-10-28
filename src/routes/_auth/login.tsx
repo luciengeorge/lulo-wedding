@@ -89,8 +89,8 @@ function LoginPage() {
       <CardHeader>
         <CardTitle>Sign in</CardTitle>
         <CardDescription>
-          Only Laura and Lucien can sign in. Guests do not need an account — they use the password from their
-          invitation.
+          For Laura, Lucien and the people helping them plan. Guests do not need an account: they use the password from
+          their invitation.
         </CardDescription>
       </CardHeader>
       <CardContent>
