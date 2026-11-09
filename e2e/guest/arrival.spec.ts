@@ -28,7 +28,7 @@ test.describe("a party opening its own link", () => {
     // The link unlocked the whole site, not just this page.
     await visit(page, "/");
     await expect(page).toHaveURL("/");
-    await expect(page.getByText("LEBANON")).toBeVisible();
+    await expect(page.getByText("FARAYA · LEBANON")).toBeVisible();
   });
 
   test("is not counted twice for a reload, but a different way in is its own visit", async ({ page }) => {

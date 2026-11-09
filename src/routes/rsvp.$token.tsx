@@ -1,6 +1,6 @@
 import type { FunctionReturnType } from "convex/server";
 
-import { createFileRoute, notFound, useRouter } from "@tanstack/react-router";
+import { createFileRoute, Link, notFound, useRouter } from "@tanstack/react-router";
 import { useMemo, useState } from "react";
 import z from "zod";
 
@@ -597,9 +597,13 @@ function Confirmed({ data, onChange }: { data: RsvpData; onChange: () => void })
       </div>
 
       <div className="mt-8 flex flex-col items-center gap-2.5 text-center">
-        <span className="h-px w-13 bg-[#E7D9C4]" />
-        <p className="font-display text-[14px] leading-5 text-[#A08C77] italic">
-          Hotels, travel and things to do in Lebanon will appear here closer to the time.
+        <span className="h-px w-13 bg-rule" />
+        <p className="font-display text-[14px] leading-5 text-faded italic">
+          The schedule, travel, where to stay and things to do in Lebanon are all on{" "}
+          <Link to="/" hash="schedule" className="text-ink not-italic underline decoration-amber underline-offset-4">
+            our home page
+          </Link>
+          .
         </p>
       </div>
     </RsvpShell>
