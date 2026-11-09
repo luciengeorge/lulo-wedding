@@ -57,7 +57,7 @@ export function JumpBar() {
 
       <div
         ref={linksRef}
-        className="flex min-w-0 flex-1 [scrollbar-width:none] items-center gap-5 overflow-x-auto [mask-image:linear-gradient(to_right,black_82%,transparent)] pl-5 lg:justify-center lg:gap-9 lg:overflow-visible lg:[mask-image:none] lg:pl-0 [&::-webkit-scrollbar]:hidden"
+        className="relative flex min-w-0 flex-1 [scrollbar-width:none] items-center gap-5 overflow-x-auto [mask-image:linear-gradient(to_right,black_calc(100%_-_4rem),transparent)] pl-5 lg:justify-center lg:gap-9 lg:overflow-visible lg:[mask-image:none] lg:pl-0 [&::-webkit-scrollbar]:hidden"
       >
         {INFO_SECTIONS.map((section) => (
           <a
