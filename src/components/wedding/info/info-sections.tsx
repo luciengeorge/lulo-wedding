@@ -42,8 +42,10 @@ function InfoSection({
     <section
       id={id}
       aria-labelledby={`${id}-title`}
+      // Focusable so the jump bar can move keyboard focus here.
+      tabIndex={-1}
       // Clear of the sticky bar when jumped to.
-      className="scroll-mt-[52px] px-6 pt-14 pb-2 lg:grid lg:scroll-mt-16 lg:grid-cols-[304px_1fr] lg:gap-24 lg:px-0 lg:pt-24"
+      className="scroll-mt-[52px] px-6 pt-14 pb-2 outline-none lg:grid lg:scroll-mt-16 lg:grid-cols-[304px_1fr] lg:gap-24 lg:px-0 lg:pt-24"
     >
       <header className="flex flex-col gap-1 lg:sticky lg:top-28 lg:gap-1.5 lg:self-start">
         <p className="font-display text-xs leading-4 font-semibold tracking-caps text-faded uppercase lg:text-[13px]">

@@ -597,7 +597,7 @@ function Confirmed({ data, onChange }: { data: RsvpData; onChange: () => void })
       </div>
 
       <div className="mt-8 flex flex-col items-center gap-2.5 text-center">
-        <span className="h-px w-13 bg-[#E7D9C4]" />
+        <span className="h-px w-13 bg-rule" />
         <p className="font-display text-[14px] leading-5 text-faded italic">
           The schedule, travel, where to stay and things to do in Lebanon are all on{" "}
           <Link to="/" hash="schedule" className="text-ink not-italic underline decoration-amber underline-offset-4">

@@ -32,10 +32,12 @@ test.describe("someone who came in with the password", () => {
   test("can jump to a section from the bar", async ({ page }) => {
     await visit(page, "/");
 
-    await page.getByRole("navigation", { name: "On this page" }).getByRole("link", { name: "Stay" }).click();
+    const link = page.getByRole("navigation", { name: "On this page" }).getByRole("link", { name: "Stay" });
+    await expect(link).toHaveAttribute("href", "#stay");
+    await link.click();
 
-    await expect(page).toHaveURL("/#stay");
     await expect(page.getByRole("heading", { name: "Where to stay" })).toBeInViewport();
+    await expect(page.locator("#stay")).toBeFocused();
     await expect(page.getByRole("heading", { name: "InterContinental Mzaar" })).toBeVisible();
   });
 
