@@ -18,7 +18,7 @@ test.describe("the guest gate", () => {
     await enterPassword(page, GUEST_PASSWORD);
 
     await expect(page).toHaveURL("/");
-    await expect(page.getByText("LEBANON")).toBeVisible();
+    await expect(page.getByText("FARAYA · LEBANON")).toBeVisible();
   });
 
   test("refuses a wrong password without saying which part was wrong", async ({ page }) => {
@@ -41,7 +41,7 @@ test.describe("the guest gate", () => {
       if (!/interrupted by another navigation/.test(error.message)) throw error;
     });
     await expect(page).toHaveURL("/");
-    await expect(page.getByText("LEBANON")).toBeVisible();
+    await expect(page.getByText("FARAYA · LEBANON")).toBeVisible();
   });
 
   /**

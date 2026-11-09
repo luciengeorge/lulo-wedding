@@ -31,6 +31,7 @@ import { Route as legalLayoutCookiesRouteImport } from './routes/(legal)/_layout
 import { Route as legalLayoutPrivacyRouteImport } from './routes/(legal)/_layout/privacy'
 import { Route as legalLayoutTermsRouteImport } from './routes/(legal)/_layout/terms'
 import { Route as ApiAuthSplatRouteImport } from './routes/api/auth.$'
+import { Route as ApiCalendarWeddingRouteImport } from './routes/api/calendar.wedding'
 import { Route as ApiImgStorageIdRouteImport } from './routes/api/img.$storageId'
 import { Route as AppSettingsIndexRouteImport } from './routes/app/settings/index'
 import { Route as AppSettingsBillingRouteImport } from './routes/app/settings/billing'
@@ -146,6 +147,11 @@ const ApiAuthSplatRoute = ApiAuthSplatRouteImport.update({
   path: '/api/auth/$',
   getParentRoute: () => rootRouteImport,
 } as any)
+const ApiCalendarWeddingRoute = ApiCalendarWeddingRouteImport.update({
+  id: '/api/calendar/wedding',
+  path: '/api/calendar/wedding',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const ApiImgStorageIdRoute = ApiImgStorageIdRouteImport.update({
   id: '/api/img/$storageId',
   path: '/api/img/$storageId',
@@ -198,6 +204,7 @@ export interface FileRoutesByFullPath {
   '/privacy': typeof legalLayoutPrivacyRoute
   '/terms': typeof legalLayoutTermsRoute
   '/api/auth/$': typeof ApiAuthSplatRoute
+  '/api/calendar/wedding': typeof ApiCalendarWeddingRoute
   '/api/img/$storageId': typeof ApiImgStorageIdRoute
   '/app/settings/billing': typeof AppSettingsBillingRoute
   '/app/settings/danger': typeof AppSettingsDangerRoute
@@ -223,6 +230,7 @@ export interface FileRoutesByTo {
   '/privacy': typeof legalLayoutPrivacyRoute
   '/terms': typeof legalLayoutTermsRoute
   '/api/auth/$': typeof ApiAuthSplatRoute
+  '/api/calendar/wedding': typeof ApiCalendarWeddingRoute
   '/api/img/$storageId': typeof ApiImgStorageIdRoute
   '/app/settings/billing': typeof AppSettingsBillingRoute
   '/app/settings/danger': typeof AppSettingsDangerRoute
@@ -254,6 +262,7 @@ export interface FileRoutesById {
   '/(legal)/_layout/privacy': typeof legalLayoutPrivacyRoute
   '/(legal)/_layout/terms': typeof legalLayoutTermsRoute
   '/api/auth/$': typeof ApiAuthSplatRoute
+  '/api/calendar/wedding': typeof ApiCalendarWeddingRoute
   '/api/img/$storageId': typeof ApiImgStorageIdRoute
   '/app/settings/billing': typeof AppSettingsBillingRoute
   '/app/settings/danger': typeof AppSettingsDangerRoute
@@ -284,6 +293,7 @@ export interface FileRouteTypes {
     | '/privacy'
     | '/terms'
     | '/api/auth/$'
+    | '/api/calendar/wedding'
     | '/api/img/$storageId'
     | '/app/settings/billing'
     | '/app/settings/danger'
@@ -309,6 +319,7 @@ export interface FileRouteTypes {
     | '/privacy'
     | '/terms'
     | '/api/auth/$'
+    | '/api/calendar/wedding'
     | '/api/img/$storageId'
     | '/app/settings/billing'
     | '/app/settings/danger'
@@ -339,6 +350,7 @@ export interface FileRouteTypes {
     | '/(legal)/_layout/privacy'
     | '/(legal)/_layout/terms'
     | '/api/auth/$'
+    | '/api/calendar/wedding'
     | '/api/img/$storageId'
     | '/app/settings/billing'
     | '/app/settings/danger'
@@ -357,6 +369,7 @@ export interface RootRouteChildren {
   RsvpTokenRoute: typeof RsvpTokenRoute
   RsvpIndexRoute: typeof RsvpIndexRoute
   ApiAuthSplatRoute: typeof ApiAuthSplatRoute
+  ApiCalendarWeddingRoute: typeof ApiCalendarWeddingRoute
   ApiImgStorageIdRoute: typeof ApiImgStorageIdRoute
 }
 
@@ -516,6 +529,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ApiAuthSplatRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/api/calendar/wedding': {
+      id: '/api/calendar/wedding'
+      path: '/api/calendar/wedding'
+      fullPath: '/api/calendar/wedding'
+      preLoaderRoute: typeof ApiCalendarWeddingRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/api/img/$storageId': {
       id: '/api/img/$storageId'
       path: '/api/img/$storageId'
@@ -651,6 +671,7 @@ const rootRouteChildren: RootRouteChildren = {
   RsvpTokenRoute: RsvpTokenRoute,
   RsvpIndexRoute: RsvpIndexRoute,
   ApiAuthSplatRoute: ApiAuthSplatRoute,
+  ApiCalendarWeddingRoute: ApiCalendarWeddingRoute,
   ApiImgStorageIdRoute: ApiImgStorageIdRoute,
 }
 export const routeTree = rootRouteImport

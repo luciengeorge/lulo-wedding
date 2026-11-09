@@ -29,6 +29,9 @@
   --color-sea: #c6d6d5;
   --color-field: #dfcdb4;
   --color-faded: #6b5445;
+  /* Hairlines between rows, and a not-yet-confirmed detail (5:1 on paper). */
+  --color-rule: #e7d9c4;
+  --color-pending: #7a6452;
 
   --tracking-caps: 0.2em;
   --tracking-place: 0.34em;
