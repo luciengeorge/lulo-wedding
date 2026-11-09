@@ -36,7 +36,8 @@ function Home() {
   return (
     <div
       id="top"
-      className="flex min-h-svh w-full flex-col bg-paper [background-image:url('/art/paper-tile.webp')] bg-[length:560px_428px] bg-repeat"
+      tabIndex={-1}
+      className="flex min-h-svh w-full flex-col bg-paper [background-image:url('/art/paper-tile.webp')] bg-[length:560px_428px] bg-repeat outline-none"
     >
       <Hero />
       <JumpBar />

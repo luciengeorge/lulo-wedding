@@ -30,7 +30,11 @@ export function JumpBar() {
     const strip = linksRef.current;
     const link = active ? strip?.querySelector<HTMLElement>(`[data-section="${active}"]`) : null;
     if (!strip || !link || strip.scrollWidth <= strip.clientWidth) return;
-    strip.scrollTo({ left: link.offsetLeft - strip.clientWidth / 2 + link.offsetWidth / 2, behavior: "smooth" });
+    const reduce = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+    strip.scrollTo({
+      left: link.offsetLeft - strip.clientWidth / 2 + link.offsetWidth / 2,
+      behavior: reduce ? "auto" : "smooth",
+    });
   }, [active]);
 
   return (
@@ -41,6 +45,7 @@ export function JumpBar() {
       {/* Name from xl up: at 1024px the side columns must narrow for the links to fit. */}
       <a
         href="#top"
+        onClick={(event) => jumpTo(event, "top")}
         aria-label="Laura and Lucien"
         className="hidden w-[140px] shrink-0 items-center gap-3.5 lg:flex xl:w-[220px]"
       >
@@ -69,8 +74,8 @@ export function JumpBar() {
             {section.label}
           </a>
         ))}
-        {/* Room to scroll the last link clear of the RSVP button. */}
-        <span aria-hidden className="w-1 shrink-0 lg:hidden" />
+        {/* As wide as the fade, so the last link can scroll fully clear of it. */}
+        <span aria-hidden className="w-16 shrink-0 lg:hidden" />
       </div>
 
       {FEATURES.rsvp ? (

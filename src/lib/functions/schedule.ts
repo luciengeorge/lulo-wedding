@@ -5,7 +5,7 @@ import { api } from "@/../convex/_generated/api";
 import { fetchAuthQuery } from "@/lib/auth-server";
 import { useGuestSession } from "@/lib/guest-session.server";
 import { createLogger } from "@/lib/logger";
-import { RSVP_EVENTS, type RsvpEventKey } from "@/lib/rsvp-rules";
+import { invitedEvents, type RsvpEventKey } from "@/lib/rsvp-rules";
 
 const logger = createLogger("schedule");
 
@@ -33,7 +33,7 @@ export const getScheduleEvents = createServerFn({ method: "GET" }).handler(async
     if (!invitation) return { known: false, events: ["wedding"] as RsvpEventKey[] };
 
     const { party } = invitation;
-    const events = RSVP_EVENTS.filter((event) => party[event.invitedFlag]).map((event) => event.key);
+    const events = invitedEvents(party);
     // A party with nothing attached yet still gets the wedding day rather than an empty list.
     return { known: true, events: events.length > 0 ? events : (["wedding"] as RsvpEventKey[]) };
   });
