@@ -1,4 +1,5 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
+import z from "zod";
 
 import { AdminBar } from "@/components/wedding/admin-bar";
 import { InfoSections } from "@/components/wedding/info/info-sections";
@@ -7,10 +8,15 @@ import { Monogram } from "@/components/wedding/monogram";
 import { FEATURES } from "@/lib/flags";
 import { getAdminSession } from "@/lib/functions/admin-session";
 import { requireGuestUnlocked } from "@/lib/functions/guest-gate";
-import { getScheduleEvents } from "@/lib/functions/schedule";
+import { getHomeContent } from "@/lib/functions/home-content";
 import { canonical, seo } from "@/lib/seo";
 
+// `as` is the couple's "view as this party" preview. Junk is dropped, not an error page.
+// Same cap as getHomeContent, so a long value is dropped here instead of failing the loader.
+const HomeSearchSchema = z.object({ as: z.string().max(64).optional().catch(undefined) });
+
 export const Route = createFileRoute("/")({
+  validateSearch: HomeSearchSchema,
   beforeLoad: async ({ location }) => {
     await requireGuestUnlocked(location.href);
 
@@ -19,7 +25,8 @@ export const Route = createFileRoute("/")({
     const admin = await getAdminSession();
     return { isAdmin: admin.status === "ok" };
   },
-  loader: () => getScheduleEvents(),
+  loaderDeps: ({ search }) => ({ as: search.as }),
+  loader: ({ deps }) => getHomeContent({ data: { as: deps.as } }),
   head: () => ({
     meta: seo({
       description: "17 July 2027, Faraya, Lebanon. The schedule, travel, where to stay and how to reply.",
@@ -31,17 +38,32 @@ export const Route = createFileRoute("/")({
 });
 
 function Home() {
-  const { events, known } = Route.useLoaderData();
+  const { preview, ...content } = Route.useLoaderData();
 
   return (
     <div
       id="top"
       className="flex min-h-svh w-full flex-col bg-paper [background-image:url('/art/paper-tile.webp')] bg-[length:560px_428px] bg-repeat"
     >
+      {preview ? <PreviewBar name={preview} /> : null}
       <Hero />
       <JumpBar />
-      <InfoSections events={events} known={known} />
+      <InfoSections {...content} />
       <Closing />
+    </div>
+  );
+}
+
+/** Says whose page the couple are looking at, so a preview is never mistaken for their own. */
+function PreviewBar({ name }: { name: string }) {
+  return (
+    <div className="flex items-center justify-center gap-4 bg-ink px-4 py-2.5 font-display text-[13px] text-paper">
+      <p>
+        Viewing as <span className="font-semibold">{name}</span>
+      </p>
+      <Link to="/" className="font-semibold tracking-caps underline decoration-amber underline-offset-4">
+        EXIT
+      </Link>
     </div>
   );
 }
@@ -55,17 +77,11 @@ function Hero() {
 
   return (
     <div className="relative flex min-h-[calc(100svh-52px)] w-full flex-col overflow-hidden text-ink lg:min-h-[calc(100svh-64px)]">
-      <SceneArt />
       <OliveBranch />
 
       {isAdmin ? <AdminBar /> : null}
 
-      {/* On mobile the scene owns the bottom of the screen, so the column is
-          padded clear of it. On desktop it sits beside the panel instead. */}
-      {/* Asymmetric on purpose: the extra left padding pushes the optical
-          centre of the type toward the painted panel so the composition does
-          not read as left-heavy. */}
-      <div className="relative z-10 flex min-h-[calc(100svh-52px)] flex-col items-center justify-center px-6 pb-[42vh] text-center lg:min-h-[calc(100svh-64px)] lg:w-[64%] lg:pr-16 lg:pb-0 lg:pl-48">
+      <div className="relative z-10 flex min-h-[calc(100svh-52px)] flex-col items-center justify-center px-6 text-center lg:min-h-[calc(100svh-64px)]">
         <Monogram className="w-14 lg:w-[82px]" />
 
         <h1
@@ -116,34 +132,6 @@ function Hero() {
 
 function Dot() {
   return <span aria-hidden className="block size-[5px] rounded-full bg-amber" />;
-}
-
-/**
- * The painted scene. Two crops of the same artwork: a tall right-hand panel on
- * desktop, a wide band across the bottom on mobile. <picture> means only the
- * one that matches is fetched.
- */
-function SceneArt() {
-  return (
-    <div
-      aria-hidden
-      className="pointer-events-none absolute inset-x-0 bottom-0 h-[44vh] overflow-hidden lg:inset-y-0 lg:left-auto lg:h-auto lg:w-[33rem]"
-    >
-      <picture>
-        <source media="(min-width: 1024px)" srcSet="/art/scene-panel.webp" />
-        {/* Masked, not overlaid with a gradient. The crop carries its own baked
-            paper, which is a slightly different cream from the page's tile, so
-            painting paper-coloured gradient over it still leaves a visible
-            seam. Fading the image's own alpha lets the page texture show
-            through and the edge disappears. */}
-        <img
-          src="/art/scene-mobile.webp"
-          alt=""
-          className="h-full w-full [mask-image:linear-gradient(to_bottom,transparent_0%,black_30%)] object-cover object-[62%_100%] lg:[mask-image:linear-gradient(to_right,transparent_0%,black_42%)] lg:object-[50%_100%]"
-        />
-      </picture>
-    </div>
-  );
 }
 
 function OliveBranch() {

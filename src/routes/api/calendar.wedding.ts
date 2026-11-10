@@ -1,7 +1,7 @@
 import { createFileRoute } from "@tanstack/react-router";
 
 import { SITE_URL } from "@/lib/seo";
-import { WEDDING_EVENTS } from "@/lib/wedding-info";
+import { WEDDING_EVENTS } from "@/lib/wedding-details.server";
 
 /**
  * The wedding as a calendar file, for "Add to calendar".

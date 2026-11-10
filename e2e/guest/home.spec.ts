@@ -17,16 +17,47 @@ function schedule(page: import("@playwright/test").Page) {
 test.describe("someone who came in with the password", () => {
   test.use({ storageState: GUEST_STATE });
 
-  test("sees the wedding day only, and a way to their invitation", async ({ page }) => {
+  test("sees the wedding day only, and is asked to find their invitation", async ({ page }) => {
     await visit(page, "/");
 
     const section = schedule(page);
     await expect(section.getByRole("heading", { name: "The day" })).toBeVisible();
     await expect(section.getByRole("heading", { name: /The wedding/ })).toBeVisible();
     await expect(section.getByRole("heading", { name: /Pre-wedding|Brunch/ })).toHaveCount(0);
+    await expect(section.getByText("There may be more for you")).toBeVisible();
 
-    await section.getByRole("link", { name: "FIND YOUR INVITATION" }).click();
-    await expect(page).toHaveURL("/rsvp");
+    await section.getByRole("link", { name: "SEE MY SCHEDULE" }).click();
+    await expect(page).toHaveURL("/rsvp?next=schedule");
+    await expect(page.getByText("we will show you your schedule")).toBeVisible();
+  });
+
+  test("finds their invitation by name and comes straight back to their own schedule", async ({ page }) => {
+    await backend.seed([
+      party({ token: "e2e-home-lookup", displayName: "Rae & Cherif", surname: "Haddad", invitedToBrunch: true }),
+    ]);
+    await visit(page, "/");
+
+    await schedule(page).getByRole("link", { name: "SEE MY SCHEDULE" }).click();
+    await page.getByLabel("Your first and last name").fill("Rae Haddad");
+    await page.getByRole("button", { name: "FIND MY INVITATION" }).click();
+    await page.getByRole("link", { name: /Rae & Cherif/ }).click();
+
+    await expect(page).toHaveURL("/#schedule");
+    const section = schedule(page);
+    await expect(section.getByRole("heading", { name: "The weekend" })).toBeVisible();
+    await expect(section.getByRole("heading", { name: /Brunch/ })).toBeVisible();
+    await expect(section.getByText("There may be more for you")).toHaveCount(0);
+    expect((await backend.activity("e2e-home-lookup")).visits).toEqual([{ source: "lookup" }]);
+  });
+
+  test("cannot borrow the couple's preview", async ({ page }) => {
+    // Junk of any length is the ordinary page, never an error.
+    for (const as of ["anything", "x".repeat(65)]) {
+      await visit(page, `/?as=${as}`);
+
+      await expect(schedule(page).getByRole("heading", { name: "The day" })).toBeVisible();
+      await expect(page.getByText("Viewing as")).toHaveCount(0);
+    }
   });
 
   test("can jump to a section from the bar", async ({ page }) => {
@@ -72,7 +103,7 @@ test.describe("a party whose invitation this device has opened", () => {
     await expect(section.getByRole("heading", { name: /Pre-wedding/ })).toBeVisible();
     await expect(section.getByRole("heading", { name: /Brunch/ })).toBeVisible();
     // They already have their link; nothing to find.
-    await expect(section.getByRole("link", { name: "FIND YOUR INVITATION" })).toHaveCount(0);
+    await expect(section.getByRole("link", { name: "SEE MY SCHEDULE" })).toHaveCount(0);
   });
 
   test("does not see an event it is not invited to", async ({ page }) => {
@@ -85,6 +116,24 @@ test.describe("a party whose invitation this device has opened", () => {
     await expect(section.getByRole("listitem")).toHaveCount(2);
     await expect(section.getByRole("heading", { name: /Brunch/ })).toBeVisible();
     await expect(section.getByRole("heading", { name: /Pre-wedding/ })).toHaveCount(0);
+  });
+
+  test("is told who an event is for when it is not the whole party", async ({ page }) => {
+    await backend.seed([party({ token: "e2e-home-split", headCount: 3 })]);
+    const all = { preWedding: false, wedding: true, brunch: true };
+    await backend.seedGuests("e2e-home-split", [
+      { firstName: "Sam", lastName: "Khoury", invitedTo: all, addedByCouple: true },
+      { firstName: "Alex", lastName: "Khoury", invitedTo: all, addedByCouple: true },
+      { firstName: "Jo", lastName: "Khoury", addedByCouple: true },
+    ]);
+
+    await visit(page, "/rsvp/e2e-home-split");
+    await visit(page, "/");
+
+    const events = schedule(page).getByRole("listitem");
+    await expect(events).toHaveCount(2);
+    await expect(events.filter({ hasText: "Brunch" })).toContainText("For Sam and Alex");
+    await expect(events.filter({ hasText: "The wedding" }).getByText(/^For /)).toHaveCount(0);
   });
 
   test("is sent from its thank-you screen to the schedule", async ({ page }) => {

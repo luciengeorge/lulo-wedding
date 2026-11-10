@@ -1,4 +1,4 @@
-import type { RsvpEventKey } from "@/lib/rsvp-rules";
+import { RSVP_EVENTS, type RsvpEventKey } from "@/lib/rsvp-rules";
 
 /**
  * Everything the home page tells guests, in one place.
@@ -6,8 +6,52 @@ import type { RsvpEventKey } from "@/lib/rsvp-rules";
  * Most of it comes from the planner's brief. `null` means "not confirmed yet":
  * the page draws an honest placeholder for it, never an invented value, so
  * filling a detail in later is a one-line change here and nothing else.
+ *
+ * Anything that belongs to one event (its venue, a shuttle, an FAQ answer only
+ * brunch guests need) goes in wedding-details.server.ts instead, tagged.
  */
 
+/**
+ * Which events a detail belongs to. Untagged, or tagged with the wedding, means
+ * every guest past the password sees it. Tagged only with the pre-wedding or the
+ * brunch, it is for parties invited to one of those, and lives in
+ * wedding-details.server.ts so it is never sent to anyone else.
+ */
+export type Tagged = { events?: readonly RsvpEventKey[] };
+
+export function isPublic(item: Tagged): boolean {
+  return !item.events?.length || item.events.includes("wedding");
+}
+
+export function visibleTo(item: Tagged, invited: readonly RsvpEventKey[]): boolean {
+  return isPublic(item) || (item.events ?? []).some((event) => invited.includes(event));
+}
+
+/**
+ * A tagged detail as the page gets it: the tag swapped for a label such as
+ * "Brunch", or null when it is for everyone. The page never needs the rule.
+ */
+export type Shown<T extends Tagged> = Omit<T, "events"> & { onlyFor: string | null };
+
+const LABEL = Object.fromEntries(RSVP_EVENTS.map((event) => [event.key, event.label])) as Record<RsvpEventKey, string>;
+const and = new Intl.ListFormat("en-GB", { type: "conjunction" });
+
+/** The items a party invited to `invited` may see, labelled. */
+export function showTo<T extends Tagged>(items: readonly T[], invited: readonly RsvpEventKey[]): Shown<T>[] {
+  return items
+    .filter((item) => visibleTo(item, invited))
+    .map(({ events, ...rest }) => ({
+      ...rest,
+      onlyFor: isPublic({ events }) ? null : and.format((events ?? []).map((event) => LABEL[event])),
+    }));
+}
+
+export type Faq = Tagged & { question: string; answer: string };
+
+/** A block in the Travel section. `pending` draws the text as not confirmed yet. */
+export type TravelNote = Tagged & { title: string; text: string; pending?: boolean };
+
+/** One event on the schedule. The events themselves are in wedding-details.server.ts, kept off the client. */
 export type WeddingEvent = {
   key: RsvpEventKey;
   name: string;
@@ -23,45 +67,6 @@ export type WeddingEvent = {
   /** Offer an add-to-calendar link. */
   calendar: boolean;
 };
-
-export const WEDDING_EVENTS: readonly WeddingEvent[] = [
-  {
-    key: "preWedding",
-    name: "Pre-wedding",
-    day: 15,
-    weekday: "Thursday",
-    area: null,
-    venue: null,
-    time: null,
-    dress: null,
-    shuttle: null,
-    calendar: false,
-  },
-  {
-    key: "wedding",
-    name: "The wedding",
-    day: 17,
-    weekday: "Saturday",
-    area: "Faraya",
-    venue: null,
-    time: null,
-    dress: "Formal. Comfortable shoes and a light layer for the mountain evening.",
-    shuttle: { from: "the InterContinental Mzaar", time: null },
-    calendar: true,
-  },
-  {
-    key: "brunch",
-    name: "Brunch",
-    day: 18,
-    weekday: "Sunday",
-    area: null,
-    venue: null,
-    time: null,
-    dress: null,
-    shuttle: null,
-    calendar: false,
-  },
-];
 
 export const TAXI = {
   name: "Snow Taxi",
@@ -87,24 +92,6 @@ export const NEARBY_HOTELS = [
   "Terrebrune Hotel",
   "L'Auberge de Faqra",
 ] as const;
-
-export const FAQS: readonly { question: string; answer: string }[] = [
-  {
-    question: "What is the weather like in July?",
-    answer:
-      "Warm and sunny by day, cooler in the mountain evenings. Temperatures drop after sunset, so bring a jacket or shawl.",
-  },
-  {
-    question: "What should I wear?",
-    answer:
-      "Formal attire, but comfort is key. Wear shoes you can stand and dance in, and bring a layer for the evening. We expect you on the dance floor all night.",
-  },
-  {
-    question: "Where can I get my hair and make-up done?",
-    answer:
-      "Near Faqra and Faraya: the InterContinental Mzaar, or Dany Attieh in Faqra. Book ahead to get the time you want.",
-  },
-];
 
 export const PLACES: readonly { name: string; kind: string; text: string }[] = [
   {

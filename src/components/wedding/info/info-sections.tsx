@@ -2,29 +2,19 @@ import type { ReactNode } from "react";
 
 import { Link } from "@tanstack/react-router";
 
-import type { RsvpEventKey } from "@/lib/rsvp-rules";
+import type { ScheduleEvent, ShownFaq, ShownTravelNote } from "@/lib/functions/home-content";
 
 import { FEATURES } from "@/lib/flags";
 import { cn } from "@/lib/utils";
-import {
-  FAQS,
-  NEARBY_HOTELS,
-  PLACES,
-  REGISTRY,
-  ROOM_BLOCK,
-  TAXI,
-  telHref,
-  WEDDING_EVENTS,
-  WINERIES,
-  type WeddingEvent,
-} from "@/lib/wedding-info";
+import { NEARBY_HOTELS, PLACES, REGISTRY, ROOM_BLOCK, TAXI, telHref, WINERIES } from "@/lib/wedding-info";
 
 /**
  * The home page below the hero: one section per thing a guest needs, each
  * reachable from the jump bar by its `#id`.
  *
  * Unconfirmed details are drawn as such ("To be confirmed", in the pending
- * colour), never invented. They all come from src/lib/wedding-info.ts.
+ * colour), never invented. They come from src/lib/wedding-info.ts, and the parts
+ * that depend on who is looking (events, FAQ, travel notes) from the loader.
  */
 
 function InfoSection({
@@ -76,48 +66,110 @@ function Subhead({ children }: { children: ReactNode }) {
 
 const body = "font-display text-[17px] leading-[25px] text-bark";
 
-export function InfoSections({ events, known }: { events: readonly RsvpEventKey[]; known: boolean }) {
+type InfoSectionsProps = {
+  events: readonly ScheduleEvent[];
+  known: boolean;
+  faqs: readonly ShownFaq[];
+  travelNotes: readonly ShownTravelNote[];
+  /** How many details each section holds back from someone who has not found their invitation. */
+  hidden: { travel: number; faq: number };
+};
+
+export function InfoSections({ events, known, faqs, travelNotes, hidden }: InfoSectionsProps) {
   return (
     <div className="mx-auto w-full max-w-[1136px] lg:px-12">
       <Schedule events={events} known={known} />
-      <Travel />
+      <Travel events={events} notes={travelNotes} hidden={hidden.travel} />
       <Stay />
-      <Faq />
+      <Faq faqs={faqs} hidden={hidden.faq} />
       <Discover />
       <Registry />
     </div>
   );
 }
 
-function Schedule({ events, known }: { events: readonly RsvpEventKey[]; known: boolean }) {
-  const shown = WEDDING_EVENTS.filter((event) => events.includes(event.key));
-
+function Schedule({ events, known }: { events: readonly ScheduleEvent[]; known: boolean }) {
   return (
-    <InfoSection id="schedule" eyebrow="Schedule · July 2027" title={shown.length > 1 ? "The weekend" : "The day"}>
+    <InfoSection id="schedule" eyebrow="Schedule · July 2027" title={events.length > 1 ? "The weekend" : "The day"}>
       <ol className="-mt-7 flex flex-col">
-        {shown.map((event) => (
+        {events.map((event) => (
           <EventRow key={event.key} event={event} />
         ))}
       </ol>
 
-      {!known && FEATURES.rsvp ? (
-        <div className="flex flex-col gap-2.5 pt-[22px]">
-          <p className="font-display text-base leading-[23px] text-faded italic">
-            Open the link in your invitation to see everything you are invited to.
-          </p>
-          <Link
-            to="/rsvp"
-            className="self-start font-display text-xs leading-4 font-semibold tracking-[0.16em] text-ink underline decoration-amber underline-offset-4"
-          >
-            FIND YOUR INVITATION
-          </Link>
-        </div>
-      ) : null}
+      {known ? null : <YourSchedule />}
     </InfoSection>
   );
 }
 
-function EventRow({ event }: { event: WeddingEvent }) {
+/**
+ * The pitch to someone who came in with the shared password: the page they see
+ * is the public one, and finding their invitation shows them their own. Sent to
+ * the name search with `next=schedule`, so they come straight back here.
+ */
+function YourSchedule() {
+  return (
+    <div className="mt-7 flex flex-col gap-3 rounded-[3px] border border-amber/60 bg-paper/70 px-5 py-6 lg:px-7">
+      <p className="font-display text-xs leading-4 font-semibold tracking-caps text-faded uppercase">Your weekend</p>
+      <p className="font-display text-[22px] leading-7 font-medium text-bark">There may be more for you</p>
+      <p className={body}>
+        Some guests are invited to more than the wedding day. Find your invitation to see your own schedule and the
+        details that go with it.
+      </p>
+      {FEATURES.rsvp ? (
+        <>
+          <Link
+            to="/rsvp"
+            search={{ next: "schedule" }}
+            className="mt-2 flex h-[52px] items-center justify-center rounded-[3px] bg-ink px-8 font-display text-[15px] font-semibold tracking-[0.16em] text-paper transition-opacity hover:opacity-90 lg:self-start"
+          >
+            SEE MY SCHEDULE
+          </Link>
+          <p className="font-display text-[15px] leading-[22px] text-faded italic">
+            Or open the link in your invitation.
+          </p>
+        </>
+      ) : (
+        <p className="font-display text-[15px] leading-[22px] text-faded italic">
+          Open the link in your invitation to see it.
+        </p>
+      )}
+    </div>
+  );
+}
+
+/** Ends a section that holds details back from someone who has not found their invitation. */
+function MoreForInvited() {
+  return (
+    <p className="mt-5 font-display text-base leading-[23px] text-faded italic">
+      There is more here for guests of other events.{" "}
+      {FEATURES.rsvp ? (
+        <Link
+          to="/rsvp"
+          search={{ next: "schedule" }}
+          className="text-ink not-italic underline decoration-amber underline-offset-4"
+        >
+          Find your invitation
+        </Link>
+      ) : (
+        "Open the link in your invitation"
+      )}{" "}
+      to see it.
+    </p>
+  );
+}
+
+/** Marks a detail that is only for some events, such as "Brunch". */
+function OnlyFor({ label }: { label: string | null }) {
+  if (!label) return null;
+  return (
+    <p className="font-display text-[11px] leading-4 font-semibold tracking-[0.18em] text-faded uppercase">{label}</p>
+  );
+}
+
+const names = new Intl.ListFormat("en-GB", { type: "conjunction" });
+
+function EventRow({ event }: { event: ScheduleEvent }) {
   const nothingYet = !event.area && !event.venue && !event.time && !event.dress && !event.shuttle;
 
   return (
@@ -136,6 +188,9 @@ function EventRow({ event }: { event: WeddingEvent }) {
           </span>
           {event.name}
         </h3>
+        {event.for.length > 0 ? (
+          <p className="-mt-2 font-display text-base leading-[22px] text-faded italic">For {names.format(event.for)}</p>
+        ) : null}
 
         {nothingYet ? (
           <p className="font-display text-base leading-[22px]">
@@ -198,17 +253,37 @@ function Fact({ label, children }: { label: string; children: ReactNode }) {
 }
 
 /** A labelled block in a list of them, ruled off from the next. */
-function Item({ title, children, className }: { title: string; children: ReactNode; className?: string }) {
+function Item({
+  title,
+  onlyFor = null,
+  children,
+  className,
+}: {
+  title: string;
+  onlyFor?: string | null;
+  children: ReactNode;
+  className?: string;
+}) {
   return (
     <div className={cn("flex flex-col gap-1.5 border-t border-rule py-[18px]", className)}>
+      <OnlyFor label={onlyFor} />
       <Subhead>{title}</Subhead>
       {children}
     </div>
   );
 }
 
-function Travel() {
-  const shuttle = WEDDING_EVENTS.find((event) => event.key === "wedding")?.shuttle;
+function Travel({
+  events,
+  notes,
+  hidden,
+}: {
+  events: readonly ScheduleEvent[];
+  notes: readonly ShownTravelNote[];
+  hidden: number;
+}) {
+  const withShuttle = events.filter((event) => event.shuttle);
+  const onlyWedding = withShuttle.length === 1 && withShuttle[0]?.key === "wedding";
 
   return (
     <InfoSection id="travel" eyebrow="Travel" title="Getting there">
@@ -218,12 +293,35 @@ function Travel() {
       </p>
 
       <div className="mt-[26px] flex flex-col border-b border-rule">
-        {shuttle ? (
+        {withShuttle.length > 0 ? (
           <Item title="Shuttles">
-            <p className={body}>
-              We have arranged shuttles between {shuttle.from} and the wedding.{" "}
-              {shuttle.time ? `They leave at ${shuttle.time}.` : <Pending>Times to be confirmed.</Pending>}
-            </p>
+            {onlyWedding && withShuttle[0]?.shuttle ? (
+              <p className={body}>
+                We have arranged shuttles between {withShuttle[0].shuttle.from} and the wedding.{" "}
+                {withShuttle[0].shuttle.time ? (
+                  `They leave at ${withShuttle[0].shuttle.time}.`
+                ) : (
+                  <Pending>Times to be confirmed.</Pending>
+                )}
+              </p>
+            ) : (
+              <ul className="flex flex-col gap-1">
+                {withShuttle.map((event) =>
+                  event.shuttle ? (
+                    <li key={event.key} className={body}>
+                      {event.name}: from {event.shuttle.from}
+                      {event.shuttle.time ? (
+                        ` at ${event.shuttle.time}`
+                      ) : (
+                        <>
+                          , <Pending>time to be confirmed</Pending>
+                        </>
+                      )}
+                    </li>
+                  ) : null,
+                )}
+              </ul>
+            )}
           </Item>
         ) : null}
         <Item title="Taxi">
@@ -241,15 +339,13 @@ function Travel() {
             ))}
           </ul>
         </Item>
-        <Item title="Driving">
-          <p className={body}>Valet parking at the venue.</p>
-        </Item>
-        <Item title="Visas">
-          <p className={body}>
-            <Pending>Guidance for guests travelling from abroad to come.</Pending>
-          </p>
-        </Item>
+        {notes.map((note) => (
+          <Item key={note.title} title={note.title} onlyFor={note.onlyFor}>
+            <p className={body}>{note.pending ? <Pending>{note.text}</Pending> : note.text}</p>
+          </Item>
+        ))}
       </div>
+      {hidden > 0 ? <MoreForInvited /> : null}
     </InfoSection>
   );
 }
@@ -301,17 +397,19 @@ function Stay() {
   );
 }
 
-function Faq() {
+function Faq({ faqs, hidden }: { faqs: readonly ShownFaq[]; hidden: number }) {
   return (
     <InfoSection id="faq" eyebrow="FAQ" title="Good to know">
       <div className="flex flex-col gap-7">
-        {FAQS.map((faq) => (
+        {faqs.map((faq) => (
           <div key={faq.question} className="flex flex-col gap-2">
+            <OnlyFor label={faq.onlyFor} />
             <h3 className="font-display text-[19px] leading-[26px] font-semibold text-bark">{faq.question}</h3>
             <p className={body}>{faq.answer}</p>
           </div>
         ))}
       </div>
+      {hidden > 0 ? <MoreForInvited /> : null}
     </InfoSection>
   );
 }

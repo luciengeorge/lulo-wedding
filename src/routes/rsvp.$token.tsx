@@ -1,6 +1,6 @@
 import type { FunctionReturnType } from "convex/server";
 
-import { createFileRoute, Link, notFound, useRouter } from "@tanstack/react-router";
+import { createFileRoute, Link, notFound, redirect, useRouter } from "@tanstack/react-router";
 import { useMemo, useState } from "react";
 import z from "zod";
 
@@ -15,7 +15,7 @@ import { CardLabel, RsvpCard, RsvpHeader, RsvpShell } from "@/components/rsvp/rs
 import { convexErrorMessage } from "@/lib/convex-error";
 import { FEATURES } from "@/lib/flags";
 import { isGuestUnlocked, requireGuestUnlocked, unlockWithToken } from "@/lib/functions/guest-gate";
-import { getRsvp, submitRsvp, VisitViaSchema } from "@/lib/functions/rsvp";
+import { getRsvp, submitRsvp, NextSchema, VisitViaSchema } from "@/lib/functions/rsvp";
 import { invitedEvents, isBlankCard, RSVP_EVENTS, validateReply } from "@/lib/rsvp-rules";
 import { seo } from "@/lib/seo";
 
@@ -34,6 +34,7 @@ const EVENT_DATE: Record<RsvpEventKey, string> = {
 const RsvpSearchSchema = z.object({
   s: z.string().max(64).optional().catch(undefined),
   via: VisitViaSchema.optional().catch(undefined),
+  next: NextSchema,
   // The router reads `?test=1` as the number 1.
   test: z
     .union([z.literal(1), z.literal("1")])
@@ -52,11 +53,16 @@ export const Route = createFileRoute("/rsvp/$token")({
     if (await unlockWithToken({ data: { token: params.token } })) return;
     return requireGuestUnlocked(location.href);
   },
-  loaderDeps: ({ search }) => ({ s: search.s, via: search.via, test: search.test !== undefined }),
+  loaderDeps: ({ search }) => ({ s: search.s, via: search.via, test: search.test !== undefined, next: search.next }),
   // Loaded on the server, so the invitation is in the first response rather than
   // a round trip later, and so the page does not depend on the browser's Convex
   // client, which holds queries until an auth token a guest will never have.
-  loader: ({ params, deps }) => getRsvp({ data: { token: params.token, ...deps } }),
+  loader: async ({ params, deps: { next, ...deps } }) => {
+    const data = await getRsvp({ data: { token: params.token, ...deps } });
+    // Loading it is what remembers the party on this device, so the home page can now show their own schedule.
+    if (data && next === "schedule") throw redirect({ to: "/", hash: "schedule", replace: true });
+    return data;
+  },
   head: () => ({
     meta: seo({
       title: "RSVP",

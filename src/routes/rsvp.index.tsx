@@ -1,11 +1,12 @@
 import { createFileRoute, Link, notFound, redirect } from "@tanstack/react-router";
 import { useState } from "react";
+import z from "zod";
 
 import { LabelledField, PrimaryButton } from "@/components/rsvp/fields";
 import { RsvpHeader, RsvpShell } from "@/components/rsvp/rsvp-shell";
 import { FEATURES } from "@/lib/flags";
 import { requireGuestUnlocked } from "@/lib/functions/guest-gate";
-import { getRememberedToken, lookupParty } from "@/lib/functions/rsvp";
+import { getRememberedToken, lookupParty, NextSchema } from "@/lib/functions/rsvp";
 import { seo } from "@/lib/seo";
 
 /**
@@ -20,14 +21,20 @@ import { seo } from "@/lib/seo";
  * hands back nothing but the party's name and its link.
  */
 export const Route = createFileRoute("/rsvp/")({
-  beforeLoad: async ({ location }) => {
+  validateSearch: z.object({ next: NextSchema }),
+  beforeLoad: async ({ location, search }) => {
     if (!FEATURES.rsvp) throw notFound();
     await requireGuestUnlocked(location.href);
 
     const token = await getRememberedToken();
     // Replaced, not pushed: Back from the invitation would land here and bounce straight back.
     if (token) {
-      throw redirect({ to: "/rsvp/$token", params: { token }, search: { via: "remembered" }, replace: true });
+      throw redirect({
+        to: "/rsvp/$token",
+        params: { token },
+        search: { via: "remembered", next: search.next },
+        replace: true,
+      });
     }
   },
   head: () => ({
@@ -68,6 +75,7 @@ function lookupMessage(result: LookupResult, query: string): string | null {
 }
 
 function FindInvitation() {
+  const { next } = Route.useSearch();
   const [query, setQuery] = useState("");
   const [searched, setSearched] = useState<{ query: string; result: LookupResult } | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -98,7 +106,14 @@ function FindInvitation() {
 
   return (
     <RsvpShell>
-      <RsvpHeader title="Find your invitation" subtitle="Tell us your name and we will find it for you." />
+      <RsvpHeader
+        title="Find your invitation"
+        subtitle={
+          next === "schedule"
+            ? "Tell us your name and we will show you your schedule."
+            : "Tell us your name and we will find it for you."
+        }
+      />
 
       <form onSubmit={onSubmit} className="mt-7 flex flex-col gap-5" noValidate>
         <LabelledField
@@ -145,7 +160,7 @@ function FindInvitation() {
                   <Link
                     to="/rsvp/$token"
                     params={{ token: match.token }}
-                    search={{ via: "lookup" }}
+                    search={{ via: "lookup", next }}
                     replace
                     className="flex min-h-14 items-center justify-between gap-3 px-1 py-3 font-display text-[18px] text-bark transition-colors hover:text-ink focus-visible:text-ink focus-visible:outline-none"
                   >

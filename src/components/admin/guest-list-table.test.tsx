@@ -266,11 +266,13 @@ describe("GuestListTable rendering", () => {
     expect(screen.getByText("2 coming of 4")).toBeInTheDocument();
   });
 
-  it("offers copy-link and edit on every row, and edit reaches the page", () => {
+  it("offers preview, copy-link and edit on every row, and edit reaches the page", () => {
     const onEdit = vi.fn();
     render(<Harness rows={[base]} onEdit={onEdit} />);
 
     const row = screen.getAllByRole("row")[1];
+    // By party id, never the token: the token is the guest's own link.
+    expect(within(row!).getByRole("link", { name: "Preview" })).toHaveAttribute("href", `/?as=${base._id}`);
     expect(within(row!).getByRole("button", { name: "Copy link" })).toBeInTheDocument();
     fireEvent.click(within(row!).getByRole("button", { name: "Edit" }));
     expect(onEdit).toHaveBeenCalledWith(base);

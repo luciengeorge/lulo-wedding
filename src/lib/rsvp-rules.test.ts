@@ -6,6 +6,7 @@ import {
   effectiveInvite,
   guestInvitedEvents,
   invitedEvents,
+  invitedNames,
   isBlankCard,
   isEffectiveDecline,
   partyInvitedTo,
@@ -234,5 +235,40 @@ describe("per-guest invites", () => {
   it("is satisfied by a party invited to nothing but one person's event", () => {
     const none = { ...party, invitedToWedding: false };
     expect(validateReply(none, [guest({ invitedTo: brunch, attending: { brunch: true } })])).toEqual([]);
+  });
+});
+
+describe("invitedNames", () => {
+  const all = { preWedding: false, wedding: true, brunch: true };
+  const weddingOnly = { preWedding: false, wedding: true, brunch: false };
+  const person = (firstName: string, invitedTo = all, isPlusOne = false) => ({ firstName, isPlusOne, invitedTo });
+  const household = { headCount: 3, defaultInvitedTo: weddingOnly };
+
+  it("names nobody when the whole party is invited", () => {
+    expect(invitedNames(household, [person("Sam"), person("Alex"), person("Jo")], "wedding")).toEqual([]);
+  });
+
+  it("names the people singled out for an event", () => {
+    const guests = [person("Sam"), person("Alex"), person("Jo", weddingOnly)];
+    expect(invitedNames(household, guests, "brunch")).toEqual(["Sam", "Alex"]);
+  });
+
+  it("names nobody when an invited card has no name yet", () => {
+    const guests = [person("Sam"), person("  "), person("Jo", weddingOnly)];
+    expect(invitedNames(household, guests, "brunch")).toEqual([]);
+  });
+
+  it("names nobody when a seat with no row takes the event by default", () => {
+    const party = { headCount: 3, defaultInvitedTo: all };
+    expect(invitedNames(party, [person("Sam"), person("Jo", weddingOnly)], "brunch")).toEqual([]);
+  });
+
+  it("still names when the seats with no row are not invited", () => {
+    expect(invitedNames(household, [person("Sam"), person("Jo", weddingOnly)], "brunch")).toEqual(["Sam"]);
+  });
+
+  it("does not count a plus one as a seat", () => {
+    const guests = [person("Sam"), person("Jo", weddingOnly), person("Kim", weddingOnly, true)];
+    expect(invitedNames({ headCount: 2, defaultInvitedTo: weddingOnly }, guests, "brunch")).toEqual(["Sam"]);
   });
 });
