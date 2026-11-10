@@ -194,6 +194,6 @@ test.describe("a reply receipt", () => {
     ).toHaveCount(0);
     // A receipt is not an invitation: nothing has been emailed in the funnel's terms.
     await expect(funnelStep(page, "Invited")).toContainText("Invited0of 1 party");
-    await expect(funnelStep(page, "Invited").locator("[data-slot=tooltip-trigger]")).toHaveCount(0);
+    await expect(funnelStep(page, "Invited").locator("[data-slot=invited-detail-trigger]")).toHaveCount(0);
   });
 });

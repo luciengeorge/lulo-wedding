@@ -27,7 +27,7 @@ describe("FunnelStrip", () => {
     expect(screen.queryByText(/bounced/)).not.toBeInTheDocument();
   });
 
-  it("keeps the channel and email numbers for the Invited tooltip", () => {
+  it("keeps the channel and email numbers for the Invited popover", () => {
     expect(invitedDetail(funnel)).toEqual(["1 by email, 4 on WhatsApp", "Emails: 3 sent, 2 opened, 0 bounced"]);
     expect(
       invitedDetail({ ...funnel, invited: { email: 0, whatsapp: 0, any: 0 }, email: { ...funnel.email, sent: 0 } }),
