@@ -1,9 +1,18 @@
 import type { Page, Request, Route } from "@playwright/test";
 
-import { backend, expect, GUEST_STATE, party, test, visit, waitForEmail } from "../fixtures";
-import { card, chip, expectStoredReply, fillCard, sendReply } from "../rsvp-form";
-
-test.use({ storageState: GUEST_STATE });
+import { backend, enterAsGuest, expect, party, test, visit, waitForEmail } from "../fixtures";
+import {
+  CAN_COME,
+  card,
+  chip,
+  comingButton,
+  emailField,
+  expectReplyForm,
+  expectStoredReply,
+  fillCard,
+  notComingButton,
+  sendReply,
+} from "../rsvp-form";
 
 /**
  * What people do to a form on a phone: tap twice, go back, reload, lose signal,
@@ -16,7 +25,8 @@ const EMAIL = "rae@example.com";
 /**
  * Server functions all share one URL prefix, and a production build names each
  * by a hash rather than by its export, so requests are told apart by what they
- * carry. On the reply form, the submit is the only POST with a contact email;
+ * carry. On the reply form, the submit is the only POST with a contact email
+ * (sent even when left blank);
  * reloading the invitation is the only GET whose payload names the party.
  */
 const SERVER_FNS = "**/_serverFn/**";
@@ -31,12 +41,12 @@ function loadsInvitation(request: Request, token: string): boolean {
 
 async function openForm(page: Page) {
   await visit(page, `/rsvp/${TOKEN}`);
-  await page.getByRole("button", { name: "JOYFULLY ACCEPT" }).click();
+  await expectReplyForm(page);
 }
 
 async function fillRae(page: Page) {
   await fillCard(page, "GUEST 1", 0, { first: "Rae", last: "Haddad", days: ["wedding"] });
-  await page.getByLabel("Your email").fill(EMAIL);
+  await emailField(page).fill(EMAIL);
 }
 
 test.beforeEach(async () => {
@@ -60,7 +70,7 @@ test.describe("sending a reply", () => {
       await route.continue();
     });
 
-    await page.getByRole("button", { name: "SEND OUR REPLY" }).dblclick();
+    await comingButton(page).dblclick();
     await expect(page.getByRole("button", { name: "SENDING" })).toBeDisabled();
     await expect(page.getByLabel("First name, guest 1")).toBeDisabled();
     release();
@@ -79,18 +89,18 @@ test.describe("sending a reply", () => {
     await page.route(SERVER_FNS, (route) =>
       isSubmit(route.request()) ? route.abort("internetdisconnected") : route.fallback(),
     );
-    await page.getByRole("button", { name: "SEND OUR REPLY" }).click();
+    await comingButton(page).click();
 
     await expect(page.getByRole("alert")).toBeVisible();
     await expect(page.getByLabel("First name, guest 1")).toHaveValue("Rae");
     await expect(chip(page, "GUEST 1", "wedding")).toBeChecked();
-    await expect(page.getByLabel("Your email")).toHaveValue(EMAIL);
-    await expect(page.getByRole("button", { name: "SEND OUR REPLY" })).toBeEnabled();
+    await expect(emailField(page)).toHaveValue(EMAIL);
+    await expect(comingButton(page)).toBeEnabled();
     expect((await backend.replyFor(TOKEN))?.respondedAt).toBeUndefined();
 
     // Signal back: the same form goes through.
     await page.unrouteAll();
-    await page.getByRole("button", { name: "SEND OUR REPLY" }).click();
+    await comingButton(page).click();
     await expect(page.getByText("Thank you")).toBeVisible();
     expect((await backend.replyFor(TOKEN))?.guests).toEqual([
       expect.objectContaining({ firstName: "Rae", wedding: "yes" }),
@@ -104,7 +114,7 @@ test.describe("sending a reply", () => {
   test("the confirmation never shows the previous answers, even for a moment", async ({ page }) => {
     const token = "e2e-interact-stale";
     await backend.seed([
-      party({ token, displayName: "The Haddads", headCount: 2, respondedAt: Date.now(), contactEmail: EMAIL }),
+      party({ token, displayName: "The Haddads", headCount: 3, respondedAt: Date.now(), contactEmail: EMAIL }),
     ]);
     await backend.seedGuests(token, [
       { firstName: "Rae", lastName: "Haddad", wedding: "yes" },
@@ -113,7 +123,7 @@ test.describe("sending a reply", () => {
     await visit(page, `/rsvp/${token}`);
     await expect(page.getByText("Rae and Cherif")).toBeVisible();
     await page.getByRole("button", { name: "CHANGE OUR REPLY" }).click();
-    await page.getByLabel("First name, guest 1").fill("Nour");
+    await fillCard(page, "GUEST 3", 2, { first: "Nour", last: "Haddad", days: ["wedding"] });
 
     await page.route(SERVER_FNS, async (route: Route) => {
       if (!loadsInvitation(route.request(), token)) return route.fallback();
@@ -129,8 +139,8 @@ test.describe("sending a reply", () => {
       }).observe(document.body, { childList: true, subtree: true, characterData: true });
     });
 
-    await page.getByRole("button", { name: "SEND OUR REPLY" }).click();
-    await expect(page.getByText("Nour and Cherif")).toBeVisible();
+    await comingButton(page).click();
+    await expect(page.getByText("Rae, Cherif and Nour")).toBeVisible();
     expect(await page.evaluate(() => (window as unknown as { sawStale: boolean }).sawStale)).toBe(false);
   });
 
@@ -139,47 +149,46 @@ test.describe("sending a reply", () => {
     await fillRae(page);
     await backend.exhaustSubmit(TOKEN);
 
-    await page.getByRole("button", { name: "SEND OUR REPLY" }).click();
+    await comingButton(page).click();
     await expect(page.getByRole("alert")).toContainText("That is a lot of changes at once.");
     expect((await backend.replyFor(TOKEN))?.respondedAt).toBeUndefined();
   });
 });
 
 test.describe("moving around", () => {
-  test("back after replying leaves the RSVP, and forward shows the reply, not the question", async ({ page }) => {
-    await visit(page, "/");
-    await visit(page, "/rsvp");
-    await page.getByLabel("Your first and last name").fill("Rae Haddad");
-    await page.getByRole("button", { name: "FIND MY INVITATION" }).click();
-    await page.getByRole("link", { name: /Rae & Cherif/ }).click();
-    await page.getByRole("button", { name: "JOYFULLY ACCEPT" }).click();
+  test("back after replying leaves the RSVP, and forward shows the reply, not the form", async ({ page }) => {
+    await visit(page, "/enter");
+    await enterAsGuest(page, "Rae Haddad");
+    await expect(page).toHaveURL("/");
+    await page.getByRole("link", { name: "RSVP", exact: true }).first().click();
+    await expect(page).toHaveURL(`/rsvp/${TOKEN}?via=remembered`);
     await fillRae(page);
-    await page.getByRole("button", { name: "SEND OUR REPLY" }).click();
+    await comingButton(page).click();
     await expect(page.getByText("Thank you")).toBeVisible();
 
-    // The search was replaced by the invitation, so Back leaves rather than
-    // landing on /rsvp and being sent straight back.
+    // /rsvp was replaced by the invitation, so Back leaves rather than landing
+    // on /rsvp and being sent straight back.
     await page.goBack();
     await expect(page).toHaveURL("/");
     await page.goForward();
-    await expect(page).toHaveURL(`/rsvp/${TOKEN}?via=lookup`);
+    await expect(page).toHaveURL(`/rsvp/${TOKEN}?via=remembered`);
     await expect(page.getByText("Thank you")).toBeVisible();
-    await expect(page.getByRole("button", { name: "JOYFULLY ACCEPT" })).toHaveCount(0);
+    await expect(comingButton(page)).toHaveCount(0);
     expect((await backend.replyFor(TOKEN))?.guests).toHaveLength(1);
   });
 
   test("an email typed on one form is still there on the other", async ({ page }) => {
     await openForm(page);
-    await page.getByLabel("Your email").fill(EMAIL);
+    await emailField(page).fill(EMAIL);
 
-    await page.getByRole("button", { name: "Actually, we cannot make it" }).click();
-    await expect(page.getByRole("button", { name: "SEND OUR REGRETS" })).toBeVisible();
-    await expect(page.getByLabel("Your email")).toHaveValue(EMAIL);
-    await page.getByLabel("Your email").fill("cherif@example.com");
+    await notComingButton(page).click();
+    await expect(page.getByRole("button", { name: "SEND", exact: true })).toBeVisible();
+    await expect(emailField(page)).toHaveValue(EMAIL);
+    await emailField(page).fill("cherif@example.com");
 
-    await page.getByRole("button", { name: "Actually, we can come", exact: true }).click();
-    await expect(page.getByRole("button", { name: "SEND OUR REPLY" })).toBeVisible();
-    await expect(page.getByLabel("Your email")).toHaveValue("cherif@example.com");
+    await page.getByRole("button", { name: CAN_COME }).click();
+    await expect(comingButton(page)).toBeVisible();
+    await expect(emailField(page)).toHaveValue("cherif@example.com");
   });
 
   test("a reload halfway through starts over and saves nothing", async ({ page }) => {
@@ -187,25 +196,25 @@ test.describe("moving around", () => {
     await fillRae(page);
 
     await page.reload();
-    await expect(page.getByRole("button", { name: "JOYFULLY ACCEPT" })).toBeVisible();
+    await expect(comingButton(page)).toBeVisible();
+    await expect(page.getByLabel("First name, guest 1")).toHaveValue("");
     expect((await backend.replyFor(TOKEN))?.respondedAt).toBeUndefined();
 
-    await page.getByRole("button", { name: "JOYFULLY ACCEPT" }).click();
     await fillRae(page);
-    await page.getByRole("button", { name: "SEND OUR REPLY" }).click();
+    await comingButton(page).click();
     await expect(page.getByText("Thank you")).toBeVisible();
   });
 });
 
 test.describe("two devices on one invitation", () => {
   test("the later reply wins, cleanly", async ({ page, browser }) => {
-    const other = await browser.newContext({ storageState: GUEST_STATE });
+    const other = await browser.newContext();
     const second = await other.newPage();
     await openForm(page);
     await openForm(second);
 
     await fillRae(page);
-    await page.getByRole("button", { name: "SEND OUR REPLY" }).click();
+    await comingButton(page).click();
     await expect(page.getByText("Thank you")).toBeVisible();
 
     await fillCard(second, "GUEST 1", 0, { first: "Cherif", last: "Haddad", days: ["wedding"] });
@@ -232,27 +241,25 @@ test.describe("two devices on one invitation", () => {
     await openForm(page);
     await fillRae(page);
     await fillCard(page, "GUEST 2", 1, { first: "Cherif", last: "Haddad", days: ["wedding"] });
-    await page.getByRole("button", { name: "SEND OUR REPLY" }).click();
+    await comingButton(page).click();
     await expect(page.getByText("Thank you")).toBeVisible();
     await expectStoredReply(page, EMAIL);
 
-    const other = await browser.newContext({ storageState: GUEST_STATE });
+    const other = await browser.newContext();
     const second = await other.newPage();
     await visit(second, `/rsvp/${TOKEN}`);
     await second.getByRole("button", { name: "CHANGE OUR REPLY" }).click();
     await page.getByRole("button", { name: "CHANGE OUR REPLY" }).click();
 
-    // The second device clears Cherif's card and sends.
-    await second.getByLabel("First name, guest 2").fill("");
-    await second.getByLabel("Last name, guest 2").fill("");
-    await second.getByRole("button", { name: "SEND OUR REPLY" }).click();
+    // The second device says Cherif can't make it, which takes his row away.
+    await card(second, "Cherif").getByLabel("Cherif can't make it").check();
+    await comingButton(second).click();
     await expect(second.getByText(/told us about 1 of your 2 places/)).toBeVisible();
 
-    // The first device, still showing Cherif, edits him.
-    await page.getByLabel("Last name, guest 2").fill("Haddad-Saab");
-    await page.getByRole("button", { name: "SEND OUR REPLY" }).click();
+    // The first device, still showing Cherif, sends him again.
+    await comingButton(page).click();
     await expect(page.getByRole("alert")).toContainText("That reply is out of date. Please reload the page");
-    await expect(card(page, "GUEST 2").getByLabel("Last name, guest 2")).toHaveValue("Haddad-Saab");
+    await expect(card(page, "Cherif")).toContainText("Cherif Haddad");
 
     expect((await backend.replyFor(TOKEN))?.guests.map((guest) => guest.firstName)).toEqual(["Rae"]);
     await other.close();

@@ -18,8 +18,8 @@ const logger = createLogger("rsvp.visit");
  *
  * Deliberately not the browser's Convex client. That client is configured to
  * hold every query until an auth token arrives, which suits /admin, where the
- * couple sign in. Guests never do: they hold the shared-password cookie and
- * nothing else, so a query issued from their browser waits on a token that will
+ * couple sign in. Guests never do: they hold the guest cookie and nothing
+ * else, so a query issued from their browser waits on a token that will
  * never come. Going through the server also means a guest's invitation is in the
  * first HTML response instead of arriving a round trip later, which is worth
  * having on a phone on mobile data.
@@ -27,15 +27,12 @@ const logger = createLogger("rsvp.visit");
  * Apart from the name lookup, nothing here is an authorisation boundary.
  * `convex/rsvp.ts` authorises on the token, the same as it would for a call
  * straight from a browser. The lookup has no token to go on, so Convex only
- * answers it for this server (APP_SERVER_SECRET), and this server only asks for a
- * session past the guest gate.
+ * answers it for this server (APP_SERVER_SECRET), which passes on the caller's IP
+ * for the rate limit.
  */
 
 /** Long enough for the 22-character tokens, short enough that a junk value is cheap to reject. */
 const TokenSchema = z.string().trim().min(1).max(64);
-
-/** `next=schedule`: they came from the home page to see their schedule, so send them back there, not to the form. */
-export const NextSchema = z.literal("schedule").optional().catch(undefined);
 
 /** How the guest reached the page, when the route knows better than "they had the link". */
 export const VisitViaSchema = z.enum(["lookup", "remembered"]);
@@ -52,7 +49,7 @@ const GetRsvpSchema = z.object({
 const SubmitSchema = z.object({
   token: TokenSchema,
   declined: z.boolean(),
-  contactEmail: z.string().trim().max(254),
+  contactEmail: z.string().trim().max(254).optional(),
   guestNote: z.string().max(2000).optional(),
   guests: z
     .array(
@@ -89,16 +86,9 @@ export const getRsvp = createServerFn({ method: "GET" })
       // count as the party seeing it, nor leave the phone remembering the party.
       if (result && !data.test) {
         const session = await useGuestSession();
-        // `unlocked` as well as the token: a valid link is as good as the password
-        // (see `unlockWithToken`). On a first, server-rendered arrival that unlock
-        // and this write share one request, and each starts from the request's
-        // cookie, so writing the token alone would drop the unlock and send the
-        // guest to the password page the moment they left their invitation.
         await session.update({
-          ...session.data,
           token: data.token,
-          unlocked: true,
-          at: session.data.unlocked ? session.data.at : Date.now(),
+          at: session.data.token === data.token ? session.data.at : Date.now(),
         });
 
         // Stats, not the page. A guest must never see an error because a visit
@@ -138,21 +128,29 @@ export const submitRsvp = createServerFn({ method: "POST" })
   });
 
 /**
- * Finds a party by name, for a guest who has lost their link. Only for a session
- * already past the guest gate: a lookup hands out links, and the gate is what
- * keeps strangers from typing names at it.
+ * Finds a party by name. This is how guests get in, so anyone may ask; Convex
+ * holds every caller to a per-IP and a global limit. The tokens stay on the
+ * server, in this device's sealed cookie: the page gets the names and a `choice`
+ * to pass to `enterAs`, never a link it could keep or share.
  */
 export const lookupParty = createServerFn({ method: "POST" })
   .validator(z.object({ query: z.string().trim().min(1).max(200) }))
   .handler(async ({ data }) => {
     return Sentry.startSpan({ name: "lookupParty" }, async () => {
-      const session = await useGuestSession();
-      if (session.data.unlocked !== true) throw new Error("The guest gate is locked");
-
-      return await fetchAuthMutation(api.rsvp.lookupByName, {
+      const result = await fetchAuthMutation(api.rsvp.lookupByName, {
         query: data.query,
         clientKey: getClientKey(),
         serverSecret: getAppServerSecret(),
       });
+      if (result.kind !== "matches") return result;
+
+      const session = await useGuestSession();
+      const search = crypto.randomUUID();
+      await session.update({ matches: { search, tokens: result.matches.map((match) => match.token) } });
+      return {
+        kind: "matches" as const,
+        search,
+        matches: result.matches.map((match, choice) => ({ displayName: match.displayName, choice })),
+      };
     });
   });

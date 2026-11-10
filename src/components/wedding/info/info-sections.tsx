@@ -1,10 +1,7 @@
 import type { ReactNode } from "react";
 
-import { Link } from "@tanstack/react-router";
-
 import type { ScheduleEvent, ShownFaq, ShownTravelNote } from "@/lib/functions/home-content";
 
-import { FEATURES } from "@/lib/flags";
 import { cn } from "@/lib/utils";
 import { NEARBY_HOTELS, PLACES, REGISTRY, ROOM_BLOCK, TAXI, telHref, WINERIES } from "@/lib/wedding-info";
 
@@ -68,27 +65,24 @@ const body = "font-display text-[17px] leading-[25px] text-bark";
 
 type InfoSectionsProps = {
   events: readonly ScheduleEvent[];
-  known: boolean;
   faqs: readonly ShownFaq[];
   travelNotes: readonly ShownTravelNote[];
-  /** How many details each section holds back from someone who has not found their invitation. */
-  hidden: { travel: number; faq: number };
 };
 
-export function InfoSections({ events, known, faqs, travelNotes, hidden }: InfoSectionsProps) {
+export function InfoSections({ events, faqs, travelNotes }: InfoSectionsProps) {
   return (
     <div className="mx-auto w-full max-w-[1136px] lg:px-12">
-      <Schedule events={events} known={known} />
-      <Travel events={events} notes={travelNotes} hidden={hidden.travel} />
+      <Schedule events={events} />
+      <Travel events={events} notes={travelNotes} />
       <Stay />
-      <Faq faqs={faqs} hidden={hidden.faq} />
+      <Faq faqs={faqs} />
       <Discover />
       <Registry />
     </div>
   );
 }
 
-function Schedule({ events, known }: { events: readonly ScheduleEvent[]; known: boolean }) {
+function Schedule({ events }: { events: readonly ScheduleEvent[] }) {
   return (
     <InfoSection id="schedule" eyebrow="Schedule · July 2027" title={events.length > 1 ? "The weekend" : "The day"}>
       <ol className="-mt-7 flex flex-col">
@@ -96,66 +90,7 @@ function Schedule({ events, known }: { events: readonly ScheduleEvent[]; known: 
           <EventRow key={event.key} event={event} />
         ))}
       </ol>
-
-      {known ? null : <YourSchedule />}
     </InfoSection>
-  );
-}
-
-/**
- * The pitch to someone who came in with the shared password: the page they see
- * is the public one, and finding their invitation shows them their own. Sent to
- * the name search with `next=schedule`, so they come straight back here.
- */
-function YourSchedule() {
-  return (
-    <div className="mt-7 flex flex-col gap-3 rounded-[3px] border border-amber/60 bg-paper/70 px-5 py-6 lg:px-7">
-      <p className="font-display text-xs leading-4 font-semibold tracking-caps text-faded uppercase">Your weekend</p>
-      <p className="font-display text-[22px] leading-7 font-medium text-bark">There may be more for you</p>
-      <p className={body}>
-        Some guests are invited to more than the wedding day. Find your invitation to see your own schedule and the
-        details that go with it.
-      </p>
-      {FEATURES.rsvp ? (
-        <>
-          <Link
-            to="/rsvp"
-            search={{ next: "schedule" }}
-            className="mt-2 flex h-[52px] items-center justify-center rounded-[3px] bg-ink px-8 font-display text-[15px] font-semibold tracking-[0.16em] text-paper transition-opacity hover:opacity-90 lg:self-start"
-          >
-            SEE MY SCHEDULE
-          </Link>
-          <p className="font-display text-[15px] leading-[22px] text-faded italic">
-            Or open the link in your invitation.
-          </p>
-        </>
-      ) : (
-        <p className="font-display text-[15px] leading-[22px] text-faded italic">
-          Open the link in your invitation to see it.
-        </p>
-      )}
-    </div>
-  );
-}
-
-/** Ends a section that holds details back from someone who has not found their invitation. */
-function MoreForInvited() {
-  return (
-    <p className="mt-5 font-display text-base leading-[23px] text-faded italic">
-      There is more here for guests of other events.{" "}
-      {FEATURES.rsvp ? (
-        <Link
-          to="/rsvp"
-          search={{ next: "schedule" }}
-          className="text-ink not-italic underline decoration-amber underline-offset-4"
-        >
-          Find your invitation
-        </Link>
-      ) : (
-        "Open the link in your invitation"
-      )}{" "}
-      to see it.
-    </p>
   );
 }
 
@@ -273,15 +208,7 @@ function Item({
   );
 }
 
-function Travel({
-  events,
-  notes,
-  hidden,
-}: {
-  events: readonly ScheduleEvent[];
-  notes: readonly ShownTravelNote[];
-  hidden: number;
-}) {
+function Travel({ events, notes }: { events: readonly ScheduleEvent[]; notes: readonly ShownTravelNote[] }) {
   const withShuttle = events.filter((event) => event.shuttle);
   const onlyWedding = withShuttle.length === 1 && withShuttle[0]?.key === "wedding";
 
@@ -345,7 +272,6 @@ function Travel({
           </Item>
         ))}
       </div>
-      {hidden > 0 ? <MoreForInvited /> : null}
     </InfoSection>
   );
 }
@@ -397,7 +323,7 @@ function Stay() {
   );
 }
 
-function Faq({ faqs, hidden }: { faqs: readonly ShownFaq[]; hidden: number }) {
+function Faq({ faqs }: { faqs: readonly ShownFaq[] }) {
   return (
     <InfoSection id="faq" eyebrow="FAQ" title="Good to know">
       <div className="flex flex-col gap-7">
@@ -409,7 +335,6 @@ function Faq({ faqs, hidden }: { faqs: readonly ShownFaq[]; hidden: number }) {
           </div>
         ))}
       </div>
-      {hidden > 0 ? <MoreForInvited /> : null}
     </InfoSection>
   );
 }

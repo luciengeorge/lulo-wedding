@@ -1,8 +1,8 @@
-import { GUEST_STATE, test } from "../../fixtures";
+import { test } from "../../fixtures";
 import { PAIRWISE_CASES, runFormCase, seedCases } from "./form-cases";
 
 /** A pairwise spread of the form matrix, for the phone projects. */
-test.use({ storageState: GUEST_STATE, resetPerTest: false });
+test.use({ resetPerTest: false });
 
 test.beforeAll(() => seedCases(PAIRWISE_CASES));
 

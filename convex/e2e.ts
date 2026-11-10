@@ -240,7 +240,7 @@ export const replyFor = internalQuery({
 /**
  * Clears the rate limiters the browser tests trip over.
  *
- * The guest gate allows 20 attempts per 15 minutes per client IP, and every test
+ * The name search allows 20 lookups per 15 minutes per client IP, and every test
  * runs from the same loopback address, so a few suite runs in a row exhaust it and
  * the tests then fail on the app defending itself correctly. Resetting between
  * runs keeps the real limit in force for real guests rather than weakening it for
@@ -254,11 +254,6 @@ export const resetRateLimits = internalMutation({
   returns: v.null(),
   handler: async (ctx) => {
     assertTestDeployment();
-    for (const key of LOCAL_CLIENT_KEYS) {
-      await rateLimiter.reset(ctx, "guestGate", { key });
-    }
-    await rateLimiter.reset(ctx, "guestGate");
-
     // Magic links are capped at a burst of 3 per address per hour. Three admin
     // specs sign in, so a second run inside the hour would otherwise fail on the
     // limiter rather than on anything the tests are about.

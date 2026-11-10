@@ -1,9 +1,7 @@
 import type { Page } from "@playwright/test";
 
-import { backend, expect, guestCookieHeader, GUEST_STATE, party, test, visit, waitForEmail } from "../fixtures";
-
-// Already past the gate: these specs are about the RSVP, not the password.
-test.use({ storageState: GUEST_STATE });
+import { backend, expect, party, test, visit, waitForEmail } from "../fixtures";
+import { CAN_COME, card, comingButton, decline, emailField, expectCardEvents, notComingButton } from "../rsvp-form";
 
 /**
  * The RSVP flow, one describe per user story.
@@ -16,14 +14,6 @@ test.use({ storageState: GUEST_STATE });
 const TOKEN = "e2e-rsvp";
 
 /**
- * One guest's card, by its legend rather than by position. Selecting the nth
- * group picks up the nested event-chip fieldsets instead of the cards.
- */
-function card(page: Page, legend: string) {
-  return page.getByRole("group", { name: legend, exact: true });
-}
-
-/**
  * Fills one card. `index` addresses the inputs, which are numbered across the
  * whole form; `legend` addresses the card, which is named "PLUS ONE" for the
  * plus one rather than "GUEST n".
@@ -31,24 +21,12 @@ function card(page: Page, legend: string) {
 async function fillGuest(
   page: Page,
   index: number,
-  {
-    first,
-    last,
-    email,
-    days,
-    legend,
-  }: { first: string; last: string; email?: string; days: string[]; legend?: string },
+  { first, last, days, legend }: { first: string; last: string; days: string[]; legend?: string },
 ) {
   const group = card(page, legend ?? `GUEST ${index + 1}`);
 
   await page.getByLabel(`First name, guest ${index + 1}`).fill(first);
   await page.getByLabel(`Last name, guest ${index + 1}`).fill(last);
-
-  if (email === undefined) {
-    await group.getByLabel("No email address").check({ force: true });
-  } else {
-    await page.getByLabel(`Email, guest ${index + 1}`).fill(email);
-  }
 
   // The input is visually hidden and toggled by the label covering it, which is
   // what a guest taps; Playwright sees that label as an interceptor.
@@ -64,17 +42,16 @@ test.describe("a party replying for the first time", () => {
     await visit(page, `/rsvp/${TOKEN}`);
     await expect(page.getByText("Rae & Cherif")).toBeVisible();
 
-    // Screen one only offers the events this party was invited to.
-    await expect(page.getByText("Wedding")).toBeVisible();
-    await expect(page.getByText("Brunch")).toBeVisible();
-    await expect(page.getByText("Pre-wedding")).toHaveCount(0);
+    // The form only offers the events this party was invited to.
+    await expectCardEvents(page, "GUEST 1", ["wedding", "brunch"]);
+    await expectCardEvents(page, "GUEST 2", ["wedding", "brunch"]);
+    // No email per guest any more: one optional address for the whole party.
+    await expect(page.getByLabel(/^Email, guest/)).toHaveCount(0);
 
-    await page.getByRole("button", { name: "JOYFULLY ACCEPT" }).click();
-
-    await fillGuest(page, 0, { first: "Rae", last: "Haddad", email: "rae@example.com", days: ["Wedding", "Brunch"] });
-    await fillGuest(page, 1, { first: "Cherif", last: "Haddad", email: "cherif@example.com", days: ["Wedding"] });
-    await page.getByLabel("Your email").fill("rae@example.com");
-    await page.getByRole("button", { name: "SEND OUR REPLY" }).click();
+    await fillGuest(page, 0, { first: "Rae", last: "Haddad", days: ["Wedding", "Brunch"] });
+    await fillGuest(page, 1, { first: "Cherif", last: "Haddad", days: ["Wedding"] });
+    await emailField(page).fill("rae@example.com");
+    await comingButton(page).click();
 
     await expect(page.getByText("Thank you")).toBeVisible();
 
@@ -93,13 +70,12 @@ test.describe("a party replying for the first time", () => {
   test("accepts every event for everyone in one go", async ({ page }) => {
     await backend.seed([party({ token: TOKEN, headCount: 2, invitedToPreWedding: true, invitedToBrunch: true })]);
     await visit(page, `/rsvp/${TOKEN}`);
-    await page.getByRole("button", { name: "JOYFULLY ACCEPT" }).click();
 
     const all = ["Pre-wedding", "Wedding", "Brunch"];
-    await fillGuest(page, 0, { first: "Rae", last: "Haddad", email: "rae@example.com", days: all });
-    await fillGuest(page, 1, { first: "Cherif", last: "Haddad", email: "cherif@example.com", days: all });
-    await page.getByLabel("Your email").fill("rae@example.com");
-    await page.getByRole("button", { name: "SEND OUR REPLY" }).click();
+    await fillGuest(page, 0, { first: "Rae", last: "Haddad", days: all });
+    await fillGuest(page, 1, { first: "Cherif", last: "Haddad", days: all });
+    await emailField(page).fill("rae@example.com");
+    await comingButton(page).click();
 
     await expect(page.getByText("Thank you")).toBeVisible();
     // Every day lists both names on the summary the guest reads back.
@@ -114,13 +90,11 @@ test.describe("a party replying for the first time", () => {
   test("refuses a named guest with no day ticked, and says whose", async ({ page }) => {
     await backend.seed([party({ token: TOKEN, headCount: 2 })]);
     await visit(page, `/rsvp/${TOKEN}`);
-    await page.getByRole("button", { name: "JOYFULLY ACCEPT" }).click();
 
     await page.getByLabel("First name, guest 1").fill("Nour");
     await page.getByLabel("Last name, guest 1").fill("Haddad");
-    await page.getByLabel("Email, guest 1").fill("nour@example.com");
-    await page.getByLabel("Your email").fill("nour@example.com");
-    await page.getByRole("button", { name: "SEND OUR REPLY" }).click();
+    await emailField(page).fill("nour@example.com");
+    await comingButton(page).click();
 
     await expect(page.getByRole("alert").filter({ hasText: "Nour" })).toBeVisible();
     expect((await backend.replyFor(TOKEN))?.respondedAt).toBeUndefined();
@@ -131,14 +105,13 @@ test.describe("a party of more than one", () => {
   test("shows one card per seat and accepts a reply for only some of them", async ({ page }) => {
     await backend.seed([party({ token: TOKEN, headCount: 4 })]);
     await visit(page, `/rsvp/${TOKEN}`);
-    await page.getByRole("button", { name: "JOYFULLY ACCEPT" }).click();
 
     await expect(page.getByLabel("First name, guest 4")).toBeVisible();
 
-    await fillGuest(page, 0, { first: "Rae", last: "Haddad", email: "rae@example.com", days: ["Wedding"] });
-    await fillGuest(page, 1, { first: "Cherif", last: "Haddad", email: "cherif@example.com", days: ["Wedding"] });
-    await page.getByLabel("Your email").fill("rae@example.com");
-    await page.getByRole("button", { name: "SEND OUR REPLY" }).click();
+    await fillGuest(page, 0, { first: "Rae", last: "Haddad", days: ["Wedding"] });
+    await fillGuest(page, 1, { first: "Cherif", last: "Haddad", days: ["Wedding"] });
+    await emailField(page).fill("rae@example.com");
+    await comingButton(page).click();
 
     // Two seats spoken for out of four, and the screen has to say so or a partial
     // reply reads as finished.
@@ -146,19 +119,40 @@ test.describe("a party of more than one", () => {
     expect((await backend.replyFor(TOKEN))?.guests).toHaveLength(2);
   });
 
-  test("takes a child with no email address", async ({ page }) => {
+  /** The address is only for a party who wants a copy; nobody has to give one. */
+  test("sends a reply with no email address at all, and no receipt", async ({ page }) => {
     await backend.seed([party({ token: TOKEN, headCount: 2 })]);
     await visit(page, `/rsvp/${TOKEN}`);
-    await page.getByRole("button", { name: "JOYFULLY ACCEPT" }).click();
 
-    await fillGuest(page, 0, { first: "Rae", last: "Haddad", email: "rae@example.com", days: ["Wedding"] });
-    await fillGuest(page, 1, { first: "Nour", last: "Haddad", email: undefined, days: ["Wedding"] });
-    await page.getByLabel("Your email").fill("rae@example.com");
-    await page.getByRole("button", { name: "SEND OUR REPLY" }).click();
+    await fillGuest(page, 0, { first: "Rae", last: "Haddad", days: ["Wedding"] });
+    await fillGuest(page, 1, { first: "Nour", last: "Haddad", days: ["Wedding"] });
+    await comingButton(page).click();
 
     await expect(page.getByText("Thank you")).toBeVisible();
-    const guests = (await backend.replyFor(TOKEN))?.guests ?? [];
-    expect(guests.map((guest) => guest.email)).toEqual(["rae@example.com", undefined]);
+    await expect(page.getByText(/A copy is on its way/)).toHaveCount(0);
+    const reply = await backend.replyFor(TOKEN);
+    expect(reply?.contactEmail).toBeUndefined();
+    expect(reply?.guests.map((guest) => [guest.firstName, guest.wedding])).toEqual([
+      ["Rae", "yes"],
+      ["Nour", "yes"],
+    ]);
+    expect((await backend.activity(TOKEN)).sends).toEqual([]);
+  });
+
+  test("never shows the address on file, and sends nothing when the field is left blank", async ({ page }) => {
+    await backend.seed([party({ token: TOKEN, headCount: 1, contactEmail: "rae@example.com" })]);
+    await visit(page, `/rsvp/${TOKEN}`);
+
+    await expect(page.getByLabel("Email me a copy (optional)")).toHaveValue("");
+    expect(await page.content()).not.toContain("rae@example.com");
+
+    await fillGuest(page, 0, { first: "Rae", last: "Haddad", days: ["Wedding"] });
+    await comingButton(page).click();
+
+    await expect(page.getByText("Thank you")).toBeVisible();
+    await expect(page.getByText(/A copy is on its way/)).toHaveCount(0);
+    expect((await backend.replyFor(TOKEN))?.contactEmail).toBe("rae@example.com");
+    expect((await backend.activity(TOKEN)).sends).toEqual([]);
   });
 });
 
@@ -166,20 +160,18 @@ test.describe("plus ones", () => {
   test("offers a plus one when the invitation includes one", async ({ page }) => {
     await backend.seed([party({ token: TOKEN, headCount: 1, plusOneAllowed: true })]);
     await visit(page, `/rsvp/${TOKEN}`);
-    await page.getByRole("button", { name: "JOYFULLY ACCEPT" }).click();
 
-    await fillGuest(page, 0, { first: "Rae", last: "Haddad", email: "rae@example.com", days: ["Wedding"] });
+    await fillGuest(page, 0, { first: "Rae", last: "Haddad", days: ["Wedding"] });
     await page.getByRole("button", { name: "+ Add a plus one" }).click();
     await fillGuest(page, 1, {
       first: "Sami",
       last: "Khoury",
-      email: "sami@example.com",
       days: ["Wedding"],
       legend: "PLUS ONE",
     });
 
-    await page.getByLabel("Your email").fill("rae@example.com");
-    await page.getByRole("button", { name: "SEND OUR REPLY" }).click();
+    await emailField(page).fill("rae@example.com");
+    await comingButton(page).click();
 
     await expect(page.getByText("Thank you")).toBeVisible();
     const guests = (await backend.replyFor(TOKEN))?.guests ?? [];
@@ -190,56 +182,76 @@ test.describe("plus ones", () => {
   test("says nothing at all about plus ones when the invitation has none", async ({ page }) => {
     await backend.seed([party({ token: TOKEN, headCount: 1, plusOneAllowed: false })]);
     await visit(page, `/rsvp/${TOKEN}`);
-    await page.getByRole("button", { name: "JOYFULLY ACCEPT" }).click();
 
+    await expect(comingButton(page)).toBeVisible();
     await expect(page.getByText(/plus one/i)).toHaveCount(0);
   });
 });
 
 test.describe("a party coming back to change their reply", () => {
-  test("opens on what they said, not on the question again", async ({ page }) => {
-    await backend.seed([party({ token: TOKEN, headCount: 2 })]);
+  test("opens on what they said, and the form comes back with their names as names", async ({ page }) => {
+    await backend.seed([party({ token: TOKEN, headCount: 2, invitedToBrunch: true })]);
     await visit(page, `/rsvp/${TOKEN}`);
-    await page.getByRole("button", { name: "JOYFULLY ACCEPT" }).click();
-    await fillGuest(page, 0, { first: "Rae", last: "Haddad", email: "rae@example.com", days: ["Wedding"] });
-    await page.getByLabel("Your email").fill("rae@example.com");
-    await page.getByRole("button", { name: "SEND OUR REPLY" }).click();
+    await fillGuest(page, 0, { first: "Rae", last: "Haddad", days: ["Wedding"] });
+    await emailField(page).fill("rae@example.com");
+    await comingButton(page).click();
     await expect(page.getByText("Thank you")).toBeVisible();
 
     await visit(page, `/rsvp/${TOKEN}`);
     await expect(page.getByText("Thank you")).toBeVisible();
-    await expect(page.getByRole("button", { name: "JOYFULLY ACCEPT" })).toHaveCount(0);
+    await expect(comingButton(page)).toHaveCount(0);
 
-    // The form comes back filled in, so changing one thing is not a retype.
+    // Rae is on the list now: shown by name, with nothing to retype. The empty
+    // seat is still a seat to fill.
     await page.getByRole("button", { name: "CHANGE OUR REPLY" }).click();
-    await expect(page.getByLabel("First name, guest 1")).toHaveValue("Rae");
+    await expect(card(page, "Rae")).toContainText("Rae Haddad");
+    await expect(page.getByLabel("First name, guest 1")).toHaveCount(0);
+    await expect(page.getByLabel("First name, guest 2")).toHaveValue("");
+    await expect(card(page, "Rae").getByRole("checkbox", { name: "Wedding", exact: true })).toBeChecked();
 
-    await page.getByLabel("Last name, guest 1").fill("Haddad-Sahyoun");
-    await page.getByRole("button", { name: "SEND OUR REPLY" }).click();
+    await card(page, "Rae").getByRole("checkbox", { name: "Brunch", exact: true }).check({ force: true });
+    await comingButton(page).click();
     await expect(page.getByText("Thank you")).toBeVisible();
 
     const guests = (await backend.replyFor(TOKEN))?.guests ?? [];
-    expect(guests).toHaveLength(1);
-    expect(guests[0].lastName).toBe("Haddad-Sahyoun");
-    // Changing a name must not touch the answer given with it.
-    expect(guests[0].wedding).toBe("yes");
+    expect(guests).toEqual([
+      expect.objectContaining({ firstName: "Rae", lastName: "Haddad", wedding: "yes", brunch: "yes" }),
+    ]);
+  });
+
+  /** A name on the list is one tick away from "not coming"; their own row then goes. */
+  test("can say someone they named can't make it after all", async ({ page }) => {
+    await backend.seed([party({ token: TOKEN, headCount: 2 })]);
+    await visit(page, `/rsvp/${TOKEN}`);
+    await fillGuest(page, 0, { first: "Rae", last: "Haddad", days: ["Wedding"] });
+    await fillGuest(page, 1, { first: "Cherif", last: "Haddad", days: ["Wedding"] });
+    await comingButton(page).click();
+    await expect(page.getByText("Rae and Cherif")).toBeVisible();
+
+    await page.getByRole("button", { name: "CHANGE OUR REPLY" }).click();
+    await card(page, "Cherif").getByLabel("Cherif can't make it").check();
+    // Not coming, so no days to ask about.
+    await expect(card(page, "Cherif").getByRole("checkbox", { name: "Wedding", exact: true })).toHaveCount(0);
+    await comingButton(page).click();
+
+    await expect(page.getByText(/told us about 1 of your 2 places/i)).toBeVisible();
+    expect((await backend.replyFor(TOKEN))?.guests.map((guest) => guest.firstName)).toEqual(["Rae"]);
   });
 
   test("keeps the days they picked when they come back to add someone", async ({ page }) => {
     await backend.seed([party({ token: TOKEN, headCount: 2, invitedToBrunch: true })]);
     await visit(page, `/rsvp/${TOKEN}`);
-    await page.getByRole("button", { name: "JOYFULLY ACCEPT" }).click();
-    await fillGuest(page, 0, { first: "Rae", last: "Haddad", email: "rae@example.com", days: ["Brunch"] });
-    await page.getByLabel("Your email").fill("rae@example.com");
-    await page.getByRole("button", { name: "SEND OUR REPLY" }).click();
+    await fillGuest(page, 0, { first: "Rae", last: "Haddad", days: ["Brunch"] });
+    await emailField(page).fill("rae@example.com");
+    await comingButton(page).click();
     await expect(page.getByText(/told us about 1 of your 2 places/i)).toBeVisible();
 
     await page.getByRole("button", { name: "CHANGE OUR REPLY" }).click();
     // The form reopens on the stored answer: Brunch ticked, Wedding not.
-    await expect(card(page, "GUEST 1").getByRole("checkbox", { name: "Brunch", exact: true })).toBeChecked();
-    await expect(card(page, "GUEST 1").getByRole("checkbox", { name: "Wedding", exact: true })).not.toBeChecked();
-    await fillGuest(page, 1, { first: "Cherif", last: "Haddad", email: "cherif@example.com", days: ["Wedding"] });
-    await page.getByRole("button", { name: "SEND OUR REPLY" }).click();
+    await expect(card(page, "Rae").getByRole("checkbox", { name: "Brunch", exact: true })).toBeChecked();
+    await expect(card(page, "Rae").getByRole("checkbox", { name: "Wedding", exact: true })).not.toBeChecked();
+    await fillGuest(page, 1, { first: "Cherif", last: "Haddad", days: ["Wedding"] });
+    await comingButton(page).click();
     await expect(page.getByText("Thank you")).toBeVisible();
 
     expect((await backend.replyFor(TOKEN))?.guests).toEqual([
@@ -265,17 +277,16 @@ test.describe("after the reply date", () => {
 
     await visit(page, `/rsvp/${TOKEN}`);
     await expect(page.getByText(/Replies have closed. Please get in touch/)).toBeVisible();
-    await expect(page.getByRole("button", { name: "JOYFULLY ACCEPT" })).toHaveCount(0);
-    await expect(page.getByRole("button", { name: "REGRETFULLY DECLINE" })).toHaveCount(0);
+    await expect(comingButton(page)).toHaveCount(0);
+    await expect(notComingButton(page)).toHaveCount(0);
   });
 
   test("shows a party what they said, without a way to change it", async ({ page, deploymentEnv }) => {
     await backend.seed([party({ token: TOKEN, headCount: 1 })]);
     await visit(page, `/rsvp/${TOKEN}`);
-    await page.getByRole("button", { name: "JOYFULLY ACCEPT" }).click();
-    await fillGuest(page, 0, { first: "Rae", last: "Haddad", email: "rae@example.com", days: ["Wedding"] });
-    await page.getByLabel("Your email").fill("rae@example.com");
-    await page.getByRole("button", { name: "SEND OUR REPLY" }).click();
+    await fillGuest(page, 0, { first: "Rae", last: "Haddad", days: ["Wedding"] });
+    await emailField(page).fill("rae@example.com");
+    await comingButton(page).click();
     await expect(page.getByText("Thank you")).toBeVisible();
 
     await deploymentEnv.set("RSVP_DEADLINE", PAST);
@@ -294,12 +305,11 @@ test.describe("after the reply date", () => {
     await deploymentEnv.set("RSVP_DEADLINE", "2099-01-01T00:00:00Z");
 
     await visit(page, `/rsvp/${TOKEN}`);
-    await page.getByRole("button", { name: "JOYFULLY ACCEPT" }).click();
-    await fillGuest(page, 0, { first: "Rae", last: "Haddad", email: "rae@example.com", days: ["Wedding"] });
-    await page.getByLabel("Your email").fill("rae@example.com");
+    await fillGuest(page, 0, { first: "Rae", last: "Haddad", days: ["Wedding"] });
+    await emailField(page).fill("rae@example.com");
 
     await deploymentEnv.set("RSVP_DEADLINE", PAST);
-    await page.getByRole("button", { name: "SEND OUR REPLY" }).click();
+    await comingButton(page).click();
 
     await expect(page.getByRole("alert")).toContainText(/The reply date has passed/);
     expect((await backend.replyFor(TOKEN))?.respondedAt).toBeUndefined();
@@ -312,44 +322,68 @@ test.describe("declining", () => {
     await backend.seed([party({ token: TOKEN, headCount: 2 })]);
     await visit(page, `/rsvp/${TOKEN}`);
 
-    await page.getByRole("button", { name: "REGRETFULLY DECLINE" }).click();
-    await page.getByLabel("A note for us, if you like").fill("We have a clash that weekend.");
-    await page.getByLabel("Your email").fill("rae@example.com");
-    await page.getByRole("button", { name: "SEND OUR REGRETS" }).click();
+    await notComingButton(page).click();
+    await page.getByLabel("A note for us").fill("We have a clash that weekend.");
+    await emailField(page).fill("rae@example.com");
+    await page.getByRole("button", { name: "SEND", exact: true }).click();
 
     await expect(page.getByRole("heading", { name: "We will miss you" })).toBeVisible();
 
     const reply = await backend.replyFor(TOKEN);
     expect(reply?.declined).toBe(true);
     expect(reply?.guestNote).toBe("We have a clash that weekend.");
+    expect(reply?.contactEmail).toBe("rae@example.com");
 
     // The way back, so a decline is never a dead end.
     await expect(page.getByRole("button", { name: "ACTUALLY, WE CAN COME", exact: true })).toBeVisible();
   });
 
-  test("will not take a decline without an email", async ({ page }) => {
+  test("takes a decline with no note and no email", async ({ page }) => {
     await backend.seed([party({ token: TOKEN, headCount: 1 })]);
     await visit(page, `/rsvp/${TOKEN}`);
 
-    await page.getByRole("button", { name: "REGRETFULLY DECLINE" }).click();
-    await page.getByRole("button", { name: "SEND OUR REGRETS" }).click();
+    await decline(page);
 
-    await expect(page.getByRole("alert")).toContainText(/email address/i);
+    await expect(page.getByRole("heading", { name: "We will miss you" })).toBeVisible();
+    await expect(page.getByRole("button", { name: "ACTUALLY, I CAN COME", exact: true })).toBeVisible();
+    const reply = await backend.replyFor(TOKEN);
+    expect(reply?.declined).toBe(true);
+    expect(reply?.contactEmail).toBeUndefined();
+    expect((await backend.activity(TOKEN)).sends).toEqual([]);
+  });
+
+  test("can go back to the form before sending anything", async ({ page }) => {
+    await backend.seed([party({ token: TOKEN, headCount: 2 })]);
+    await visit(page, `/rsvp/${TOKEN}`);
+
+    await notComingButton(page).click();
+    await page.getByRole("button", { name: CAN_COME }).click();
+
+    await expect(comingButton(page)).toBeVisible();
     expect((await backend.replyFor(TOKEN))?.respondedAt).toBeUndefined();
   });
 });
 
-test.describe("a link that does not resolve", () => {
-  test("says so kindly rather than erroring", async ({ page }) => {
+test.describe("a link that does not resolve, on a device that knows its party", () => {
+  /** Someone else's dead link opened on a phone that already belongs to a party. */
+  test("says so kindly, and leads back to their own invitation", async ({ page }) => {
+    await backend.seed([party({ token: TOKEN })]);
+    await visit(page, `/rsvp/${TOKEN}`);
+    await expect(page.getByText("Rae & Cherif")).toBeVisible();
+
     await visit(page, "/rsvp/not-a-real-token");
     await expect(page.getByText(/could not find that invitation/i)).toBeVisible();
+
+    await page.getByRole("link", { name: "FIND MY INVITATION" }).click();
+    await expect(page).toHaveURL(`/rsvp/${TOKEN}?via=remembered`);
+    await expect(page.getByText("Rae & Cherif")).toBeVisible();
   });
 });
 
 test.describe("finding an invitation again", () => {
   /**
    * The case a guest actually hits: replied months ago, lost the WhatsApp
-   * message, types the bare address. Before this there was no route back at all.
+   * message, types the bare address.
    */
   test("remembers the invitation this device opened", async ({ page }) => {
     await backend.seed([party({ token: TOKEN })]);
@@ -362,50 +396,39 @@ test.describe("finding an invitation again", () => {
     await expect(page.getByText("Rae & Cherif")).toBeVisible();
   });
 
-  /**
-   * The remembered token is a convenience, not a credential. A device that never
-   * opened an invitation is told so, rather than being shown someone else's or an
-   * empty form.
-   */
-  test("tells a device that has never opened one that it cannot tell", async ({ browser }) => {
+  /** A device that never opened an invitation is asked for a name, never shown someone else's. */
+  test("sends a device that has never opened one to the name search", async ({ page }) => {
     await backend.seed([party({ token: TOKEN })]);
 
-    // A fresh context: past the gate, but with no memory of any invitation.
-    const context = await browser.newContext({ storageState: GUEST_STATE });
-    const page = await context.newPage();
     await visit(page, "/rsvp");
-
-    await expect(page).toHaveURL("/rsvp");
-    await expect(page.getByRole("heading", { name: "Find your invitation" })).toBeVisible();
-    await context.close();
+    await expect(page).toHaveURL(/\/enter\?redirect=%2Frsvp$/);
   });
 
   test("still remembers after the reply is submitted", async ({ page }) => {
     await backend.seed([party({ token: TOKEN, headCount: 1 })]);
     await visit(page, `/rsvp/${TOKEN}`);
-    await page.getByRole("button", { name: "JOYFULLY ACCEPT" }).click();
-    await fillGuest(page, 0, { first: "Rae", last: "Haddad", email: "rae@example.com", days: ["Wedding"] });
-    await page.getByLabel("Your email").fill("rae@example.com");
-    await page.getByRole("button", { name: "SEND OUR REPLY" }).click();
+    await fillGuest(page, 0, { first: "Rae", last: "Haddad", days: ["Wedding"] });
+    await comingButton(page).click();
     await expect(page.getByText("Thank you")).toBeVisible();
 
     await visit(page, "/rsvp");
     await expect(page).toHaveURL(`/rsvp/${TOKEN}?via=remembered`);
-    // Straight to the reply, not the question again.
+    // Straight to the reply, not the form again.
     await expect(page.getByText("Thank you")).toBeVisible();
   });
 
-  test("does not remember a token that resolves to nothing", async ({ browser }) => {
-    const context = await browser.newContext({ storageState: GUEST_STATE });
-    const page = await context.newPage();
-
-    await visit(page, "/rsvp/not-a-real-token");
-    await expect(page.getByText(/could not find that invitation/i)).toBeVisible();
-
+  /** /rsvp is replaced by the invitation, so there is no /rsvp behind it to send Back straight forward again. */
+  test("Back from a remembered invitation leaves the RSVP", async ({ page }) => {
+    await backend.seed([party({ token: TOKEN })]);
+    await visit(page, `/rsvp/${TOKEN}`);
+    await expect(comingButton(page)).toBeVisible();
+    await visit(page, "/");
     await visit(page, "/rsvp");
-    await expect(page).toHaveURL("/rsvp");
-    await expect(page.getByRole("heading", { name: "Find your invitation" })).toBeVisible();
-    await context.close();
+    await expect(page).toHaveURL(`/rsvp/${TOKEN}?via=remembered`);
+    await expect(comingButton(page)).toBeVisible();
+
+    await page.goBack();
+    await expect(page).toHaveURL("/");
   });
 });
 
@@ -417,9 +440,8 @@ test.describe("the invitation arrives without a round trip", () => {
   test("renders the party name in the server response", async ({ request }) => {
     await backend.seed([party({ token: TOKEN })]);
 
-    const response = await request.get(`/rsvp/${TOKEN}`, {
-      headers: { cookie: await guestCookieHeader() },
-    });
+    // No cookie: the link alone lets the request in.
+    const response = await request.get(`/rsvp/${TOKEN}`);
     expect(response.status()).toBe(200);
     expect(await response.text()).toContain("Rae &amp; Cherif");
   });

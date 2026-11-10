@@ -1,8 +1,8 @@
 import { ConvexError, v } from "convex/values";
 
+import type { EventFlags, ReplyGuest, RsvpEventKey, RsvpStatus } from "../src/lib/rsvp-rules";
 import type { Doc, Id } from "./_generated/dataModel";
 import type { QueryCtx } from "./_generated/server";
-import type { EventFlags, ReplyGuest, RsvpEventKey, RsvpStatus } from "../src/lib/rsvp-rules";
 
 import { matches, nameKeys } from "../src/lib/name-search";
 import {
@@ -41,6 +41,10 @@ const eventFlags = v.object({ preWedding: v.boolean(), wedding: v.boolean(), bru
  * moment someone opened their invitation, and a field added to the schema later
  * would start leaking silently.
  *
+ * No email addresses either, the party's or any guest's. Anyone who can type a
+ * guest's name can open this, and the form never shows them; a guest who wants a
+ * copy types an address in.
+ *
  * The three `invitedTo*` flags are the party's effective invite: its own flags,
  * or any one person the couple invited further. `defaultInvitedTo` is what a seat
  * the couple did not single out is asked about, which is what a new card gets.
@@ -53,7 +57,6 @@ const guestFacingParty = v.object({
   invitedToWedding: v.boolean(),
   invitedToBrunch: v.boolean(),
   defaultInvitedTo: eventFlags,
-  contactEmail: v.optional(v.string()),
   guestNote: v.optional(v.string()),
   respondedAt: v.optional(v.number()),
   declined: v.optional(v.boolean()),
@@ -64,7 +67,6 @@ const guestFacingGuest = v.object({
   _id: v.id("guests"),
   firstName: v.string(),
   lastName: v.string(),
-  email: v.optional(v.string()),
   isPlusOne: v.boolean(),
   dietaryNotes: v.optional(v.string()),
   preWedding: rsvpStatus,
@@ -80,7 +82,7 @@ const guestFacingGuest = v.object({
  * The cutoff, read from the Convex deployment's env so it can move without a deploy.
  *
  * Absent means no deadline, which is the current truth: the couple have not set
- * one yet. Failing open is right here, unlike GUEST_PASSWORD where an unset value
+ * one yet. Failing open is right here, unlike APP_SERVER_SECRET where an unset value
  * has to fail closed. The worst case is a late reply, not an open door.
  */
 function deadlinePassed(): boolean {
@@ -141,7 +143,6 @@ export const getByToken = query({
         invitedToWedding: invited.wedding,
         invitedToBrunch: invited.brunch,
         defaultInvitedTo: partyFlags(party),
-        contactEmail: party.contactEmail,
         guestNote: party.guestNote,
         respondedAt: party.respondedAt,
         declined: party.declined,
@@ -151,7 +152,6 @@ export const getByToken = query({
         _id: guest._id,
         firstName: guest.firstName,
         lastName: guest.lastName,
-        email: guest.email,
         isPlusOne: guest.isPlusOne,
         dietaryNotes: guest.dietaryNotes,
         preWedding: guest.preWedding,
@@ -245,7 +245,8 @@ function guestFieldsFor(
   const fields: GuestFields = {
     firstName: guest.firstName.trim(),
     lastName: guest.lastName.trim(),
-    email: trimmed(guest.email),
+    // The form no longer asks for one, so a reply keeps whatever was given before.
+    email: trimmed(guest.email) ?? previous?.email,
     isPlusOne: guest.isPlusOne,
     dietaryNotes: trimmed(guest.dietaryNotes),
     preWedding: "pending",
@@ -288,7 +289,8 @@ export const submit = mutation({
   args: {
     token: v.string(),
     declined: v.boolean(),
-    contactEmail: v.string(),
+    /** Optional: only for a guest who wants their reply emailed to them. */
+    contactEmail: v.optional(v.string()),
     guestNote: v.optional(v.string()),
     guests: v.array(submittedGuest),
   },
@@ -319,7 +321,8 @@ export const submit = mutation({
     }
 
     const now = Date.now();
-    const email = contactEmail.trim();
+    // Left blank: no receipt this time, and the address already on file stays for the couple's invitations.
+    const email = trimmed(contactEmail);
 
     if (declined) {
       // The names stay. "Actually, we can come" then restores the reply instead of
@@ -332,11 +335,11 @@ export const submit = mutation({
         declined: true,
         respondedAt: now,
         firstRespondedAt: party.firstRespondedAt ?? now,
-        contactEmail: email,
+        ...(email ? { contactEmail: email } : {}),
         guestNote: trimmed(guestNote),
       });
 
-      await ctx.scheduler.runAfter(0, internal.rsvp.sendConfirmation, { partyId: party._id });
+      if (email) await ctx.scheduler.runAfter(0, internal.rsvp.sendConfirmation, { partyId: party._id });
       return { ok: true as const, seatsNamed: 0, headCount: party.headCount };
     }
 
@@ -377,14 +380,17 @@ export const submit = mutation({
     }
 
     await ctx.db.patch(party._id, {
-      declined: isEffectiveDecline(party, reply.filter((guest) => !isBlankCard(guest))),
+      declined: isEffectiveDecline(
+        party,
+        reply.filter((guest) => !isBlankCard(guest)),
+      ),
       respondedAt: now,
       firstRespondedAt: party.firstRespondedAt ?? now,
-      contactEmail: email,
+      ...(email ? { contactEmail: email } : {}),
       guestNote: trimmed(guestNote),
     });
 
-    await ctx.scheduler.runAfter(0, internal.rsvp.sendConfirmation, { partyId: party._id });
+    if (email) await ctx.scheduler.runAfter(0, internal.rsvp.sendConfirmation, { partyId: party._id });
 
     return {
       ok: true as const,
@@ -548,7 +554,10 @@ export const lookupByName = mutation({
     const limit = await rateLimiter.limit(ctx, "nameLookup", { key: clientKey });
     if (!limit.ok) return { kind: "rateLimited" as const, retryAfterMs: Math.ceil(limit.retryAfter ?? 0) };
 
-    const global = await rateLimiter.limit(ctx, "nameLookupGlobal");
+    // Checked here, spent only on a search that hands out a link (below). A miss
+    // gives nothing away, so someone typing junk from many addresses cannot use up
+    // the budget and shut every guest out of the site.
+    const global = await rateLimiter.check(ctx, "nameLookupGlobal");
     if (!global.ok) return { kind: "rateLimited" as const, retryAfterMs: Math.ceil(global.retryAfter ?? 0) };
 
     const query = typed.slice(0, 200);
@@ -564,6 +573,7 @@ export const lookupByName = mutation({
 
     const found = parties.filter((party) => matches(query, nameKeys(party, guestsByParty.get(party._id) ?? [])));
     if (found.length > MAX_LOOKUP_MATCHES) return { kind: "tooMany" as const };
+    if (found.length > 0) await rateLimiter.limit(ctx, "nameLookupGlobal");
 
     return {
       kind: "matches" as const,

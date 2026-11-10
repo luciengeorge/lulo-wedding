@@ -207,7 +207,6 @@ function ensureDeployment() {
  * the password and the allowlist in order to sign in.
  */
 const DEPLOYMENT_ENV = {
-  GUEST_PASSWORD: "e2e-guest-password",
   ADMIN_EMAILS: "admin@e2e.test",
   APP_NAME: "Laura and Lucien",
   SITE_URL: "http://127.0.0.1:3100",

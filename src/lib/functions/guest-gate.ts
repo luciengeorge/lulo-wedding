@@ -4,78 +4,101 @@ import { createServerFn } from "@tanstack/react-start";
 import z from "zod";
 
 import { api } from "@/../convex/_generated/api";
-import { getAppServerSecret } from "@/lib/app-server-secret.server";
 import { fetchAuthMutation, fetchAuthQuery } from "@/lib/auth-server";
-import { getClientKey } from "@/lib/client-key.server";
 import { useGuestSession } from "@/lib/guest-session.server";
+import { createLogger } from "@/lib/logger";
 import { safeRedirect } from "@/lib/safe-redirect";
 
-/** Where an un-unlocked guest gets sent. The route is owned by the UI side. */
+const logger = createLogger("guest-gate");
+
+/** Where a guest this device does not know yet gets sent. The route is owned by the UI side. */
 const GATE_ROUTE = "/enter";
 
-const EnterGateSchema = z.object({ password: z.string().min(1) });
+const TokenSchema = z.object({ token: z.string().trim().min(1).max(64) });
 
 /**
- * Checks the shared guest password and, on success, marks the session unlocked.
- * Returns the structured result so the UI can distinguish a wrong password from
- * being rate limited.
+ * Lets a guest in as the party they picked from the name search, and counts it
+ * as that party seeing their invitation. `choice` is the party's place in the
+ * list that `search` returned; the token itself was kept in the cookie and never
+ * sent out. A pick from an older search, say in another tab, finds nothing.
  */
-export const enterGate = createServerFn({ method: "POST" })
-  .validator(EnterGateSchema)
+export const enterAs = createServerFn({ method: "POST" })
+  .validator(z.object({ search: z.string().max(64), choice: z.number().int().min(0).max(9) }))
   .handler(async ({ data }) => {
-    return Sentry.startSpan({ name: "enterGate" }, async () => {
-      const result = await fetchAuthMutation(api.guests.verifyGuestPassword, {
-        password: data.password,
-        clientKey: getClientKey(),
-        serverSecret: getAppServerSecret(),
-      });
-
-      if (result.ok) {
-        const session = await useGuestSession();
-        await session.update({ unlocked: true, at: Date.now() });
-      }
-
-      return result;
-    });
-  });
-
-/**
- * Unlocks the gate for someone holding a valid party link. The link is already
- * a better credential than the shared password, which every guest knows, so
- * asking for both would only stop the people the link was sent to.
- */
-export const unlockWithToken = createServerFn({ method: "POST" })
-  .validator(z.object({ token: z.string().trim().min(1).max(64) }))
-  .handler(async ({ data }) => {
-    return Sentry.startSpan({ name: "unlockWithToken" }, async () => {
-      if (!(await fetchAuthQuery(api.rsvp.tokenIsValid, { token: data.token }))) return false;
-
+    return Sentry.startSpan({ name: "enterAs" }, async () => {
       const session = await useGuestSession();
-      await session.update({ ...session.data, unlocked: true, at: Date.now() });
+      const matches = session.data.matches;
+      const token = matches?.search === data.search ? matches.tokens[data.choice] : undefined;
+      if (!token || !(await fetchAuthQuery(api.rsvp.tokenIsValid, { token }))) return false;
+
+      await session.update({ token, at: Date.now(), matches: undefined });
+
+      // Stats, not the page: a visit that could not be counted must not keep anyone out.
+      try {
+        await fetchAuthMutation(api.rsvp.recordVisit, { token, source: "lookup" });
+      } catch (error) {
+        logger.warn("could not record visit", { error });
+      }
       return true;
     });
   });
 
+/**
+ * A valid party link is its own way in: whoever holds it is that party. With
+ * `remember: false` (a test copy the couple sent themselves) the link opens but
+ * this device is not made that party, so its later visits are not counted as theirs.
+ */
+export const unlockWithToken = createServerFn({ method: "POST" })
+  .validator(TokenSchema.extend({ remember: z.boolean().default(true) }))
+  .handler(async ({ data }) => {
+    return Sentry.startSpan({ name: "unlockWithToken" }, async () => {
+      if (!(await fetchAuthQuery(api.rsvp.tokenIsValid, { token: data.token }))) return false;
+      if (!data.remember) return true;
+
+      const session = await useGuestSession();
+      await session.update({ token: data.token, at: Date.now() });
+      return true;
+    });
+  });
+
+/**
+ * True when this device belongs to a party that still exists.
+ *
+ * Checked against Convex every time, not just read off the cookie: a party the
+ * couple deleted or re-imported leaves a dead token behind, and a guest holding
+ * one must be asked for their name again, not stranded on "we could not find
+ * that invitation".
+ */
 export const isGuestUnlocked = createServerFn({ method: "GET" }).handler(async () => {
   return Sentry.startSpan({ name: "isGuestUnlocked" }, async () => {
     const session = await useGuestSession();
-    return session.data.unlocked === true;
+    const { token } = session.data;
+    if (!token) return false;
+    if (await fetchAuthQuery(api.rsvp.tokenIsValid, { token })) return true;
+
+    await session.clear();
+    return false;
+  });
+});
+
+/** "Not you?": forgets the party on this device, for a shared phone or a wrong pick. */
+export const forgetGuest = createServerFn({ method: "POST" }).handler(async () => {
+  return Sentry.startSpan({ name: "forgetGuest" }, async () => {
+    const session = await useGuestSession();
+    await session.clear();
   });
 });
 
 /**
- * Call from a route's `beforeLoad` to require the guest gate. Throws a redirect to
- * the gate page when the session is not unlocked.
+ * Call from a route's `beforeLoad` to require a known guest. Throws a redirect to
+ * the name search when this device has not picked a party yet.
  *
- * Pass the route's `location.href` so the gate can send them back afterwards.
- * Without it every party who taps their personal RSVP link, and none of them have
- * the cookie the first time, types the password and lands on the save-the-date
- * with their own link gone from the screen.
+ * Pass the route's `location.href` so the search can send them back afterwards.
  */
 export async function requireGuestUnlocked(returnTo?: string): Promise<void> {
   const unlocked = await isGuestUnlocked();
   if (!unlocked) {
-    // Only carried when it is worth carrying: "/" is where the gate goes anyway,
+    // Only carried when it is worth carrying: "/" is where the search goes anyway,
     // and a redirect param pointing at the home page is just noise in the URL.
     const target = safeRedirect(returnTo);
     throw redirect({ to: GATE_ROUTE, search: target === "/" ? {} : { redirect: target } });

@@ -4,7 +4,6 @@ name: Smoke
 #
 # Preview (writes only to the preview's own smoke party):
 #   secrets.SMOKE_SECRET                     same value as SMOKE_SECRET in the Convex *preview* defaults
-#   secrets.PREVIEW_GUEST_PASSWORD           GUEST_PASSWORD in the Convex preview defaults
 #   vars.SMOKE_ADMIN_EMAIL                   an address in ADMIN_EMAILS for previews, on Convex and on Vercel,
 #                                            and SMOKE_ADMIN_EMAIL in the Convex preview defaults
 #   secrets.VERCEL_AUTOMATION_BYPASS_SECRET  optional, when Vercel Deployment Protection is on
@@ -33,7 +32,6 @@ jobs:
       CI: "1"
       SMOKE_BASE_URL: ${{ github.event.deployment_status.environment_url }}
       SMOKE_SECRET: ${{ secrets.SMOKE_SECRET }}
-      PREVIEW_GUEST_PASSWORD: ${{ secrets.PREVIEW_GUEST_PASSWORD }}
       SMOKE_ADMIN_EMAIL: ${{ vars.SMOKE_ADMIN_EMAIL }}
       VERCEL_AUTOMATION_BYPASS_SECRET: ${{ secrets.VERCEL_AUTOMATION_BYPASS_SECRET }}
     steps:
@@ -63,7 +61,6 @@ jobs:
         run: |
           missing=""
           [ -n "$SMOKE_SECRET" ] || missing="$missing secrets.SMOKE_SECRET"
-          [ -n "$PREVIEW_GUEST_PASSWORD" ] || missing="$missing secrets.PREVIEW_GUEST_PASSWORD"
           [ -n "$SMOKE_ADMIN_EMAIL" ] || missing="$missing vars.SMOKE_ADMIN_EMAIL"
           if [ -n "$missing" ]; then
             echo "::error::Preview smoke cannot run. Missing:$missing (see the header of .github/workflows/smoke.yml)"

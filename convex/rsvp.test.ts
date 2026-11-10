@@ -153,7 +153,6 @@ describe("getByToken", () => {
     expect(result).not.toBeNull();
     expect(Object.keys(result!.party).sort()).toEqual(
       [
-        "contactEmail",
         "declined",
         "defaultInvitedTo",
         "displayName",
@@ -167,6 +166,14 @@ describe("getByToken", () => {
         "respondedAt",
       ].sort(),
     );
+  });
+
+  it("sends no email address, the party's or a guest's, to whoever opened the page", async () => {
+    const stored = storedGuest("g1", { email: "nour@example.com" });
+    const { ctx } = harness([{ ...party, contactEmail: "rae@example.com" }], [stored]);
+    const serialised = JSON.stringify(await getByToken._handler(ctx, { token: TOKEN }));
+    expect(serialised).not.toContain("rae@example.com");
+    expect(serialised).not.toContain("nour@example.com");
   });
 
   it("does not hand out the token, the import key or the admin edit stamp", async () => {
@@ -296,7 +303,10 @@ describe("submit: a party of more than one", () => {
     });
     expect(first).toEqual({ ok: true, seatsNamed: 2, headCount: 4 });
 
-    const existing = guestsOf(guestRows).map((guest) => ({ ...card({ firstName: guest.firstName }), guestId: guest._id }));
+    const existing = guestsOf(guestRows).map((guest) => ({
+      ...card({ firstName: guest.firstName }),
+      guestId: guest._id,
+    }));
     const second = await submit._handler(ctx, {
       token: TOKEN,
       declined: false,
@@ -406,7 +416,7 @@ describe("submit: a party coming back to change their reply", () => {
     expect(guestRows.get(other._id)?.firstName).toBe("Rae");
   });
 
-  it("clears an email when the guest says they have none", async () => {
+  it("keeps an email the form no longer asks for", async () => {
     const stored = storedGuest("g1", { email: "rae@example.com" });
     const { ctx, guestRows } = harness([party], [stored]);
 
@@ -417,7 +427,23 @@ describe("submit: a party coming back to change their reply", () => {
       guests: [card({ guestId: stored._id, email: undefined })],
     });
 
-    expect(guestRows.get(stored._id)).not.toHaveProperty("email");
+    expect(guestRows.get(stored._id)).toHaveProperty("email", "rae@example.com");
+  });
+
+  it("takes a reply with no email, and keeps the address already on file", async () => {
+    const { ctx, partyRows } = harness([{ ...party, contactEmail: "rae@example.com" }]);
+
+    await submit._handler(ctx, { token: TOKEN, declined: false, guests: [card()] });
+
+    expect(partyRows.get(party._id)).toHaveProperty("contactEmail", "rae@example.com");
+  });
+
+  it("sends no receipt when the guest leaves the email blank", async () => {
+    const { ctx, scheduler } = harness([{ ...party, contactEmail: "rae@example.com" }]);
+
+    await submit._handler(ctx, { token: TOKEN, declined: false, contactEmail: "", guests: [card()] });
+
+    expect(scheduler.runAfter).not.toHaveBeenCalled();
   });
 });
 

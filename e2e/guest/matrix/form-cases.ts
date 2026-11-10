@@ -5,9 +5,9 @@ import type { EventKey } from "../../rsvp-form";
 import { backend, expect, party, visit } from "../../fixtures";
 import {
   EVENTS,
-  expectAskScreen,
   expectCardEvents,
   expectedStatus,
+  expectReplyForm,
   fillCard,
   flags,
   seatCards,
@@ -104,12 +104,8 @@ function attendance(c: FormCase, seat: number): EventKey[] | null {
 
 export async function runFormCase(page: Page, c: FormCase) {
   await visit(page, `/rsvp/${c.token}`);
-  await expectAskScreen(page, c.events);
-  await expect(
-    page.getByText(new RegExp(`Your invitation is for ${c.headCount} ${c.headCount === 1 ? "person" : "people"}\\.`)),
-  ).toBeVisible();
-
-  await page.getByRole("button", { name: "JOYFULLY ACCEPT" }).click();
+  await expectReplyForm(page);
+  await expect(page.getByText(`Your invitation is for ${c.headCount}. Leave a card blank`)).toBeVisible();
   await expect(seatCards(page)).toHaveCount(c.headCount);
   await expect(page.getByText("YOUR PLUS ONE")).toHaveCount(c.plusOneAllowed ? 1 : 0);
   await expect(page.getByRole("button", { name: "+ Add a plus one" })).toHaveCount(c.plusOneAllowed ? 1 : 0);

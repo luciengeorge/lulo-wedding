@@ -1,16 +1,6 @@
 import type { Page } from "@playwright/test";
 
-import {
-  ADMIN_STATE,
-  backend,
-  enterPassword,
-  expect,
-  GUEST_PASSWORD,
-  openAdmin,
-  party,
-  test,
-  visit,
-} from "../fixtures";
+import { ADMIN_STATE, backend, expect, openAdmin, party, test, visit } from "../fixtures";
 
 test.use({ storageState: ADMIN_STATE });
 
@@ -62,10 +52,7 @@ test.describe("the guest list", () => {
     await backend.seed([
       party({ token: "e2e-preview", displayName: "Hala", surname: "Nassar", invitedToBrunch: true }),
     ]);
-    // The preview is the guest page, so it sits behind the guest gate like any other visit.
-    await visit(page, "/enter");
-    await enterPassword(page, GUEST_PASSWORD);
-    await expect(page).toHaveURL("/");
+    // The couple are not a party, so no name search stands in front of the preview.
     await openAdmin(page);
 
     const preview = row(page, "Hala").getByRole("link", { name: "Preview" });
@@ -77,7 +64,18 @@ test.describe("the guest list", () => {
     await expect(schedule.getByRole("heading", { name: /Brunch/ })).toBeVisible();
     await expect(schedule.getByRole("heading", { name: /Pre-wedding/ })).toHaveCount(0);
 
+    await expect(page.getByText(/^Welcome,/)).toHaveCount(0);
+    expect((await backend.activity("e2e-preview")).visits).toEqual([]);
+
     await page.getByRole("link", { name: "EXIT" }).click();
     await expect(page.getByText("Viewing as")).toHaveCount(0);
+  });
+
+  test("opens the home page without being asked for a name", async ({ page }) => {
+    await visit(page, "/");
+
+    await expect(page).toHaveURL("/");
+    await expect(page.getByText("FARAYA · LEBANON")).toBeVisible();
+    await expect(page.getByText(/^Welcome,/)).toHaveCount(0);
   });
 });

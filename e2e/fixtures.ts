@@ -2,7 +2,6 @@ import { test as base, expect, type APIRequestContext, type Page } from "@playwr
 import { convexToJson, jsonToConvex, type JSONValue, type Value } from "convex/values";
 import { createHmac, randomUUID } from "node:crypto";
 import { readFileSync } from "node:fs";
-import { readFile } from "node:fs/promises";
 
 /**
  * Talking to the throwaway backend from a spec.
@@ -93,11 +92,8 @@ async function setDeploymentEnv(name: string, value: string | null): Promise<voi
   if (!response.ok) throw new Error(`Setting ${name} failed: ${response.status} ${await response.text()}`);
 }
 
-export const GUEST_PASSWORD = "e2e-guest-password";
 export const ADMIN_EMAIL = "admin@e2e.test";
-/** Where the unlocked guest cookie is parked between the setup project and the specs. */
-export const GUEST_STATE = ".e2e/guest-state.json";
-/** The signed-in admin's cookies, parked the same way. */
+/** The signed-in admin's cookies, parked between the setup project and the specs. */
 export const ADMIN_STATE = ".e2e/admin-state.json";
 /** The local deployment's HTTP actions, where Resend's webhook is routed. */
 export const CONVEX_SITE_URL = "http://127.0.0.1:3211";
@@ -287,24 +283,22 @@ export function linkFromEmail(html: string, contains: string): string {
  * The probe is React's own doing: hydration attaches a `__reactFiber$` property to
  * each DOM node it adopts. Reaching into an internal is acceptable here because it
  * is a test helper and the failure mode is a loud timeout, not a silent pass.
+ *
+ * Every control is checked as well as <main>: the route's own content can hydrate
+ * a beat after the shell, and the RSVP form is the first thing on its page, so a
+ * spec types into it straight away. A name typed into a not-yet-adopted input is
+ * wiped by the next render.
  */
 export async function waitForHydration(page: Page): Promise<void> {
   await page.waitForFunction(
     () => {
+      const adopted = (node: Element) => Object.keys(node).some((key) => key.startsWith("__reactFiber$"));
       const root = document.querySelector("main") ?? document.body;
-      return Object.keys(root).some((key) => key.startsWith("__reactFiber$"));
+      return adopted(root) && [...root.querySelectorAll("input, textarea, button")].every(adopted);
     },
     undefined,
     { timeout: 30_000 },
   );
-}
-
-/** The unlocked-gate cookie as a request header, for asserting on server-rendered HTML. */
-export async function guestCookieHeader(): Promise<string> {
-  const state = JSON.parse(await readFile(GUEST_STATE, "utf8")) as {
-    cookies: { name: string; value: string }[];
-  };
-  return state.cookies.map((cookie) => `${cookie.name}=${cookie.value}`).join("; ");
 }
 
 export async function visit(page: Page, path: string): Promise<void> {
@@ -313,18 +307,38 @@ export async function visit(page: Page, path: string): Promise<void> {
 }
 
 /**
- * Types into the guest gate and submits. The form can hydrate a beat after
- * <main>; a value typed before then sits in the DOM while React's state stays
- * empty and ENTER stays disabled. So: type until the button agrees, then press.
+ * Types a name into the name search on /enter and submits. The form can hydrate
+ * a beat after <main>; a value typed before then sits in the DOM while React's
+ * state stays empty and the button stays disabled. So: type until the button
+ * agrees, then press.
  */
-export async function enterPassword(page: Page, password: string) {
-  const field = page.getByLabel(/password from your invitation/i);
-  const enter = page.getByRole("button", { name: "ENTER" });
+export async function searchName(page: Page, name: string) {
+  const field = page.getByLabel("Please enter your first and last name");
+  const find = page.getByRole("button", { name: "FIND MY INVITATION" });
   await expect(async () => {
-    await field.fill(password);
-    await expect(enter).toBeEnabled({ timeout: 1_000 });
+    await field.fill(name);
+    await expect(find).toBeEnabled({ timeout: 1_000 });
   }).toPass({ timeout: 30_000 });
-  await enter.click();
+  await find.click();
+}
+
+/** The parties the last search offered, one button each. */
+export function searchResults(page: Page) {
+  return page.getByRole("status").getByRole("listitem");
+}
+
+/**
+ * Gets past /enter the way a guest does: searches a name and picks their party.
+ * `displayName` picks one of several results; left out, the search must find one.
+ */
+export async function enterAsGuest(page: Page, name: string, displayName?: string) {
+  await searchName(page, name);
+  if (displayName) {
+    await page.getByRole("button", { name: displayName, exact: true }).click();
+  } else {
+    await expect(searchResults(page)).toHaveCount(1);
+    await searchResults(page).getByRole("button").click();
+  }
 }
 
 /** Opens an admin page and waits for its data, so the first click lands on a settled layout. */

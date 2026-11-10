@@ -31,7 +31,7 @@ export function constantTimeEqual(a: string, b: string): boolean {
  * they could pick a fresh key per call and never meet a per-IP limit.
  *
  * APP_SERVER_SECRET is set on the Convex deployment and in the app server's env,
- * never as a VITE_ variable. Unset fails closed, loudly, like GUEST_PASSWORD.
+ * never as a VITE_ variable. Unset fails closed, loudly.
  */
 export function requireAppServer(given: string): void {
   const expected = process.env.APP_SERVER_SECRET;

@@ -10,13 +10,7 @@ import { convexSiteUrl, go, linkFromEmail, passProtection, required, smokeClient
 
 const GUEST_EMAIL = "smoke-guest@example.com";
 
-test("a guest gets in, finds their invitation, replies, and the couple see it", async ({
-  browser,
-  page,
-  request,
-  baseURL,
-}) => {
-  const password = required("PREVIEW_GUEST_PASSWORD");
+test("a guest finds their name, replies, and the couple see it", async ({ browser, page, request, baseURL }) => {
   const secret = required("SMOKE_SECRET");
   const adminEmail = required("SMOKE_ADMIN_EMAIL");
 
@@ -24,37 +18,38 @@ test("a guest gets in, finds their invitation, replies, and the couple see it", 
   const smoke = smokeClient(request, await convexSiteUrl(page), secret);
   const party = await smoke.reset();
 
-  // The shared password.
+  // The name search: the smoke party is "Smoke & Test", surname "Preview".
   await expect(page).toHaveURL(/\/enter/);
+  const nameField = page.getByLabel("Please enter your first and last name");
+  const find = page.getByRole("button", { name: "FIND MY INVITATION" });
   await expect(async () => {
-    await page.getByLabel(/password from your invitation/i).fill(password);
-    await expect(page.getByRole("button", { name: "ENTER" })).toBeEnabled({ timeout: 1_000 });
+    await nameField.fill(`Smoke ${party.surname}`);
+    await expect(find).toBeEnabled({ timeout: 1_000 });
   }).toPass({ timeout: 30_000 });
-  await page.getByRole("button", { name: "ENTER" }).click();
+  await find.click();
+  await page.getByRole("button", { name: party.displayName, exact: true }).click();
   await expect(page).toHaveURL(new URL("/", baseURL).toString());
+  await expect(page.getByText(`Welcome, ${party.displayName}`)).toBeVisible();
 
-  // A party's own link, cold: no password asked.
+  // A party's own link, cold: no name asked.
   const cold = await browser.newContext();
   await passProtection(cold, baseURL!);
   const coldPage = await cold.newPage();
   await go(coldPage, `/rsvp/${party.token}`);
-  await expect(coldPage.getByRole("button", { name: "JOYFULLY ACCEPT" })).toBeVisible();
+  await expect(coldPage.getByRole("button", { name: /^(WE|I)'LL BE THERE$/ })).toBeVisible();
   await cold.close();
 
-  // Lost the link: find it by name, then reply.
+  // Back on the first device, /rsvp opens the invitation it picked. Reply.
   await go(page, "/rsvp");
-  await page.getByLabel("Your first and last name").fill("Smoke Preview");
-  await page.getByRole("button", { name: "FIND MY INVITATION" }).click();
-  await page.getByRole("link", { name: new RegExp(party.displayName) }).click();
-  await page.getByRole("button", { name: "JOYFULLY ACCEPT" }).click();
+  await expect(page).toHaveURL(new RegExp(`/rsvp/${party.token}\\?via=remembered$`));
   await page.getByLabel("First name, guest 1").fill("Smoke");
   await page.getByLabel("Last name, guest 1").fill("Preview");
   await page
     .getByRole("group", { name: "GUEST 1", exact: true })
     .getByRole("checkbox", { name: "Wedding", exact: true })
     .check({ force: true });
-  await page.getByLabel("Your email").fill(GUEST_EMAIL);
-  await page.getByRole("button", { name: "SEND OUR REPLY" }).click();
+  await page.getByLabel("Email me a copy (optional)").fill(GUEST_EMAIL);
+  await page.getByRole("button", { name: /^(WE|I)'LL BE THERE$/ }).click();
   await expect(page.getByText("Thank you")).toBeVisible();
 
   // The receipt, captured rather than sent, linking back to this party.

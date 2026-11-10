@@ -3,26 +3,29 @@ import { useSealedSession } from "@/lib/sealed-session.server";
 export const GUEST_COOKIE = "lulo_guest";
 
 /**
- * The wedding is July 2027, so a guest who unlocks the site today should not be
- * asked for the password again while they are still planning their trip. 400 days
+ * The wedding is July 2027, so a guest who finds their name today should not be
+ * asked for it again while they are still planning their trip. 400 days
  * is the ceiling Chrome and Safari actually honour for a persistent cookie —
  * anything longer is silently clamped — so it is the longest honest value we can
- * set. Someone who unlocked very early may have to re-enter once; that is fine.
+ * set. Someone who came in very early may have to search once more; that is fine.
  */
 const GUEST_SESSION_MAX_AGE_SECONDS = 400 * 24 * 60 * 60;
 
 interface GuestSessionData {
-  unlocked?: boolean;
   at?: number;
   /**
-   * The RSVP token this device last opened.
-   *
-   * A convenience, not a credential: it records a token the guest already proved
-   * they hold by following their link, and unlocks nothing they could not reach
-   * with it. Anything that treated it as authentication would hand the next
-   * person on a shared phone someone else's reply.
+   * The party this device belongs to: the token of the link they opened, or of
+   * the name they picked from the search. No token means a stranger, who only
+   * gets the name search. "Not you?" clears it, for a shared phone.
    */
   token?: string;
+  /**
+   * The tokens the last name search found, in the order it listed them. The
+   * browser only ever sees the names and a position in this list, so a search
+   * never hands out a party's link. `search` names the search, so a pick made
+   * in one tab is never read against a newer search from another.
+   */
+  matches?: { search: string; tokens: string[] };
 }
 
 function getGuestSessionPassword() {

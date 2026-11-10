@@ -3,6 +3,8 @@
 // its server-only import, and the production build refused it.
 import { getRequestHeader, getRequestIP } from "@tanstack/react-start/server";
 
+import { rateLimitKey } from "@/lib/rate-limit-key";
+
 /** Keys are only ever IPs; cap the length so a hostile header can't bloat the limiter. */
 const MAX_CLIENT_KEY_LENGTH = 100;
 
@@ -23,5 +25,5 @@ export function getClientKey(): string {
     getRequestHeader("x-vercel-forwarded-for") ?? getRequestHeader("x-real-ip") ?? forwarded ?? getRequestIP();
 
   const key = candidate?.trim();
-  return key ? key.slice(0, MAX_CLIENT_KEY_LENGTH) : "unknown";
+  return key ? rateLimitKey(key.slice(0, MAX_CLIENT_KEY_LENGTH)) : "unknown";
 }

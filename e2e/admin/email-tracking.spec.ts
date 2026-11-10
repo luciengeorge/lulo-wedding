@@ -9,7 +9,6 @@ import {
   expect,
   funnelStep,
   invitedDetail,
-  GUEST_STATE,
   openAdmin,
   party,
   postResendEvent,
@@ -19,6 +18,7 @@ import {
   test,
   visit,
 } from "../fixtures";
+import { decline } from "../rsvp-form";
 
 test.use({ storageState: ADMIN_STATE });
 
@@ -167,12 +167,10 @@ test.describe("a reply receipt", () => {
   test("is tracked on the party's timeline without inflating the funnel", async ({ page, request, browser }) => {
     await backend.seed([party({ token: TOKEN, displayName: "Amal", surname: "Khalil", headCount: 1 })]);
 
-    const guestContext = await browser.newContext({ storageState: GUEST_STATE });
+    const guestContext = await browser.newContext();
     const guest = await guestContext.newPage();
     await visit(guest, `/rsvp/${TOKEN}`);
-    await guest.getByRole("button", { name: "REGRETFULLY DECLINE" }).click();
-    await guest.getByLabel("Your email").fill(EMAIL);
-    await guest.getByRole("button", { name: "SEND OUR REGRETS" }).click();
+    await decline(guest, EMAIL);
     await expect(guest.getByRole("heading", { name: "We will miss you" })).toBeVisible();
     await guestContext.close();
 
