@@ -571,6 +571,27 @@ describe("named guests in /admin", () => {
     expect(rae.invitedTo).toBeUndefined();
   });
 
+  it("keeps a person's phone trimmed, and clears it when emptied", async () => {
+    const t = setup();
+    const partyId = await insertParty(t);
+    const guestId = await t.mutation(api.admin.addNamedGuest, {
+      partyId,
+      firstName: "Rae",
+      lastName: "Haddad",
+      phone: " +961 3 123 456 ",
+    });
+    expect((await guestsOf(t, partyId))[0]?.phone).toBe("+961 3 123 456");
+    expect((await t.query(api.admin.namedGuests, { partyId }))[0]?.phone).toBe("+961 3 123 456");
+    const { rows } = await t.query(api.admin.listParties, {});
+    expect(rows[0]?.guestPhones).toEqual([{ name: "Rae Haddad", phone: "+961 3 123 456" }]);
+
+    await expect(t.mutation(api.admin.updateNamedGuest, { guestId, phone: "1".repeat(101) })).rejects.toThrow(
+      "too long",
+    );
+    await t.mutation(api.admin.updateNamedGuest, { guestId, phone: "  " });
+    expect((await guestsOf(t, partyId))[0]?.phone).toBeUndefined();
+  });
+
   it("refuses to name more people than the party has seats", async () => {
     const t = setup();
     const partyId = await insertParty(t, { headCount: 1 });

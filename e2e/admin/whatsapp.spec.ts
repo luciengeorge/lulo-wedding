@@ -1,6 +1,6 @@
 import type { Page } from "@playwright/test";
 
-import { ADMIN_STATE, backend, expect, openAdmin, party, test } from "../fixtures";
+import { ADMIN_STATE, backend, expect, funnelStep, openAdmin, party, test } from "../fixtures";
 
 test.use({ storageState: ADMIN_STATE });
 
@@ -39,14 +39,12 @@ test.describe("marking parties invited on WhatsApp", () => {
 
     await select(page, "Amal", "Khalil");
     await select(page, "Bassam", "Aoun");
-    await page.getByRole("button", { name: "Mark invited on WhatsApp" }).click();
+    await page.getByRole("button", { name: "Mark sent on WhatsApp" }).click();
 
     await expect(page.getByText("Marked 1 party as invited on WhatsApp")).toBeVisible();
     await expect(page.getByText("1 party already was.")).toBeVisible();
     await expect(row(page, "Bassam").getByText("WhatsApp")).toBeVisible();
-    await expect(
-      page.getByRole("region", { name: "Invitation funnel" }).getByText("Invited", { exact: true }).locator(".."),
-    ).toContainText("Invited2parties");
+    await expect(funnelStep(page, "Invited")).toContainText("Invited2of");
     expect(await whatsappSends("e2e-amal")).toHaveLength(1);
     expect(await whatsappSends("e2e-bassam")).toHaveLength(1);
 
@@ -64,11 +62,11 @@ test.describe("marking parties invited on WhatsApp", () => {
     await openAdmin(page);
     await select(page, "Chadi", "Mrad");
 
-    await page.getByRole("button", { name: "Mark invited on WhatsApp" }).click();
+    await page.getByRole("button", { name: "Mark sent on WhatsApp" }).click();
     await expect(page.getByText("Marked 1 party as invited on WhatsApp")).toBeVisible();
     await expect(row(page, "Chadi").getByText("WhatsApp")).toBeVisible();
 
-    await page.getByRole("button", { name: "Mark invited on WhatsApp" }).click();
+    await page.getByRole("button", { name: "Mark sent on WhatsApp" }).click();
     await expect(page.getByText("Marked 0 parties as invited on WhatsApp")).toBeVisible();
     await expect(page.getByText("1 party already was.")).toBeVisible();
 
@@ -79,7 +77,7 @@ test.describe("marking parties invited on WhatsApp", () => {
     await openAdmin(page);
     await page.getByRole("checkbox", { name: "Select all 3 matching parties" }).click();
     await expect(page.getByText("3 selected")).toBeVisible();
-    await page.getByRole("button", { name: "Mark invited on WhatsApp" }).click();
+    await page.getByRole("button", { name: "Mark sent on WhatsApp" }).click();
 
     await expect(page.getByText("Marked 3 parties as invited on WhatsApp")).toBeVisible();
     for (const token of ["e2e-amal", "e2e-bassam", "e2e-chadi"]) expect(await whatsappSends(token)).toHaveLength(1);

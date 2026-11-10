@@ -6,6 +6,8 @@ import {
   ADMIN_STATE,
   backend,
   expect,
+  funnelStep,
+  invitedDetail,
   openAdmin,
   party,
   postResendEvent,
@@ -60,23 +62,18 @@ async function scenario(request: Parameters<typeof postResendEvent>[0]) {
     await backend.seedVisit({ token: "e2e-bassam", source: "link", at: now - hoursAgo * HOUR });
 }
 
-function funnelStep(page: Page, label: string) {
-  return page.getByRole("region", { name: "Invitation funnel" }).getByText(label, { exact: true }).locator("..");
-}
-
 test.describe("the funnel above the guest list", () => {
   test("counts each stage in parties", async ({ page, request }) => {
     await scenario(request);
     await openAdmin(page);
 
-    await expect(funnelStep(page, "Invited")).toHaveText("Invited2parties· 1 by email · 1 on WhatsApp");
-    await expect(funnelStep(page, "Opened email")).toHaveText("Opened email1party· of 1 emailed");
-    await expect(funnelStep(page, "Seen link")).toHaveText("Seen link2parties· 100% of invited");
+    await expect(funnelStep(page, "Invited")).toHaveText("Invited2of 4 parties · 50%");
+    await expect(funnelStep(page, "Seen")).toHaveText("Seen2of 4 parties · 50%");
     // Chadi's early "no" is a reply even though nothing was sent.
-    await expect(funnelStep(page, "Replied")).toHaveText("Replied2parties· 100% of invited");
-    await expect(funnelStep(page, "Email bounced")).toHaveText("Email bounced0parties");
-    // Amal was emailed an invitation, so the zeros mean something and need no excuse.
-    await expect(page.getByText(/No invitations emailed yet/)).toHaveCount(0);
+    await expect(funnelStep(page, "Replied")).toHaveText("Replied2of 4 parties · 50%");
+    const detail = await invitedDetail(page);
+    await expect(detail).toContainText("1 by email, 1 on WhatsApp");
+    await expect(detail).toContainText("Emails: 1 sent, 1 opened, 0 bounced");
   });
 
   test("shows each party's channel and when it was last seen", async ({ page, request }) => {
@@ -194,7 +191,7 @@ test.describe("the pipeline board", () => {
 
   test("puts each party in the furthest stage it reached, and flags who needs a look", async ({ page, request }) => {
     await boardScenario(request);
-    await openAdmin(page, "/admin/insights");
+    await openAdmin(page, "/admin?view=board");
 
     const notInvited = await showLane(page, "Not invited");
     expect(await cards(notInvited)).toEqual(["Dalia Saab", "Karim Fares"]);
@@ -245,16 +242,9 @@ test.describe("the pipeline board", () => {
       "Invited to no events",
     );
 
-    // Each party credited to the channel that reached it first.
-    const strip = page.getByRole("region", { name: "Funnel by channel" });
-    await expect(strip.getByRole("group", { name: "Email first" })).toHaveText(
-      "Email first2 invited→1 seen 50%→0 replied 0%",
-    );
-    await expect(strip.getByRole("group", { name: "WhatsApp first" })).toHaveText(
-      "WhatsApp first5 invited→2 seen 40%→2 replied 40%",
-    );
-    await expect(strip.getByRole("group", { name: "Emails" }).getByText(/^\d+ delivered$/)).toHaveText("1 delivered");
-    await expect(strip.getByRole("group", { name: "Emails" }).getByText(/^\d+ bounced$/)).toHaveText("1 bounced");
+    // The split by channel lives on the dashboard; the board's page keeps the totals.
+    await expect(funnelStep(page, "Invited")).toContainText("Invited7of 11 parties");
+    await expect(await invitedDetail(page)).toContainText("1 bounced");
   });
 
   test("flags an email that failed to send, in its own words", async ({ page }) => {
@@ -268,7 +258,7 @@ test.describe("the pipeline board", () => {
       to: "lina@example",
       status: "failed",
     });
-    await openAdmin(page, "/admin/insights");
+    await openAdmin(page, "/admin?view=board");
 
     const attention = await showLane(page, "Needs attention");
     const lina = attention.getByRole("button", { name: "Lina Sfeir", exact: true });
@@ -279,7 +269,7 @@ test.describe("the pipeline board", () => {
 
   test("narrows the board by name and by filter", async ({ page, request }) => {
     await boardScenario(request);
-    await openAdmin(page, "/admin/insights");
+    await openAdmin(page, "/admin?view=board");
 
     await page.getByRole("searchbox", { name: "Search name or surname" }).fill("khoury");
     await expect(page.getByText("1 of 11 parties")).toBeVisible();
@@ -294,9 +284,33 @@ test.describe("the pipeline board", () => {
     expect(await cards(await showLane(page, "Not invited"))).toEqual(["Dalia Saab"]);
   });
 
+  test("switches between table and board, keeping the search, and the old Insights link lands on the board", async ({
+    page,
+    request,
+  }) => {
+    await boardScenario(request);
+    await openAdmin(page);
+
+    await page.getByRole("searchbox", { name: "Search name or surname" }).fill("khoury");
+    await page.getByRole("navigation", { name: "View" }).getByRole("link", { name: "Board" }).click();
+    await expect(page).toHaveURL(/[?&]view=board/);
+    await expect(page.getByText("1 of 11 parties")).toBeVisible();
+    expect(await cards(await showLane(page, "Seen"))).toEqual(["Joumana Khoury"]);
+
+    await page.getByRole("navigation", { name: "View" }).getByRole("link", { name: "Table" }).click();
+    await expect(page.getByText("Showing all 1 (filtered from 11)")).toBeVisible();
+
+    await page.goto("/admin/insights");
+    await expect(page).toHaveURL(/\/admin\?view=board$/);
+    await expect(page.getByRole("region", { name: "Pipeline board" })).toBeVisible();
+    await expect(page.getByRole("navigation", { name: "Admin" }).getByRole("link", { name: "Insights" })).toHaveCount(
+      0,
+    );
+  });
+
   test("opens a party's timeline from its card, by click or Enter", async ({ page, request }) => {
     await boardScenario(request);
-    await openAdmin(page, "/admin/insights");
+    await openAdmin(page, "/admin?view=board");
 
     const seen = await showLane(page, "Seen");
     await seen.getByRole("button", { name: "Amal Khalil", exact: true }).click();
@@ -337,7 +351,7 @@ test("folds a reply group away, and remembers it after a reload", async ({ page 
     party({ token: "e2e-ghada", displayName: "Ghada", surname: "Azar", headCount: 1, respondedAt: Date.now() - HOUR }),
   ]);
   await backend.seedGuests("e2e-ghada", [{ firstName: "Ghada", lastName: "Azar", wedding: "yes" }]);
-  await openAdmin(page, "/admin/insights");
+  await openAdmin(page, "/admin?view=board");
 
   let replied = await showLane(page, "Replied");
   const toggle = (group: string) => replied.getByRole("button", { name: new RegExp(`^${group} \\d+$`) });
@@ -355,7 +369,7 @@ test("folds a reply group away, and remembers it after a reload", async ({ page 
   await expect(chadi()).toHaveCount(0);
   await expect(ghada()).toBeVisible();
 
-  await openAdmin(page, "/admin/insights");
+  await openAdmin(page, "/admin?view=board");
   replied = await showLane(page, "Replied");
   await expect(toggle("Declined")).toHaveAttribute("aria-expanded", "false");
   await expect(chadi()).toHaveCount(0);
@@ -373,7 +387,7 @@ test.describe("on a wide screen", () => {
 
   test("scrolls each lane on its own, and never the page", async ({ page }) => {
     await backend.seed(crowd(36));
-    await openAdmin(page, "/admin/insights");
+    await openAdmin(page, "/admin?view=board");
 
     const pageScroll = () => page.evaluate(() => window.scrollY);
     const pageOverflow = () =>
@@ -398,7 +412,7 @@ test.describe("on a wide screen", () => {
     // Everything above the cards stays put.
     for (const fixed of [
       page.getByRole("navigation", { name: "Admin" }),
-      page.getByRole("region", { name: "Funnel by channel" }),
+      page.getByRole("region", { name: "Invitation funnel" }),
       page.getByRole("searchbox", { name: "Search name or surname" }),
       notInvited.locator("header"),
       page.getByRole("region", { name: "Replied", exact: true }).locator("header"),
@@ -458,7 +472,7 @@ test.describe("dragging a party to Invited", () => {
   }
 
   test("only Invited takes the drop, it stamps WhatsApp, and Undo takes it back", async ({ page }) => {
-    await openAdmin(page, "/admin/insights");
+    await openAdmin(page, "/admin?view=board");
     const notInvited = page.getByRole("region", { name: "Not invited", exact: true });
     const invited = page.getByRole("region", { name: "Invited", exact: true });
     const seen = page.getByRole("region", { name: "Seen", exact: true });
@@ -482,7 +496,7 @@ test.describe("dragging a party to Invited", () => {
     await expect.poll(() => cards(invited)).toEqual(["Dalia Saab"]);
     expect(await cards(notInvited)).toEqual([]);
     await expect.poll(async () => (await whatsappSends("e2e-dalia")).length).toBe(1);
-    await expect(page.getByRole("group", { name: "WhatsApp first" })).toContainText("1 invited");
+    await expect(funnelStep(page, "Invited")).toContainText("Invited1of 2 parties");
 
     await page.getByRole("button", { name: "Undo" }).click();
     await expect(page.getByText("Undone: Dalia Saab no longer marked as invited on WhatsApp")).toBeVisible();
@@ -491,7 +505,7 @@ test.describe("dragging a party to Invited", () => {
   });
 
   test("works from the keyboard: Space, right arrow, Space", async ({ page }) => {
-    await openAdmin(page, "/admin/insights");
+    await openAdmin(page, "/admin?view=board");
     const invited = page.getByRole("region", { name: "Invited", exact: true });
 
     await page
@@ -523,7 +537,7 @@ test.describe("on a 375px phone", () => {
 
   test("lights up only the stage shown, and the lane names it", async ({ page, request }) => {
     await boardScenario(request);
-    await openAdmin(page, "/admin/insights");
+    await openAdmin(page, "/admin?view=board");
 
     const stages = page.getByRole("group", { name: "Stage" });
     const lanes = [
@@ -558,7 +572,7 @@ test.describe("on a 375px phone", () => {
     request,
   }) => {
     await boardScenario(request);
-    await openAdmin(page, "/admin/insights");
+    await openAdmin(page, "/admin?view=board");
 
     const overflow = () => page.evaluate(() => document.documentElement.scrollWidth - window.innerWidth);
     expect(await overflow()).toBeLessThanOrEqual(0);
@@ -571,7 +585,7 @@ test.describe("on a 375px phone", () => {
     );
 
     await notInvited.getByRole("button", { name: "Actions for Dalia Saab" }).click();
-    await page.getByRole("menuitem", { name: "Mark invited on WhatsApp" }).click();
+    await page.getByRole("menuitem", { name: "Mark sent on WhatsApp" }).click();
     await expect(page.getByText("Marked Dalia Saab as invited on WhatsApp")).toBeVisible();
     await expect.poll(() => cards(notInvited)).toEqual(["Karim Fares"]);
     await expect.poll(async () => (await whatsappSends("e2e-dalia")).length).toBe(1);
@@ -592,7 +606,7 @@ test.describe("on a 375px phone", () => {
 
   test("scrolls the page, not the lane, and never sideways", async ({ page }) => {
     await backend.seed(crowd(20));
-    await openAdmin(page, "/admin/insights");
+    await openAdmin(page, "/admin?view=board");
 
     const notInvited = await showLane(page, "Not invited");
     const list = notInvited.locator(":scope > div");

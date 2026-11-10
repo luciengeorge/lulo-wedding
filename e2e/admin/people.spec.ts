@@ -50,6 +50,7 @@ test.describe("people the couple name in a party", () => {
     const adding = person(page, "Add a person");
     await adding.getByLabel("First name").fill("Nadia");
     await adding.getByLabel("Last name").fill("Haddad");
+    await adding.getByLabel("Phone").fill(" +961 70 000 000 ");
     // A new person starts on the party's own events.
     await expect(adding.getByRole("checkbox", { name: "Wedding", exact: true })).toBeChecked();
     await expect(adding.getByText("Same as the party")).toBeVisible();
@@ -62,6 +63,7 @@ test.describe("people the couple name in a party", () => {
     expect((await backend.replyFor(TOKEN))?.guests).toEqual([
       expect.objectContaining({
         firstName: "Nadia",
+        phone: "+961 70 000 000",
         addedByCouple: true,
         wedding: "pending",
         brunch: "pending",
@@ -126,13 +128,13 @@ test.describe("the party's phone number", () => {
     await openAdmin(page);
 
     const dialog = await editParty(page, "Nadia & Omar");
-    await dialog.getByLabel("Phone").fill("+961 3 123 456");
+    await dialog.locator("input[name=contactPhone]").fill("+961 3 123 456");
     await dialog.getByRole("button", { name: "Save changes" }).click();
 
     await expect(page.getByText("Party updated")).toBeVisible();
     expect((await backend.partyFields(TOKEN)).contactPhone).toBe("+961 3 123 456");
 
     await editParty(page, "Nadia & Omar");
-    await expect(page.getByRole("dialog").getByLabel("Phone")).toHaveValue("+961 3 123 456");
+    await expect(page.getByRole("dialog").locator("input[name=contactPhone]")).toHaveValue("+961 3 123 456");
   });
 });

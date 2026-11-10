@@ -330,7 +330,7 @@ export async function enterPassword(page: Page, password: string) {
 /** Opens an admin page and waits for its data, so the first click lands on a settled layout. */
 export async function openAdmin(
   page: Page,
-  path: "/admin" | "/admin/insights" | "/admin/dashboard" = "/admin",
+  path: "/admin" | "/admin?view=board" | "/admin/dashboard" = "/admin",
 ): Promise<void> {
   await visit(page, path);
   if (path === "/admin") await expect(page.getByText(/^No parties$|^Showing all/)).toBeVisible();
@@ -339,8 +339,19 @@ export async function openAdmin(
   else await expect(page.getByRole("region", { name: "Pipeline board" })).toBeVisible();
 }
 
+/** One of the three numbers above the guest list: Invited, Seen or Replied. */
+export function funnelStep(page: Page, label: "Invited" | "Seen" | "Replied") {
+  return page.getByRole("region", { name: "Invitation funnel" }).getByRole("group", { name: label, exact: true });
+}
+
+/** The channel and email numbers behind Invited, shown on hover. */
+export async function invitedDetail(page: Page) {
+  await funnelStep(page, "Invited").locator("[data-slot=tooltip-trigger]").hover();
+  return page.locator("[data-slot=tooltip-content]");
+}
+
 /**
- * One lane of the pipeline board on /admin/insights. On a phone the lanes show
+ * One lane of the pipeline board on /admin?view=board. On a phone the lanes show
  * one at a time behind a row of stage buttons, so it presses the right one first.
  */
 export async function showLane(page: Page, lane: string) {

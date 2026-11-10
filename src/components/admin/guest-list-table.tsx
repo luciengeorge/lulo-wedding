@@ -118,7 +118,7 @@ type GuestListFeatures = typeof features;
 const helper = createColumnHelper<GuestListFeatures, PartyRow>();
 
 const SELECTION_CHECKBOX_CLASS =
-  "border-[#D4D4D8] bg-[#FFFFFF] focus-visible:border-[#A1A1AA] focus-visible:ring-[#A1A1AA]/50 data-checked:border-[#18181B] data-checked:bg-[#18181B] data-checked:text-[#FFFFFF] data-indeterminate:border-[#18181B] data-indeterminate:bg-[#18181B] data-indeterminate:text-[#FFFFFF]";
+  "border-[#A1A1AA] bg-[#FFFFFF] focus-visible:border-[#A1A1AA] focus-visible:ring-[#A1A1AA]/50 data-checked:border-[#18181B] data-checked:bg-[#18181B] data-checked:text-[#FFFFFF] data-indeterminate:border-[#18181B] data-indeterminate:bg-[#18181B] data-indeterminate:text-[#FFFFFF]";
 
 const columns = helper.columns([
   helper.display({
@@ -311,6 +311,16 @@ const columns = helper.columns([
       ) : (
         <RelativeTime at={row.original.lastVisitAt} className="text-[#52525B]" />
       ),
+  }),
+
+  helper.accessor((party) => party.contactPhone ?? "", {
+    id: "phone",
+    header: "Phone",
+    meta: { width: 150 },
+    enableSorting: false,
+    enableColumnFilter: false,
+    enableGlobalFilter: false,
+    cell: (info) => <span className="text-[#52525B]">{info.getValue()}</span>,
   }),
 
   helper.display({

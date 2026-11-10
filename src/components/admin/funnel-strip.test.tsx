@@ -3,7 +3,7 @@ import { describe, expect, it } from "vitest";
 
 import type { Funnel } from "./funnel-strip";
 
-import { FunnelStrip } from "./funnel-strip";
+import { FunnelStrip, invitedDetail } from "./funnel-strip";
 
 const funnel: Funnel = {
   parties: 10,
@@ -19,8 +19,18 @@ const funnel: Funnel = {
 };
 
 describe("FunnelStrip", () => {
-  it("counts opens against every party emailed, the same parties the opens come from", () => {
+  it("shows three numbers, each out of every party on the list", () => {
     render(<FunnelStrip funnel={funnel} />);
-    expect(screen.getByText("Opened email").parentElement).toHaveTextContent("Opened email2parties· of 3 emailed");
+    expect(screen.getByRole("group", { name: "Invited" })).toHaveTextContent("Invited5of 10 parties · 50%");
+    expect(screen.getByRole("group", { name: "Seen" })).toHaveTextContent("Seen2of 10 parties · 20%");
+    expect(screen.getByRole("group", { name: "Replied" })).toHaveTextContent("Replied1of 10 parties · 10%");
+    expect(screen.queryByText(/bounced/)).not.toBeInTheDocument();
+  });
+
+  it("keeps the channel and email numbers for the Invited tooltip", () => {
+    expect(invitedDetail(funnel)).toEqual(["1 by email, 4 on WhatsApp", "Emails: 3 sent, 2 opened, 0 bounced"]);
+    expect(
+      invitedDetail({ ...funnel, invited: { email: 0, whatsapp: 0, any: 0 }, email: { ...funnel.email, sent: 0 } }),
+    ).toEqual([]);
   });
 });

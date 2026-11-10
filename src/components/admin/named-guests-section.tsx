@@ -79,6 +79,7 @@ function NamedGuestForm({ party, flags, guest }: { party: PartyRow; flags: Event
   const defaults: NamedGuestValues = {
     firstName: guest?.firstName ?? "",
     lastName: guest?.lastName ?? "",
+    phone: guest?.phone ?? "",
     ...(guest?.invitedTo ?? flags),
   };
 
@@ -95,6 +96,7 @@ function NamedGuestForm({ party, flags, guest }: { party: PartyRow; flags: Event
               guestId: guest._id,
               firstName: parsed.firstName,
               lastName: parsed.lastName,
+              phone: parsed.phone,
               invitedTo,
             });
             toast.success(`Saved ${fullName(parsed)}`);
@@ -105,6 +107,7 @@ function NamedGuestForm({ party, flags, guest }: { party: PartyRow; flags: Event
               partyId: party._id,
               firstName: parsed.firstName,
               lastName: parsed.lastName,
+              ...(parsed.phone ? { phone: parsed.phone } : {}),
               ...(invitedTo ? { invitedTo } : {}),
             });
             toast.success(`Added ${fullName(parsed)} to ${party.displayName}`);
@@ -172,6 +175,25 @@ function NamedGuestForm({ party, flags, guest }: { party: PartyRow; flags: Event
                 value={field.state.value}
                 onChange={(event) => field.handleChange(event.target.value)}
                 onBlur={field.handleBlur}
+                className="h-8 text-[13px]"
+              />
+              {field.state.meta.isValid ? null : <FieldError errors={field.state.meta.errors} />}
+            </Field>
+          )}
+        </form.Field>
+        <form.Field name="phone">
+          {(field) => (
+            <Field className="col-span-2">
+              <FieldLabel htmlFor={`${idPrefix}-phone`} className="text-[12.5px]">
+                Phone
+              </FieldLabel>
+              <Input
+                id={`${idPrefix}-phone`}
+                type="tel"
+                value={field.state.value}
+                onChange={(event) => field.handleChange(event.target.value)}
+                onBlur={field.handleBlur}
+                placeholder="For WhatsApp"
                 className="h-8 text-[13px]"
               />
               {field.state.meta.isValid ? null : <FieldError errors={field.state.meta.errors} />}

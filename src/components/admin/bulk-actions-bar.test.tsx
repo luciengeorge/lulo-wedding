@@ -37,6 +37,7 @@ const rows: PartyRow[] = Array.from({ length: 240 }, (_, index) => ({
   invitedTo: { preWedding: false, wedding: true, brunch: false },
   visitCount: 0,
   emailBounced: false,
+  guestPhones: [],
 }));
 
 const updateParties =
@@ -92,7 +93,7 @@ function selectRows(data = rows) {
 }
 
 async function inviteToBrunch() {
-  fireEvent.click(screen.getByRole("button", { name: "Invite to" }));
+  fireEvent.click(screen.getByRole("button", { name: "Invite to events" }));
   const group = await screen.findByRole("group", { name: "Add" });
   fireEvent.click(within(group).getByRole("menuitem", { name: "Brunch" }));
 }
@@ -116,19 +117,30 @@ describe("BulkActionsBar", () => {
     render(<Harness data={rows.slice(0, 12)} />);
     fireEvent.click(screen.getByRole("button", { name: "Select rows" }));
     fireEvent.click(screen.getByRole("button", { name: "Only Laura" }));
-    fireEvent.click(screen.getByRole("button", { name: "Email…" }));
+    fireEvent.click(screen.getByRole("button", { name: "Send email" }));
     expect(onEmail).toHaveBeenCalledTimes(1);
     expect(onEmail.mock.calls[0][0]).toHaveLength(12);
   });
 
-  it("appears only for a selection, reports hidden selections and clears them", () => {
+  it("shows every action before anything is ticked, disabled, with a hint", () => {
     render(<Harness data={rows.slice(0, 12)} />);
-    expect(screen.queryByLabelText("Bulk actions")).not.toBeInTheDocument();
+    const bar = screen.getByRole("group", { name: "Bulk actions" });
+    expect(within(bar).getByText("Tick guests to act on them")).toBeInTheDocument();
+    for (const name of ["Invite to events", "Change details", "Send email", "Mark sent on WhatsApp", "Delete"]) {
+      expect(within(bar).getByRole("button", { name })).toBeDisabled();
+    }
+    expect(within(bar).queryByRole("button", { name: "Clear selection" })).not.toBeInTheDocument();
+  });
+
+  it("enables the actions for a selection, reports hidden selections and clears them", () => {
+    render(<Harness data={rows.slice(0, 12)} />);
     fireEvent.click(screen.getByRole("button", { name: "Select rows" }));
     fireEvent.click(screen.getByRole("button", { name: "Only Laura" }));
     expect(screen.getByText("12 selected")).toHaveTextContent("4 not shown by these filters");
+    expect(screen.getByRole("button", { name: "Send email" })).toBeEnabled();
     fireEvent.click(screen.getByRole("button", { name: "Clear selection" }));
-    expect(screen.queryByLabelText("Bulk actions")).not.toBeInTheDocument();
+    expect(screen.getByText("Tick guests to act on them")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Send email" })).toBeDisabled();
   });
 
   it("updates all selected parties in chunks with one toast and keeps the selection", async () => {
@@ -189,7 +201,14 @@ describe("BulkActionsBar", () => {
       .mockRejectedValueOnce(new Error("Connection lost"));
     selectRows();
     await inviteToBrunch();
-    for (const name of ["Invite to", "Set", "Mark invited on WhatsApp", "Delete", "Clear selection"]) {
+    for (const name of [
+      "Invite to events",
+      "Change details",
+      "Send email",
+      "Mark sent on WhatsApp",
+      "Delete",
+      "Clear selection",
+    ]) {
       expect(screen.getByRole("button", { name })).toBeDisabled();
     }
     expect(updateParties).toHaveBeenCalledTimes(1);
@@ -204,13 +223,13 @@ describe("BulkActionsBar", () => {
     expect(updateParties).toHaveBeenCalledTimes(2);
     expect(toast.error).toHaveBeenCalledTimes(1);
     expect(toast.success).not.toHaveBeenCalled();
-    expect(screen.getByRole("button", { name: "Invite to" })).toBeEnabled();
+    expect(screen.getByRole("button", { name: "Invite to events" })).toBeEnabled();
     expect(screen.getByLabelText("Selected count")).toHaveTextContent("240");
   });
 
   it("offers Add and Remove groups for all three events", async () => {
     selectRows(rows.slice(0, 1));
-    fireEvent.click(screen.getByRole("button", { name: "Invite to" }));
+    fireEvent.click(screen.getByRole("button", { name: "Invite to events" }));
     for (const name of ["Add", "Remove"]) {
       const group = await screen.findByRole("group", { name });
       expect(
@@ -234,7 +253,7 @@ describe("BulkActionsBar", () => {
     ["Early decline", ["Yes", "No"], { earlyDecline: false }],
   ])("offers the %s submenu and applies its value", async (label, options, fields) => {
     selectRows(rows.slice(0, 1));
-    fireEvent.click(screen.getByRole("button", { name: "Set" }));
+    fireEvent.click(screen.getByRole("button", { name: "Change details" }));
     const trigger = await screen.findByRole("menuitem", { name: label });
     fireEvent.keyDown(trigger, { key: "ArrowRight" });
     const option = await screen.findByRole("menuitem", { name: options.at(-1)! });
@@ -314,7 +333,7 @@ describe("BulkActionsBar", () => {
       .mockResolvedValueOnce({ marked: 100, alreadyMarked: 0, missing: 0 })
       .mockResolvedValueOnce({ marked: 40, alreadyMarked: 0, missing: 0 });
     selectRows();
-    fireEvent.click(screen.getByRole("button", { name: "Mark invited on WhatsApp" }));
+    fireEvent.click(screen.getByRole("button", { name: "Mark sent on WhatsApp" }));
     await waitFor(() =>
       expect(toast.success).toHaveBeenCalledWith("Marked 237 parties as invited on WhatsApp", {
         description: "3 parties already were.",
@@ -332,7 +351,7 @@ describe("BulkActionsBar", () => {
       .map((row, index) => (index === 0 ? { ...row, invitedVia: "whatsapp" as const } : row));
     markWhatsApp.mockResolvedValueOnce({ marked: 2, alreadyMarked: 1, missing: 0 });
     selectRows(data);
-    fireEvent.click(screen.getByRole("button", { name: "Mark invited on WhatsApp" }));
+    fireEvent.click(screen.getByRole("button", { name: "Mark sent on WhatsApp" }));
     await waitFor(() => expect(toast.success).toHaveBeenCalledTimes(1));
 
     const [, options] = vi.mocked(toast.success).mock.calls[0]!;
@@ -348,7 +367,7 @@ describe("BulkActionsBar", () => {
   it("offers no undo when nothing new was stamped", async () => {
     markWhatsApp.mockResolvedValueOnce({ marked: 0, alreadyMarked: 1, missing: 0 });
     selectRows(rows.slice(0, 1));
-    fireEvent.click(screen.getByRole("button", { name: "Mark invited on WhatsApp" }));
+    fireEvent.click(screen.getByRole("button", { name: "Mark sent on WhatsApp" }));
     await waitFor(() =>
       expect(toast.success).toHaveBeenCalledWith("Marked 0 parties as invited on WhatsApp", {
         description: "1 party already was.",

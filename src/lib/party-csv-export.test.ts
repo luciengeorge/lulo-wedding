@@ -58,6 +58,28 @@ describe("partiesToCsv", () => {
     expect(columns.indexOf("Phone(s)")).toBe(columns.indexOf("Email(s)") + 1);
   });
 
+  it("lists each guest's own phone with their name, after the party's", () => {
+    const [header, line] = rows(
+      partiesToCsv(
+        [
+          {
+            ...party,
+            guestPhones: [
+              { name: "Rae Haddad", phone: "+961 3 123 456" },
+              { name: "Cherif Haddad", phone: "+44 7700 900123" },
+            ],
+          },
+        ],
+        "https://x.test",
+      ),
+    );
+    const columns = header?.split(",") ?? [];
+    expect(columns.indexOf("Guest phones")).toBe(columns.indexOf("Phone(s)") + 1);
+    expect(line?.split(",")[columns.indexOf("Guest phones")]).toBe(
+      "Rae Haddad: +961 3 123 456; Cherif Haddad: +44 7700 900123",
+    );
+  });
+
   it("renders the enums and flags as words, not codes", () => {
     const line = rows(partiesToCsv([party], "https://x.test"))[1] ?? "";
     expect(line).toContain("Laura");
