@@ -1,5 +1,5 @@
 import { ADMIN_STATE, backend, enterAsGuest, expect, party, test, visit } from "../fixtures";
-import { comingButton, expectReplyForm } from "../rsvp-form";
+import { sendButton, expectReplyForm } from "../rsvp-form";
 
 /**
  * A guest arriving on their own link, cold: no cookie, no memory of any
@@ -115,7 +115,7 @@ test.describe("a link that does not resolve", () => {
 
     await expect(page).toHaveURL("/rsvp/not-a-real-token");
     await expect(page.getByText(/could not find that invitation/i)).toBeVisible();
-    await expect(comingButton(page)).toHaveCount(0);
+    await expect(sendButton(page)).toHaveCount(0);
 
     await page.getByRole("link", { name: "FIND MY INVITATION" }).click();
     await expect(page).toHaveURL(`/rsvp/${TOKEN}?via=remembered`);

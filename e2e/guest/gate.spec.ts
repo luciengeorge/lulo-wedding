@@ -86,7 +86,7 @@ test.describe("a guest this device does not know", () => {
 
   test("opening a test copy of an invitation does not make this device that party", async ({ page }) => {
     await visit(page, `/rsvp/${TOKEN}?test=1`);
-    await expect(page.getByRole("button", { name: "WE'LL BE THERE" })).toBeVisible();
+    await expect(page.getByRole("button", { name: "SEND OUR REPLY" })).toBeVisible();
 
     await visit(page, "/rsvp");
     await expect(page).toHaveURL(/\/enter\?redirect=%2Frsvp$/);
