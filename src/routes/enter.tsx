@@ -90,16 +90,16 @@ function GatePage() {
     setPending(false);
   }
 
-  async function choose(choice: number) {
+  async function choose(search: string, choice: number) {
     if (pending) return;
     setPending(true);
     setError(null);
     try {
-      if (await enterAs({ data: { choice } })) {
+      if (await enterAs({ data: { search, choice } })) {
         await router.navigate({ to: redirectTo ?? "/" });
         return;
       }
-      setError("That invitation has just changed. Please search again.");
+      setError("Please search for your name again.");
     } catch (cause) {
       console.error("[gate] enterAs failed", cause);
       setError("Something went wrong. Please try again.");
@@ -108,7 +108,8 @@ function GatePage() {
   }
 
   const message = error ?? (searched ? lookupMessage(searched.result, searched.query) : null);
-  const matches = searched?.result.kind === "matches" ? searched.result.matches : [];
+  const found = searched?.result.kind === "matches" ? searched.result : null;
+  const matches = found?.matches ?? [];
 
   return (
     <div className="relative flex min-h-svh w-full flex-col items-center justify-center overflow-hidden bg-paper [background-image:url('/art/paper-tile.webp')] bg-[length:560px_428px] bg-repeat px-6 text-ink">
@@ -203,7 +204,7 @@ function GatePage() {
                     <button
                       type="button"
                       disabled={pending}
-                      onClick={() => void choose(match.choice)}
+                      onClick={() => found && void choose(found.search, match.choice)}
                       className="flex min-h-14 w-full items-center justify-between gap-3 px-1 py-3 text-left font-display text-[18px] text-bark transition-colors hover:text-ink focus-visible:text-ink focus-visible:outline-none disabled:opacity-60"
                     >
                       <span>{match.displayName}</span>

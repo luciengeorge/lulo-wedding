@@ -145,9 +145,11 @@ export const lookupParty = createServerFn({ method: "POST" })
       if (result.kind !== "matches") return result;
 
       const session = await useGuestSession();
-      await session.update({ matches: result.matches.map((match) => match.token) });
+      const search = crypto.randomUUID();
+      await session.update({ matches: { search, tokens: result.matches.map((match) => match.token) } });
       return {
         kind: "matches" as const,
+        search,
         matches: result.matches.map((match, choice) => ({ displayName: match.displayName, choice })),
       };
     });

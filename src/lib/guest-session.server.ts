@@ -22,9 +22,10 @@ interface GuestSessionData {
   /**
    * The tokens the last name search found, in the order it listed them. The
    * browser only ever sees the names and a position in this list, so a search
-   * never hands out a party's link.
+   * never hands out a party's link. `search` names the search, so a pick made
+   * in one tab is never read against a newer search from another.
    */
-  matches?: string[];
+  matches?: { search: string; tokens: string[] };
 }
 
 function getGuestSessionPassword() {

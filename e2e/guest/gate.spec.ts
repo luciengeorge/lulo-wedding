@@ -42,6 +42,24 @@ test.describe("a guest this device does not know", () => {
     expect(await page.content()).not.toContain(TOKEN);
   });
 
+  test("picking from an older search in another tab lets nobody in as the wrong party", async ({ page }) => {
+    await backend.seed([party({ token: "e2e-gate-other", displayName: "Hala", surname: "Nassar" })]);
+    const other = await page.context().newPage();
+
+    await visit(page, "/enter");
+    await searchName(page, "Rae Haddad");
+    await expect(page.getByText("Is this you?")).toBeVisible();
+
+    await visit(other, "/enter");
+    await searchName(other, "Hala Nassar");
+    await expect(other.getByText("Is this you?")).toBeVisible();
+
+    await page.getByRole("button", { name: "Rae & Cherif", exact: true }).click();
+    await expect(page.getByText("Please search for your name again.")).toBeVisible();
+    await expect(page).toHaveURL(/\/enter$/);
+    expect((await backend.activity("e2e-gate-other")).visits).toEqual([]);
+  });
+
   test("is told kindly when the name is not on the list, and who to ask", async ({ page }) => {
     await visit(page, "/enter");
     await searchName(page, "Zeina Nobody");
