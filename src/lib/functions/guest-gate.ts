@@ -39,12 +39,17 @@ export const enterAs = createServerFn({ method: "POST" })
     });
   });
 
-/** A valid party link is its own way in: whoever holds it is that party. */
+/**
+ * A valid party link is its own way in: whoever holds it is that party. With
+ * `remember: false` (a test copy the couple sent themselves) the link opens but
+ * this device is not made that party, so its later visits are not counted as theirs.
+ */
 export const unlockWithToken = createServerFn({ method: "POST" })
-  .validator(TokenSchema)
+  .validator(TokenSchema.extend({ remember: z.boolean().default(true) }))
   .handler(async ({ data }) => {
     return Sentry.startSpan({ name: "unlockWithToken" }, async () => {
       if (!(await fetchAuthQuery(api.rsvp.tokenIsValid, { token: data.token }))) return false;
+      if (!data.remember) return true;
 
       const session = await useGuestSession();
       await session.update({ token: data.token, at: Date.now() });

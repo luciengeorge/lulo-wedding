@@ -43,13 +43,14 @@ const RsvpSearchSchema = z.object({
 
 export const Route = createFileRoute("/rsvp/$token")({
   validateSearch: RsvpSearchSchema,
-  beforeLoad: async ({ location, params }) => {
+  beforeLoad: async ({ location, params, search }) => {
     // Unfinished work must be unreachable, not merely unlinked. A guest who
     // guessed the path should get the 404 the rest of the site gives.
     if (!FEATURES.rsvp) throw notFound();
     if (await isGuestUnlocked()) return;
-    // A valid link is its own way in. Only a dead one gets the name search.
-    if (await unlockWithToken({ data: { token: params.token } })) return;
+    // A valid link is its own way in. Only a dead one gets the name search. A test
+    // copy the couple opened is let in without this device becoming that party.
+    if (await unlockWithToken({ data: { token: params.token, remember: search.test === undefined } })) return;
     return requireGuestUnlocked(location.href);
   },
   loaderDeps: ({ search }) => ({ s: search.s, via: search.via, test: search.test !== undefined }),

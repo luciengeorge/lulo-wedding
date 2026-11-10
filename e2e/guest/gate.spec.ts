@@ -50,6 +50,15 @@ test.describe("a guest this device does not know", () => {
     await visit(page, "/enter");
     await expect(page.getByText(/Can't find your name/)).toHaveCount(0);
   });
+
+  test("opening a test copy of an invitation does not make this device that party", async ({ page }) => {
+    await visit(page, `/rsvp/${TOKEN}?test=1`);
+    await expect(page.getByRole("button", { name: "WE'LL BE THERE" })).toBeVisible();
+
+    await visit(page, "/rsvp");
+    await expect(page).toHaveURL(/\/enter\?redirect=%2Frsvp$/);
+    expect((await backend.activity(TOKEN)).visits).toEqual([]);
+  });
 });
 
 test.describe("a guest this device knows", () => {
