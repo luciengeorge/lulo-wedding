@@ -330,7 +330,7 @@ export async function enterPassword(page: Page, password: string) {
 /** Opens an admin page and waits for its data, so the first click lands on a settled layout. */
 export async function openAdmin(
   page: Page,
-  path: "/admin" | "/admin/insights" | "/admin/dashboard" = "/admin",
+  path: "/admin" | "/admin?view=board" | "/admin/dashboard" = "/admin",
 ): Promise<void> {
   await visit(page, path);
   if (path === "/admin") await expect(page.getByText(/^No parties$|^Showing all/)).toBeVisible();
@@ -339,11 +339,28 @@ export async function openAdmin(
   else await expect(page.getByRole("region", { name: "Pipeline board" })).toBeVisible();
 }
 
+/** One of the three numbers above the guest list: Invited, Seen or Replied. */
+export function funnelStep(page: Page, label: "Invited" | "Seen" | "Replied") {
+  return page.getByRole("region", { name: "Invitation funnel" }).getByRole("group", { name: label, exact: true });
+}
+
+/** The channel and email numbers behind Invited, opened by a click. Left open if it already is, since a second click closes it. */
+export async function invitedDetail(page: Page) {
+  const detail = page.locator("[data-slot=invited-detail]");
+  if (!(await detail.isVisible())) {
+    await funnelStep(page, "Invited").locator("[data-slot=invited-detail-trigger]").click();
+  }
+  return detail;
+}
+
 /**
- * One lane of the pipeline board on /admin/insights. On a phone the lanes show
+ * One lane of the pipeline board on /admin?view=board. On a phone the lanes show
  * one at a time behind a row of stage buttons, so it presses the right one first.
  */
 export async function showLane(page: Page, lane: string) {
+  // The skeleton has no stage buttons, so checking for them before the board has
+  // loaded would skip the press and leave a phone on the wrong lane.
+  await expect(page.getByRole("region", { name: "Pipeline board" })).toBeVisible();
   const stages = page.getByRole("group", { name: "Stage" });
   if (await stages.isVisible()) {
     await stages.getByRole("button", { name: new RegExp(`^${lane} \\d+$`) }).click();

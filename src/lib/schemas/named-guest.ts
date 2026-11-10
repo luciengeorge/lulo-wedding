@@ -10,6 +10,7 @@ export const NamedGuestSchema = z
   .object({
     firstName: z.string().trim().min(1, { error: "A first name, please" }).max(100, { error: "That name is too long" }),
     lastName: z.string().trim().max(100, { error: "That name is too long" }),
+    phone: z.string().trim().max(100, { error: "That is too long for a phone number" }),
     preWedding: z.boolean(),
     wedding: z.boolean(),
     brunch: z.boolean(),

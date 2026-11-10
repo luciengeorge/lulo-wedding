@@ -95,7 +95,7 @@ test("a guest gets in, finds their invitation, replies, and the couple see it", 
   await expect(row).toContainText("1 coming");
   await expect(row).not.toContainText("Never");
   await expect(
-    adminPage.getByRole("region", { name: "Invitation funnel" }).getByText("Replied", { exact: true }).locator(".."),
+    adminPage.getByRole("region", { name: "Invitation funnel" }).getByRole("group", { name: "Replied", exact: true }),
   ).not.toContainText("Replied0");
   await admin.close();
 });

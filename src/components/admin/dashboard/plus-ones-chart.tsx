@@ -1,10 +1,3 @@
-import { barX, defineChart, text } from "@tanstack/charts";
-import { scaleBand } from "@tanstack/charts/scales/band";
-import { scaleLinear } from "@tanstack/charts/scales/linear";
-import { tooltip } from "@tanstack/charts/tooltip";
-import { Chart } from "@tanstack/react-charts";
-import { useMemo } from "react";
-
 import { ChartCard } from "./chart-card";
 import { formatCount, plural } from "./format";
 
@@ -14,36 +7,17 @@ type Props = {
 };
 
 /**
- * The two things a caterer asks after the headcount. Plus-ones run from
- * offered to named to coming; dietary notes are listed by name, only for
+ * The two things a caterer asks after the headcount. Three numbers rather than
+ * a chart: plus-ones run from offered to named to coming, and the counts are
+ * small enough to read at a glance. Dietary notes are listed by name, only for
  * guests who are coming, behind a disclosure so the card stays short.
  */
 export function PlusOnesChart({ plusOnes, dietary }: Props) {
-  const definition = useMemo(() => {
-    const rows = [
-      { step: "Allowed", count: plusOnes.allowed, paint: "var(--viz-soft)" },
-      { step: "Named", count: plusOnes.named, paint: "var(--viz-neutral)" },
-      { step: "Coming", count: plusOnes.coming, paint: "var(--viz-ink)" },
-    ];
-    return defineChart({
-      marks: [
-        barX(rows, { x: "count", y: "step", fill: (row) => row.paint, radius: { end: 3 } }),
-        text(rows, {
-          x: "count",
-          y: "step",
-          text: (row) => formatCount(row.count),
-          anchor: "start",
-          dx: 6,
-          fill: "var(--foreground)",
-        }),
-      ],
-      scales: {
-        x: { scale: scaleLinear, nice: true, grid: true, axis: { label: "Plus-ones" } },
-        y: { scale: () => scaleBand<string>().padding(0.3), axis: { ticks: { size: 0 } } },
-      },
-      tooltip,
-    });
-  }, [plusOnes]);
+  const stats = [
+    { label: "Allowed", value: plusOnes.allowed },
+    { label: "Named", value: plusOnes.named },
+    { label: "Coming", value: plusOnes.coming },
+  ];
 
   return (
     <ChartCard
@@ -63,15 +37,23 @@ export function PlusOnesChart({ plusOnes, dietary }: Props) {
       table={{
         caption: "Plus-ones",
         columns: ["Step", "Plus-ones"],
-        rows: [
-          ["Allowed", plusOnes.allowed],
-          ["Named", plusOnes.named],
-          ["Coming", plusOnes.coming],
-        ],
+        rows: stats.map((stat) => [stat.label, stat.value]),
       }}
       footer={<DietaryNotes dietary={dietary} />}
     >
-      <Chart definition={definition} height={150} ariaLabel="Plus-ones allowed, named and coming" />
+      <dl aria-hidden className="grid grid-cols-3 gap-3">
+        {stats.map((stat) => (
+          <div key={stat.label} className="flex flex-col gap-1 rounded-md bg-muted/50 px-3 py-3">
+            <dt className="text-[12px] text-muted-foreground">{stat.label}</dt>
+            <dd
+              className={`text-[26px] leading-none font-semibold ${stat.value === 0 ? "text-muted-foreground/70" : "text-foreground"}`}
+              style={{ fontVariantNumeric: "tabular-nums" }}
+            >
+              {formatCount(stat.value)}
+            </dd>
+          </div>
+        ))}
+      </dl>
     </ChartCard>
   );
 }

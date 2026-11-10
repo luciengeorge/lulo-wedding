@@ -250,23 +250,33 @@ export function BulkActionsBar({
     }
   }
 
-  if (selected.length === 0 && !busy && !deleteTarget) return null;
+  const none = selected.length === 0;
+  const off = busy || none;
 
   return (
     <>
+      {/* Always on screen, so the actions are visible before anything is ticked
+          and the hint says how to reach them. */}
       <div
+        role="group"
         aria-label="Bulk actions"
         aria-busy={busy}
         className="flex flex-wrap items-center gap-2 rounded-[9px] border border-[#E4E4E7] bg-[#FAFAFA] px-3 py-2 text-[12.5px]"
       >
-        <p className="mr-2 text-[#18181B]" aria-live="polite">
-          {selected.length} selected
-          {hidden > 0 ? <span className="text-[#71717A]"> · {hidden} not shown by these filters</span> : null}
+        <p className={cn("mr-2", none ? "text-[#71717A]" : "text-[#18181B]")} aria-live="polite">
+          {none ? (
+            "Tick guests to act on them"
+          ) : (
+            <>
+              {selected.length} selected
+              {hidden > 0 ? <span className="text-[#71717A]"> · {hidden} not shown by these filters</span> : null}
+            </>
+          )}
         </p>
 
         <DropdownMenu>
-          <DropdownMenuTrigger className={CONTROL_CLASS} disabled={busy}>
-            Invite to <span aria-hidden>▾</span>
+          <DropdownMenuTrigger className={CONTROL_CLASS} disabled={off}>
+            Invite to events <span aria-hidden>▾</span>
           </DropdownMenuTrigger>
           <DropdownMenuContent className={MENU_CLASS}>
             {[true, false].map((invited, index) => (
@@ -297,8 +307,8 @@ export function BulkActionsBar({
         </DropdownMenu>
 
         <DropdownMenu>
-          <DropdownMenuTrigger className={CONTROL_CLASS} disabled={busy}>
-            Set <span aria-hidden>▾</span>
+          <DropdownMenuTrigger className={CONTROL_CLASS} disabled={off}>
+            Change details <span aria-hidden>▾</span>
           </DropdownMenuTrigger>
           <DropdownMenuContent className={MENU_CLASS}>
             {SET_GROUPS.map((group) => (
@@ -328,35 +338,41 @@ export function BulkActionsBar({
           </DropdownMenuContent>
         </DropdownMenu>
 
-        <button type="button" className={CONTROL_CLASS} disabled={busy} onClick={() => onEmail(selected)}>
-          Email…
+        <button type="button" className={CONTROL_CLASS} disabled={off} onClick={() => onEmail(selected)}>
+          Send email
         </button>
 
-        <button type="button" className={CONTROL_CLASS} disabled={busy} onClick={() => void applyMarkWhatsApp()}>
-          Mark invited on WhatsApp
+        <button type="button" className={CONTROL_CLASS} disabled={off} onClick={() => void applyMarkWhatsApp()}>
+          Mark sent on WhatsApp
         </button>
 
-        <button
-          type="button"
-          className={cn(CONTROL_CLASS, DELETE_CLASS)}
-          disabled={busy}
-          onClick={() => setDeleteTarget(selected)}
-        >
-          Delete
-        </button>
         {busy ? (
           <span className="flex items-center gap-1.5 text-[#71717A]" role="status">
             <Spinner /> Applying changes
           </span>
         ) : null}
-        <button
-          type="button"
-          className={cn(CONTROL_CLASS, "ml-auto shrink-0 border-transparent bg-transparent")}
-          disabled={busy}
-          onClick={() => table.resetRowSelection(true)}
-        >
-          Clear selection
-        </button>
+
+        <div className="ml-auto flex shrink-0 items-center gap-2">
+          {none ? null : (
+            <button
+              type="button"
+              className={cn(CONTROL_CLASS, "border-transparent bg-transparent")}
+              disabled={busy}
+              onClick={() => table.resetRowSelection(true)}
+            >
+              Clear selection
+            </button>
+          )}
+          <span aria-hidden className="h-5 w-px bg-[#E4E4E7]" />
+          <button
+            type="button"
+            className={cn(CONTROL_CLASS, DELETE_CLASS)}
+            disabled={off}
+            onClick={() => setDeleteTarget(selected)}
+          >
+            Delete
+          </button>
+        </div>
       </div>
 
       <Dialog

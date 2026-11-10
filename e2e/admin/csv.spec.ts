@@ -45,7 +45,7 @@ test.describe("the guest sheet", () => {
       .filter({ has: page.getByText("Nayla & Paul", { exact: true }) })
       .getByRole("button", { name: "Edit" })
       .click();
-    await expect(page.getByRole("dialog").getByLabel("Phone")).toHaveValue("+961 3 123 456");
+    await expect(page.getByRole("dialog").locator("input[name=contactPhone]")).toHaveValue("+961 3 123 456");
     await page.getByRole("dialog").getByRole("button", { name: "Cancel" }).click();
 
     const download = page.waitForEvent("download");

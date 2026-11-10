@@ -5,6 +5,7 @@ import {
   ADMIN_STATE,
   backend,
   expect,
+  invitedDetail,
   linkFromEmail,
   openAdmin,
   party,
@@ -40,7 +41,7 @@ async function select(page: Page, name: string) {
 }
 
 async function openComposer(page: Page) {
-  await page.getByRole("button", { name: "Email…" }).click();
+  await page.getByRole("button", { name: "Send email" }).click();
   const dialog = page.getByRole("dialog");
   await expect(dialog.getByRole("heading", { name: /^Email \d+ part/ })).toBeVisible();
   return dialog;
@@ -137,7 +138,7 @@ test.describe("emailing invitations", () => {
     await page.keyboard.press("Escape");
     await expect(page.getByRole("region", { name: "Recent sends" })).toContainText("Invitation to 2 parties");
 
-    await openAdmin(page, "/admin/insights");
+    await openAdmin(page, "/admin?view=board");
     await expect(
       (await showLane(page, "Invited")).getByRole("button", { name: "Amal Khalil", exact: true }),
     ).toBeVisible();
@@ -296,10 +297,10 @@ test.describe("emailing reminders", () => {
     expect(await backend.emailCount("chadi@example.com")).toBe(0);
 
     // The reminder counts in the email numbers; it does not make Amal invited by email.
-    await openAdmin(page, "/admin/insights");
-    await expect(page.getByRole("group", { name: "Emails" })).toContainText("1 sent");
-    await expect(page.getByRole("group", { name: "Email first" })).toContainText("0 invited");
-    await expect(page.getByText(/No invitations emailed yet/)).toHaveCount(0);
+    await openAdmin(page, "/admin?view=board");
+    const detail = await invitedDetail(page);
+    await expect(detail).toContainText("0 by email");
+    await expect(detail).toContainText("Emails: 1 sent");
   });
 
   test("can be started from a lane of the pipeline", async ({ page }) => {
@@ -310,7 +311,7 @@ test.describe("emailing reminders", () => {
     await backend.seedSend({ token: AMAL.token, channel: "whatsapp", kind: "invite" });
     await backend.seedSend({ token: "e2e-dana", channel: "whatsapp", kind: "invite" });
 
-    await openAdmin(page, "/admin/insights");
+    await openAdmin(page, "/admin?view=board");
     const lane = await showLane(page, "Invited");
     await lane.getByRole("button", { name: "Remind this lane: Invited" }).click();
 

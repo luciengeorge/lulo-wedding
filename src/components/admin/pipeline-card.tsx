@@ -259,7 +259,7 @@ export function PipelineCard({
           >
             <DropdownMenuItem className="h-8 text-[12.5px]" onClick={() => onMarkInvited(party)}>
               <HugeiconsIcon icon={WhatsappIcon} size={14} strokeWidth={1.75} aria-hidden />
-              Mark invited on WhatsApp
+              Mark sent on WhatsApp
             </DropdownMenuItem>
             <DropdownMenuItem className="h-8 text-[12.5px]" onClick={open}>
               Open timeline

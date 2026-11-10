@@ -1,5 +1,5 @@
 /**
- * Where each party has got to, for the board on /admin/insights.
+ * Where each party has got to, for the board on /admin (Board view).
  *
  * Pure and free of Convex imports, like party-filters.ts: `replyOutcome` runs
  * inside the `admin.pipeline` query, where the guest rows are, and

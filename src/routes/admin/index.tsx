@@ -1,4 +1,4 @@
-import { createFileRoute } from "@tanstack/react-router";
+import { createFileRoute, Link } from "@tanstack/react-router";
 import { useMutation, useQuery } from "convex/react";
 import { useState } from "react";
 import { toast } from "sonner";
@@ -27,15 +27,22 @@ import {
 } from "@/components/admin/guest-list-table";
 import { ImportCsvDialog } from "@/components/admin/import-csv-dialog";
 import { PartyFormDialog } from "@/components/admin/party-form-dialog";
+import { PipelineView } from "@/components/admin/pipeline-view";
 import { RecentSends } from "@/components/admin/recent-sends";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Skeleton } from "@/components/ui/skeleton";
 import { csvFilename, partiesToCsv } from "@/lib/party-csv-export";
 import { LINK_LABEL, WAVE_LABEL, WHO_LONG_LABEL } from "@/lib/party-labels";
+import { AdminSearchSchema, type AdminView } from "@/lib/schemas/admin-search";
 import { cn } from "@/lib/utils";
 
-export const Route = createFileRoute("/admin/")({ component: GuestListPage });
+export const Route = createFileRoute("/admin/")({ validateSearch: AdminSearchSchema, component: GuestListPage });
+
+const VIEWS: readonly { value: AdminView; label: string }[] = [
+  { value: "table", label: "Table" },
+  { value: "board", label: "Board" },
+];
 
 const SITE_URL = import.meta.env.VITE_SITE_URL ?? "";
 
@@ -96,6 +103,7 @@ function setColumnFilterValues(table: GuestListTableInstance, columnId: string, 
 }
 
 function GuestListPage() {
+  const view: AdminView = Route.useSearch().view ?? "table";
   const data = useQuery(api.admin.listParties, {});
 
   const [editing, setEditing] = useState<PartyRow | null>(null);
@@ -143,14 +151,22 @@ function GuestListPage() {
 
   const stats = data?.stats;
   const total = data?.rows.length ?? 0;
-  const matching = table.getFilteredRowModel().rows.length;
+  const filteredRows = table.getFilteredRowModel().rows;
+  const matching = filteredRows.length;
 
   return (
-    <div className="flex flex-1 flex-col">
+    // On a wide screen the board owns the rest of the viewport and each lane
+    // scrolls on its own, so the page is held to the height below the header.
+    <div
+      className={cn(
+        "flex flex-1 flex-col",
+        view === "board" && "md:h-[calc(100dvh-60px)] md:flex-none md:overflow-hidden",
+      )}
+    >
       {/* A scrolling strip on a phone rather than a grid: five stats stacked two
           abreast pushes the table itself below the fold, and the whole point of
           this screen is the table. */}
-      <section className="flex gap-7 overflow-x-auto border-b border-[#E4E4E7] px-4 py-4 sm:gap-10 sm:overflow-x-visible sm:px-6">
+      <section className="flex shrink-0 gap-7 overflow-x-auto border-b border-[#E4E4E7] px-4 py-4 sm:gap-10 sm:overflow-x-visible sm:px-6">
         <Stat label="Parties" value={stats?.parties} hint="invited units" />
         <Stat
           label="Maximum guests"
@@ -172,7 +188,23 @@ function GuestListPage() {
 
       <FunnelStrip funnel={funnel} />
 
-      <section className="flex flex-col gap-2 px-4 py-3.5 sm:flex-row sm:flex-wrap sm:items-center sm:px-6">
+      <section className="flex shrink-0 flex-col gap-2 px-4 py-3.5 sm:flex-row sm:flex-wrap sm:items-center sm:px-6">
+        <nav aria-label="View" className="flex w-fit shrink-0 items-center gap-0.5 rounded-md bg-muted p-0.5">
+          {VIEWS.map((option) => (
+            <Link
+              key={option.value}
+              to="/admin"
+              search={{ view: option.value }}
+              aria-current={view === option.value ? "page" : undefined}
+              className={cn(
+                "flex h-7 items-center rounded-[5px] px-3 text-[12.5px] text-muted-foreground hover:text-foreground",
+                view === option.value && "bg-background font-medium text-foreground shadow-sm",
+              )}
+            >
+              {option.label}
+            </Link>
+          ))}
+        </nav>
         <Input
           type="search"
           value={table.state.globalFilter ?? ""}
@@ -252,6 +284,18 @@ function GuestListPage() {
               </button>
             );
           })}
+          {table.state.columnFilters.length > 0 || (table.state.globalFilter ?? "") !== "" ? (
+            <button
+              type="button"
+              onClick={() => {
+                table.setColumnFilters([]);
+                table.setGlobalFilter("");
+              }}
+              className="h-8 shrink-0 rounded-md px-2 text-[12.5px] text-muted-foreground underline-offset-4 hover:text-foreground hover:underline"
+            >
+              Clear
+            </button>
+          ) : null}
         </div>
 
         <div className="flex flex-wrap items-center gap-2 sm:ml-auto">
@@ -274,40 +318,57 @@ function GuestListPage() {
         </div>
       </section>
 
-      <section className="flex flex-1 flex-col gap-3 px-4 pb-8 sm:px-6">
-        {data === undefined ? (
-          <GuestListTableSkeleton />
-        ) : (
-          <>
-            <RecentSends />
-            <BulkActionsBar
-              table={table}
-              busy={bulkBusy}
-              onBusyChange={setBulkBusy}
-              updateParties={bulkUpdateParties}
-              deleteParties={bulkDeleteParties}
-              markWhatsApp={markInvitedOnWhatsApp}
-              unmarkWhatsApp={unmarkInvitedOnWhatsApp}
-              onEmail={(parties) => {
-                setEmailParties(parties.map((party) => party._id));
-                setEmailOpen(true);
-              }}
-            />
-            <GuestListTable table={table} rowWindow={rowWindow} />
-
-            {/* The count has to say both numbers: the list keeps growing as you
-                scroll, so "showing 60" alone would read as "there are 60". */}
-            <p className="text-[12px] text-[#71717A]" style={{ fontVariantNumeric: "tabular-nums" }}>
-              {matching === 0
-                ? "No parties"
-                : rowWindow.hasMore
-                  ? `Showing ${rowWindow.visibleCount} of ${matching} — scroll for more`
-                  : `Showing all ${matching}`}
-              {matching === total ? "" : ` (filtered from ${total})`}
+      {view === "board" ? (
+        <section aria-label="Board" className="flex min-h-0 flex-1 flex-col">
+          {data === undefined ? null : (
+            <p
+              className="px-4 pb-2 text-[12px] text-muted-foreground sm:px-6"
+              style={{ fontVariantNumeric: "tabular-nums" }}
+            >
+              {matching === total ? `${total} parties` : `${matching} of ${total} parties`}
             </p>
-          </>
-        )}
-      </section>
+          )}
+          {/* Until the parties load, every id looks filtered out and the board would draw empty lanes. */}
+          <PipelineView
+            visibleIds={data === undefined ? undefined : new Set(filteredRows.map((row) => row.original._id))}
+          />
+        </section>
+      ) : (
+        <section className="flex flex-1 flex-col gap-3 px-4 pb-8 sm:px-6">
+          {data === undefined ? (
+            <GuestListTableSkeleton />
+          ) : (
+            <>
+              <RecentSends />
+              <BulkActionsBar
+                table={table}
+                busy={bulkBusy}
+                onBusyChange={setBulkBusy}
+                updateParties={bulkUpdateParties}
+                deleteParties={bulkDeleteParties}
+                markWhatsApp={markInvitedOnWhatsApp}
+                unmarkWhatsApp={unmarkInvitedOnWhatsApp}
+                onEmail={(parties) => {
+                  setEmailParties(parties.map((party) => party._id));
+                  setEmailOpen(true);
+                }}
+              />
+              <GuestListTable table={table} rowWindow={rowWindow} />
+
+              {/* The count has to say both numbers: the list keeps growing as you
+                scroll, so "showing 60" alone would read as "there are 60". */}
+              <p className="text-[12px] text-[#71717A]" style={{ fontVariantNumeric: "tabular-nums" }}>
+                {matching === 0
+                  ? "No parties"
+                  : rowWindow.hasMore
+                    ? `Showing ${rowWindow.visibleCount} of ${matching} — scroll for more`
+                    : `Showing all ${matching}`}
+                {matching === total ? "" : ` (filtered from ${total})`}
+              </p>
+            </>
+          )}
+        </section>
+      )}
 
       <PartyFormDialog party={editing} open={formOpen} onOpenChange={setFormOpen} />
       <ImportCsvDialog open={importOpen} onOpenChange={setImportOpen} />

@@ -75,16 +75,13 @@ test.describe("the dashboard", () => {
     await expect(summaryOf(page, "Funnel by channel")).toHaveText(
       "Email first: 1 invited → 1 seen (100%) → 1 replied (100%).WhatsApp first: 1 invited → 1 seen (100%) → 1 replied (100%).",
     );
-    await expect(summaryOf(page, "Email health per send run")).toContainText(
-      "1 email, 1 delivered, 1 opened, 0 clicked, 0 bounced, 0 failed.",
-    );
     await expect(summaryOf(page, "Visits per day")).toContainText("Direct link 1, Email button 1");
 
     // The dietary list is folded away until asked for.
     await page.getByText("1 guest coming with dietary notes").click();
     await expect(page.getByText("Vegan", { exact: true })).toBeVisible();
 
-    await expect(page.locator(".viz-chart svg[role=img]")).toHaveCount(9);
+    await expect(page.locator(".viz-chart svg[role=img]")).toHaveCount(7);
     for (const svg of await page.locator(".viz-chart svg[role=img]").all()) {
       await expect(svg).toHaveAttribute("aria-label", /.+/);
     }
@@ -96,16 +93,13 @@ test.describe("the dashboard", () => {
 
     await expect(page.getByRole("region", { name: "Replies over time" }).getByText("No replies yet")).toBeVisible();
     await expect(page.getByRole("region", { name: "Visits per day" }).getByText("No visits yet")).toBeVisible();
-    await expect(
-      page.getByRole("region", { name: "Email health per send run" }).getByText("No emails sent yet"),
-    ).toBeVisible();
   });
 
   test("fits a 375px phone without scrolling sideways", async ({ page }) => {
     await scenario();
     await page.setViewportSize({ width: 375, height: 812 });
     await openAdmin(page, "/admin/dashboard");
-    await expect(page.locator(".viz-chart svg[role=img]")).toHaveCount(9);
+    await expect(page.locator(".viz-chart svg[role=img]")).toHaveCount(7);
 
     const overflow = await page.evaluate(
       () => document.documentElement.scrollWidth - document.documentElement.clientWidth,

@@ -22,7 +22,7 @@ function steps(funnel: ChannelFunnel) {
 
 /**
  * Which channel converts, credited to whichever invite reached each party
- * first, the same split as the strip on Insights. Shares are of that channel's
+ * first, counted per channel. Shares are of that channel's
  * invited parties.
  */
 export function ChannelChart({ email, whatsapp }: Props) {

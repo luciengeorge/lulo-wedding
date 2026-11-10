@@ -41,6 +41,7 @@ const base: PartyRow = {
   invitedTo: { preWedding: false, wedding: true, brunch: false },
   visitCount: 0,
   emailBounced: false,
+  guestPhones: [],
 };
 
 /** `invitedTo` follows the overridden flags, as it does for a party with no couple-named guests. */

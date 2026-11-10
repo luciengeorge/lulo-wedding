@@ -71,7 +71,6 @@ describe("DashboardCharts", () => {
     expect(within(card("Replies over time")).getByText("No replies yet")).toBeInTheDocument();
     expect(within(card("Time to reply")).getByText("No replies to an invitation yet")).toBeInTheDocument();
     expect(within(card("Funnel by channel")).getByText("No invitations sent yet")).toBeInTheDocument();
-    expect(within(card("Email health per send run")).getByText("No emails sent yet")).toBeInTheDocument();
     expect(within(card("Visits per day")).getByText("No visits yet")).toBeInTheDocument();
     expect(within(card("Plus-ones & dietary needs")).getByText("No plus-ones offered")).toBeInTheDocument();
     expect(within(card("Reply rate by group")).getByText("No one asked yet")).toBeInTheDocument();
@@ -100,7 +99,6 @@ describe("DashboardCharts", () => {
     expect(card("Funnel by channel").querySelector("[data-slot=chart-summary] li")).toHaveTextContent(
       "Email first: 1 invited → 1 seen (100%) → 1 replied (100%).",
     );
-    expect(within(card("Email health per send run")).getByText(/1 email, 1 delivered, 1 opened/)).toBeInTheDocument();
     expect(within(card("Visits per day")).getByText(/1 visit over 1 day/)).toBeInTheDocument();
     expect(document.querySelectorAll("svg[role='img']").length).toBeGreaterThan(0);
   });

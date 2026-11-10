@@ -135,6 +135,8 @@ const partyRow = v.object({
   visitCount: v.number(),
   emailBounced: v.boolean(),
   invitedVia: v.optional(invitedVia),
+  /** Guests with a phone of their own, for the agency's export. */
+  guestPhones: v.array(v.object({ name: v.string(), phone: v.string() })),
 });
 
 export type PartyRow = {
@@ -145,6 +147,7 @@ export type PartyRow = {
   visitCount: number;
   emailBounced: boolean;
   invitedVia?: "email" | "whatsapp" | "both";
+  guestPhones: { name: string; phone: string }[];
 } & Omit<Doc<"parties">, "_id" | "_creationTime">;
 
 function bucketByParty<T extends { partyId: Id<"parties"> }>(rows: readonly T[]): Map<Id<"parties">, T[]> {
@@ -220,6 +223,9 @@ async function loadParties(ctx: QueryCtx): Promise<PartyRow[]> {
       rsvp: deriveRsvp(party, guests),
       invitedTo: partyInvitedTo(party, guests),
       ...engagement,
+      guestPhones: guests.flatMap((guest) =>
+        guest.phone ? [{ name: `${guest.firstName} ${guest.lastName}`.trim(), phone: guest.phone }] : [],
+      ),
     };
   });
 }
@@ -461,6 +467,15 @@ function guestName(firstName: string, lastName: string) {
   return { firstName: first, lastName: lastName.trim() };
 }
 
+const MAX_PHONE = 100;
+
+/** Trimmed free text. Empty means no phone. */
+function guestPhone(phone: string): string | undefined {
+  const trimmed = phone.trim();
+  if (trimmed.length > MAX_PHONE) throw new ConvexError("That is too long for a phone number");
+  return trimmed === "" ? undefined : trimmed;
+}
+
 function hasAnswers(guest: Doc<"guests">): boolean {
   return guest.preWedding !== "pending" || guest.wedding !== "pending" || guest.brunch !== "pending";
 }
@@ -479,10 +494,11 @@ export const addNamedGuest = mutation({
     partyId: v.id("parties"),
     firstName: v.string(),
     lastName: v.string(),
+    phone: v.optional(v.string()),
     invitedTo: v.optional(eventFlags),
   },
   returns: v.id("guests"),
-  handler: async (ctx, { partyId, firstName, lastName, invitedTo }) => {
+  handler: async (ctx, { partyId, firstName, lastName, phone, invitedTo }) => {
     await requireAdmin(ctx);
 
     const party = await ctx.db.get(partyId);
@@ -498,9 +514,11 @@ export const addNamedGuest = mutation({
       );
     }
 
+    const trimmedPhone = phone === undefined ? undefined : guestPhone(phone);
     return await ctx.db.insert("guests", {
       partyId,
       ...guestName(firstName, lastName),
+      ...(trimmedPhone ? { phone: trimmedPhone } : {}),
       isPlusOne: false,
       preWedding: "pending",
       wedding: "pending",
@@ -511,16 +529,20 @@ export const addNamedGuest = mutation({
   },
 });
 
-/** `invitedTo: null` clears the person's own invite, so the party's flags apply again. */
+/**
+ * `invitedTo: null` clears the person's own invite, so the party's flags apply
+ * again. An empty `phone` clears theirs.
+ */
 export const updateNamedGuest = mutation({
   args: {
     guestId: v.id("guests"),
     firstName: v.optional(v.string()),
     lastName: v.optional(v.string()),
+    phone: v.optional(v.string()),
     invitedTo: v.optional(v.union(eventFlags, v.null())),
   },
   returns: v.null(),
-  handler: async (ctx, { guestId, firstName, lastName, invitedTo }) => {
+  handler: async (ctx, { guestId, firstName, lastName, phone, invitedTo }) => {
     await requireAdmin(ctx);
 
     const guest = await ctx.db.get(guestId);
@@ -529,6 +551,7 @@ export const updateNamedGuest = mutation({
     const name = guestName(firstName ?? guest.firstName, lastName ?? guest.lastName);
     await ctx.db.patch(guestId, {
       ...name,
+      ...(phone === undefined ? {} : { phone: guestPhone(phone) }),
       ...(invitedTo === undefined ? {} : { invitedTo: invitedTo ?? undefined }),
     });
     return null;
@@ -566,6 +589,7 @@ export const namedGuests = query({
       _id: v.id("guests"),
       firstName: v.string(),
       lastName: v.string(),
+      phone: v.optional(v.string()),
       /** Absent when this person follows the party's flags. */
       invitedTo: v.optional(eventFlags),
       hasAnswers: v.boolean(),
@@ -585,6 +609,7 @@ export const namedGuests = query({
         _id: guest._id,
         firstName: guest.firstName,
         lastName: guest.lastName,
+        phone: guest.phone,
         invitedTo: guest.invitedTo,
         hasAnswers: hasAnswers(guest),
       }));
@@ -1020,19 +1045,6 @@ export const dashboard = query({
       unprompted: v.number(),
     }),
     channels: v.object({ email: channelFunnel, whatsapp: channelFunnel }),
-    campaigns: v.array(
-      v.object({
-        kind: campaignKind,
-        createdAt: v.number(),
-        sent: v.number(),
-        delivered: v.number(),
-        opened: v.number(),
-        clicked: v.number(),
-        bounced: v.number(),
-        failed: v.number(),
-        complained: v.number(),
-      }),
-    ),
     visits: v.object({
       days: v.array(
         v.object({

@@ -3,7 +3,6 @@ import type { FunctionReturnType } from "convex/server";
 import type { api } from "@/../convex/_generated/api";
 
 import { ChannelChart } from "./channel-chart";
-import { EmailHealthChart } from "./email-health-chart";
 import { GroupRatesChart } from "./group-rates-chart";
 import { PlusOnesChart } from "./plus-ones-chart";
 import { ProjectionChart } from "./projection-chart";
@@ -14,7 +13,7 @@ import { VisitsChart } from "./visits-chart";
 
 export type DashboardData = FunctionReturnType<typeof api.admin.dashboard>;
 
-/** The nine charts, in the order the couple read them: who is coming, then how the asking is going. */
+/** The eight cards, in the order the couple read them: who is coming, then how the asking is going. */
 export function DashboardCharts({ data }: { data: DashboardData }) {
   return (
     <div className="grid gap-4 lg:grid-cols-2">
@@ -38,7 +37,6 @@ export function DashboardCharts({ data }: { data: DashboardData }) {
         unprompted={data.timeToReply.unprompted}
       />
       <ChannelChart email={data.channels.email} whatsapp={data.channels.whatsapp} />
-      <EmailHealthChart campaigns={data.campaigns} />
       <VisitsChart days={data.visits.days} total={data.visits.total} earlierDays={data.visits.earlierDays} />
     </div>
   );

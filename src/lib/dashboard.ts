@@ -20,8 +20,6 @@ const DAY = 24 * 60 * 60 * 1000;
 export const MIN_REPLIES_FOR_PROJECTION = 10;
 /** Longer than any send run is worth plotting day by day on a phone. */
 export const VISIT_DAYS = 60;
-/** The latest runs; older ones are history nobody is acting on. */
-export const CAMPAIGN_LIMIT = 8;
 /** whereFrom is free text, so the long tail is folded into "Other". */
 export const WHERE_FROM_LIMIT = 7;
 
@@ -112,17 +110,6 @@ export type EventProjection = {
 
 export type GroupRate = { group: string; base: number; replied: number; coming: number };
 export type DayCount = { day: string; coming: number; declined: number };
-export type CampaignHealth = {
-  kind: "invite" | "reminder";
-  createdAt: number;
-  sent: number;
-  delivered: number;
-  opened: number;
-  clicked: number;
-  bounced: number;
-  failed: number;
-  complained: number;
-};
 export type ChannelFunnel = { parties: number; visited: number; replied: number };
 export type VisitDay = { day: string } & Record<VisitSource, number>;
 
@@ -158,7 +145,6 @@ export type Dashboard = {
     unprompted: number;
   };
   channels: { email: ChannelFunnel; whatsapp: ChannelFunnel };
-  campaigns: CampaignHealth[];
   visits: { days: VisitDay[]; total: number; earlierDays: number };
 };
 
@@ -262,7 +248,7 @@ export function buildDashboard(entries: readonly DashboardEntry[], campaigns: re
     email: { parties: 0, visited: 0, replied: 0 },
     whatsapp: { parties: 0, visited: 0, replied: 0 },
   };
-  const campaignSends = new Map<string, DashboardSend[]>();
+  const sentCampaigns = new Set<string>();
   const visitDays = new Map<string, Record<VisitSource, number>>();
   let visitTotal = 0;
 
@@ -339,10 +325,7 @@ export function buildDashboard(entries: readonly DashboardEntry[], campaigns: re
     }
 
     for (const send of sends) {
-      if (!send.campaignId) continue;
-      const rows = campaignSends.get(send.campaignId);
-      if (rows) rows.push(send);
-      else campaignSends.set(send.campaignId, [send]);
+      if (send.campaignId) sentCampaigns.add(send.campaignId);
     }
 
     for (const visit of visits) {
@@ -355,9 +338,9 @@ export function buildDashboard(entries: readonly DashboardEntry[], campaigns: re
   }
 
   // A run stopped before anything went out has no rows left here: no line on the
-  // replies chart, no "0 emails" row, no slot taken from runs that did send.
+  // replies chart.
   const orderedCampaigns = campaigns
-    .filter((campaign) => campaignSends.has(campaign.id))
+    .filter((campaign) => sentCampaigns.has(campaign.id))
     .sort((a, b) => a.createdAt - b.createdAt);
 
   const sortedReplyDays = [...replyDays.keys()].sort();
@@ -426,22 +409,6 @@ export function buildDashboard(entries: readonly DashboardEntry[], campaigns: re
       unprompted,
     },
     channels,
-    campaigns: orderedCampaigns.slice(-CAMPAIGN_LIMIT).map((campaign) => {
-      const rows = campaignSends.get(campaign.id) ?? [];
-      return {
-        kind: campaign.kind,
-        createdAt: campaign.createdAt,
-        sent: rows.length,
-        // An open or a click proves delivery even when the delivered event was lost.
-        delivered: rows.filter((row) => row.deliveredAt !== undefined || row.openCount > 0 || row.clickCount > 0)
-          .length,
-        opened: rows.filter((row) => row.openCount > 0).length,
-        clicked: rows.filter((row) => row.clickCount > 0).length,
-        bounced: rows.filter((row) => row.status === "bounced").length,
-        failed: rows.filter((row) => row.status === "failed").length,
-        complained: rows.filter((row) => row.status === "complained").length,
-      };
-    }),
     visits: { days: visitSeries, total: visitTotal, earlierDays },
   };
 }

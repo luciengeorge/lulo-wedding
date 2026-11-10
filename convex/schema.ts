@@ -87,6 +87,8 @@ export default defineSchema({
     firstName: v.string(),
     lastName: v.string(),
     email: v.optional(v.string()),
+    /** Free text, like the party's `contactPhone`: the agency sends WhatsApp invites by hand. */
+    phone: v.optional(v.string()),
     isPlusOne: v.boolean(),
     dietaryNotes: v.optional(v.string()),
     preWedding: rsvpStatus,

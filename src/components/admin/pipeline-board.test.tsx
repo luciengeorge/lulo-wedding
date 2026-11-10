@@ -210,7 +210,7 @@ describe("PipelineBoard", () => {
     expect(within(lane("Seen")).queryByRole("button", { name: /^Actions for/ })).not.toBeInTheDocument();
 
     fireEvent.click(screen.getAllByRole("button", { name: "Actions for Amal Haddad" })[0]);
-    fireEvent.click(screen.getByRole("menuitem", { name: "Mark invited on WhatsApp" }));
+    fireEvent.click(screen.getByRole("menuitem", { name: "Mark sent on WhatsApp" }));
     expect(onMarkInvited).toHaveBeenCalledWith(expect.objectContaining({ displayName: "Amal" }));
   });
 

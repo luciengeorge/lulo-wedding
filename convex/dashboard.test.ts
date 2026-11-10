@@ -98,7 +98,13 @@ async function scenario(t: T) {
   const inviteRun = await insertCampaign(t, "invite", T0);
   const reminderRun = await insertCampaign(t, "reminder", T0 + 6 * DAY);
 
-  const amal = await insertParty(t, { displayName: "Amal", headCount: 4, plusOneAllowed: true, respondedAt: T0 + 2 * DAY, whereFrom: "Beirut" });
+  const amal = await insertParty(t, {
+    displayName: "Amal",
+    headCount: 4,
+    plusOneAllowed: true,
+    respondedAt: T0 + 2 * DAY,
+    whereFrom: "Beirut",
+  });
   await insertGuest(t, amal, { wedding: "yes", dietaryNotes: "  " });
   await insertGuest(t, amal, {
     firstName: "Nour",
@@ -108,7 +114,13 @@ async function scenario(t: T) {
     invitedTo: { preWedding: false, wedding: true, brunch: true },
     addedByCouple: true,
   });
-  await insertGuest(t, amal, { firstName: "Joe", lastName: "Plus", isPlusOne: true, wedding: "yes", dietaryNotes: "Vegetarian" });
+  await insertGuest(t, amal, {
+    firstName: "Joe",
+    lastName: "Plus",
+    isPlusOne: true,
+    wedding: "yes",
+    dietaryNotes: "Vegetarian",
+  });
   await insertSend(t, amal, {
     campaignId: inviteRun,
     status: "delivered",
@@ -120,7 +132,13 @@ async function scenario(t: T) {
   await insertVisit(t, amal, T0 + DAY, "email");
   await insertVisit(t, amal, T0 + 2 * DAY, "remembered");
 
-  const bassam = await insertParty(t, { displayName: "Bassam", who: "lucien", link: "friends", respondedAt: T0 + 5 * DAY, declined: true });
+  const bassam = await insertParty(t, {
+    displayName: "Bassam",
+    who: "lucien",
+    link: "friends",
+    respondedAt: T0 + 5 * DAY,
+    declined: true,
+  });
   await insertSend(t, bassam, { channel: "whatsapp", sentAt: T0 });
   await insertVisit(t, bassam, T0 + 3 * DAY, "link");
 
@@ -175,43 +193,16 @@ describe("admin.dashboard", () => {
       coming: 1,
       declined: 0,
     });
-    expect(repliesOverTime.days[repliesOverTime.days.length - 1]).toEqual({ day: "2026-09-07", coming: 1, declined: 1 });
+    expect(repliesOverTime.days[repliesOverTime.days.length - 1]).toEqual({
+      day: "2026-09-07",
+      coming: 1,
+      declined: 1,
+    });
     expect(repliesOverTime.campaigns).toEqual([
       { day: "2026-09-01", kind: "invite" },
       { day: "2026-09-07", kind: "reminder" },
     ]);
     expect(repliesOverTime.undatedDeclines).toBe(1);
-  });
-
-  it("reads email health per run, leaving out a message stopped before it went out", async () => {
-    const t = setup();
-    await scenario(t);
-    const { campaigns } = await t.query(api.admin.dashboard, {});
-
-    expect(campaigns).toEqual([
-      {
-        kind: "invite",
-        createdAt: T0,
-        sent: 3,
-        delivered: 1,
-        opened: 1,
-        clicked: 1,
-        bounced: 1,
-        failed: 1,
-        complained: 0,
-      },
-      {
-        kind: "reminder",
-        createdAt: T0 + 6 * DAY,
-        sent: 1,
-        delivered: 1,
-        opened: 0,
-        clicked: 0,
-        bounced: 0,
-        failed: 0,
-        complained: 0,
-      },
-    ]);
   });
 
   it("matches admin.funnel's split by first channel, and times replies from the first invite", async () => {
@@ -247,7 +238,13 @@ describe("admin.dashboard", () => {
       "2026-09-07",
     ]);
     expect(visits.days[0]).toEqual({ day: "2026-09-02", link: 0, email: 1, lookup: 0, remembered: 0 });
-    expect(visits.days[visits.days.length - 1]).toEqual({ day: "2026-09-07", link: 0, email: 0, lookup: 1, remembered: 0 });
+    expect(visits.days[visits.days.length - 1]).toEqual({
+      day: "2026-09-07",
+      link: 0,
+      email: 0,
+      lookup: 1,
+      remembered: 0,
+    });
 
     // Everyone was asked: Chadi by answering on the sheet.
     expect(groups.link).toEqual([

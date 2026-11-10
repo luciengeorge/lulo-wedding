@@ -200,7 +200,6 @@ describe("buildDashboard groups and timing", () => {
         { id: "stopped-run", kind: "reminder", createdAt: T0 + DAY },
       ],
     );
-    expect(dashboard.campaigns).toHaveLength(1);
     expect(dashboard.repliesOverTime.campaigns.map((run) => run.kind)).toEqual(["invite"]);
   });
 });
