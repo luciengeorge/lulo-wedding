@@ -116,7 +116,7 @@ const names = new Intl.ListFormat("en-GB", { type: "conjunction" });
 
 /** Where each event sits around the wedding, which is how the planner wants guests to read the weekend. */
 const DAY_LABEL: Record<ScheduleEvent["key"], string> = {
-  preWedding: "The day before",
+  preWedding: "Two days before",
   wedding: "The day",
   brunch: "The day after",
 };

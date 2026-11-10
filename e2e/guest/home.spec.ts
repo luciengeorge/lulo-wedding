@@ -118,7 +118,7 @@ test.describe("a party whose invitation this device has opened", () => {
     await visit(page, "/");
 
     const section = schedule(page);
-    await expect(section.getByRole("listitem").nth(0)).toContainText("The day before");
+    await expect(section.getByRole("listitem").nth(0)).toContainText("Two days before");
     await expect(section.getByRole("listitem").nth(1)).toContainText("The day");
     await expect(section.getByRole("listitem").nth(2)).toContainText("The day after");
     await expect(section.getByText("Shuttle from the InterContinental Mzaar")).toBeVisible();
