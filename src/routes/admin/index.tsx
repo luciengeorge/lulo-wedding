@@ -328,7 +328,10 @@ function GuestListPage() {
               {matching === total ? `${total} parties` : `${matching} of ${total} parties`}
             </p>
           )}
-          <PipelineView visibleIds={new Set(filteredRows.map((row) => row.original._id))} />
+          {/* Until the parties load, every id looks filtered out and the board would draw empty lanes. */}
+          <PipelineView
+            visibleIds={data === undefined ? undefined : new Set(filteredRows.map((row) => row.original._id))}
+          />
         </section>
       ) : (
         <section className="flex flex-1 flex-col gap-3 px-4 pb-8 sm:px-6">

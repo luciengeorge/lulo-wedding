@@ -1,9 +1,10 @@
 import type { FunctionReturnType } from "convex/server";
 
+import { Popover } from "@base-ui/react/popover";
+
 import type { api } from "@/../convex/_generated/api";
 
 import { Skeleton } from "@/components/ui/skeleton";
-import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 
 export type Funnel = FunctionReturnType<typeof api.admin.funnel>;
 
@@ -62,16 +63,21 @@ function Step({
   return (
     <div role="group" aria-label={label} className="flex shrink-0 items-baseline gap-1.5 text-[12px] whitespace-nowrap">
       {detail.length > 0 ? (
-        <Tooltip>
-          <TooltipTrigger className="cursor-help rounded-sm text-muted-foreground outline-none focus-visible:ring-2 focus-visible:ring-ring/50">
+        // A popover, not a tooltip: it opens on a tap, so the email counts are within reach on a phone.
+        <Popover.Root>
+          <Popover.Trigger className="cursor-pointer rounded-sm text-muted-foreground outline-none focus-visible:ring-2 focus-visible:ring-ring/50">
             {text}
-          </TooltipTrigger>
-          <TooltipContent side="bottom" className="flex-col items-start gap-0.5">
-            {detail.map((line) => (
-              <span key={line}>{line}</span>
-            ))}
-          </TooltipContent>
-        </Tooltip>
+          </Popover.Trigger>
+          <Popover.Portal>
+            <Popover.Positioner side="bottom" sideOffset={4} className="isolate z-50">
+              <Popover.Popup className="flex flex-col items-start gap-0.5 rounded-md bg-foreground px-3 py-1.5 text-xs text-background">
+                {detail.map((line) => (
+                  <span key={line}>{line}</span>
+                ))}
+              </Popover.Popup>
+            </Popover.Positioner>
+          </Popover.Portal>
+        </Popover.Root>
       ) : (
         <span className="text-muted-foreground">{text}</span>
       )}

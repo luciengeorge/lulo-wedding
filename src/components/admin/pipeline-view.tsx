@@ -61,7 +61,7 @@ const stampWhatsApp: OptimisticUpdate<FunctionArgs<typeof api.admin.markInvitedO
  * The guest list as a pipeline board. Which parties show is decided by the
  * page's filters, the same ones the table uses, passed in as ids.
  */
-export function PipelineView({ visibleIds }: { visibleIds: ReadonlySet<string> }) {
+export function PipelineView({ visibleIds }: { visibleIds: ReadonlySet<string> | undefined }) {
   const rows = useQuery(api.admin.pipeline, {});
   const now = useNow();
   const wide = useWide();
@@ -73,7 +73,7 @@ export function PipelineView({ visibleIds }: { visibleIds: ReadonlySet<string> }
   const unmarkInvited = useMutation(api.admin.unmarkInvitedOnWhatsApp);
 
   const visible: BoardParty[] = (rows ?? [])
-    .filter((row) => visibleIds.has(row.partyId))
+    .filter((row) => visibleIds?.has(row.partyId))
     .map((row) => ({ ...row, ...derivePipeline(row, now) }));
 
   async function undo(party: BoardParty) {
@@ -104,7 +104,7 @@ export function PipelineView({ visibleIds }: { visibleIds: ReadonlySet<string> }
 
   return (
     <>
-      {rows === undefined ? (
+      {rows === undefined || visibleIds === undefined ? (
         <PipelineBoardSkeleton />
       ) : (
         <PipelineBoard
