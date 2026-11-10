@@ -358,6 +358,9 @@ export async function invitedDetail(page: Page) {
  * one at a time behind a row of stage buttons, so it presses the right one first.
  */
 export async function showLane(page: Page, lane: string) {
+  // The skeleton has no stage buttons, so checking for them before the board has
+  // loaded would skip the press and leave a phone on the wrong lane.
+  await expect(page.getByRole("region", { name: "Pipeline board" })).toBeVisible();
   const stages = page.getByRole("group", { name: "Stage" });
   if (await stages.isVisible()) {
     await stages.getByRole("button", { name: new RegExp(`^${lane} \\d+$`) }).click();
