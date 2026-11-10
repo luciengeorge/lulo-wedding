@@ -34,10 +34,10 @@ const logger = createLogger("rsvp.visit");
 /** Long enough for the 22-character tokens, short enough that a junk value is cheap to reject. */
 const TokenSchema = z.string().trim().min(1).max(64);
 
-/** How the guest reached the page, when the route knows better than "they had the link". */
 /** `next=schedule`: they came from the home page to see their schedule, so send them back there, not to the form. */
 export const NextSchema = z.literal("schedule").optional().catch(undefined);
 
+/** How the guest reached the page, when the route knows better than "they had the link". */
 export const VisitViaSchema = z.enum(["lookup", "remembered"]);
 
 const GetRsvpSchema = z.object({

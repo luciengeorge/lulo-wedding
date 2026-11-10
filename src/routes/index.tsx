@@ -12,7 +12,8 @@ import { getHomeContent } from "@/lib/functions/home-content";
 import { canonical, seo } from "@/lib/seo";
 
 // `as` is the couple's "view as this party" preview. Junk is dropped, not an error page.
-const HomeSearchSchema = z.object({ as: z.string().optional().catch(undefined) });
+// Same cap as getHomeContent, so a long value is dropped here instead of failing the loader.
+const HomeSearchSchema = z.object({ as: z.string().max(64).optional().catch(undefined) });
 
 export const Route = createFileRoute("/")({
   validateSearch: HomeSearchSchema,

@@ -51,10 +51,13 @@ test.describe("someone who came in with the password", () => {
   });
 
   test("cannot borrow the couple's preview", async ({ page }) => {
-    await visit(page, "/?as=anything");
+    // Junk of any length is the ordinary page, never an error.
+    for (const as of ["anything", "x".repeat(65)]) {
+      await visit(page, `/?as=${as}`);
 
-    await expect(schedule(page).getByRole("heading", { name: "The day" })).toBeVisible();
-    await expect(page.getByText("Viewing as")).toHaveCount(0);
+      await expect(schedule(page).getByRole("heading", { name: "The day" })).toBeVisible();
+      await expect(page.getByText("Viewing as")).toHaveCount(0);
+    }
   });
 
   test("can jump to a section from the bar", async ({ page }) => {
