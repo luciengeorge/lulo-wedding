@@ -1,6 +1,16 @@
 import type { Page } from "@playwright/test";
 
-import { ADMIN_STATE, backend, expect, openAdmin, party, test } from "../fixtures";
+import {
+  ADMIN_STATE,
+  backend,
+  enterPassword,
+  expect,
+  GUEST_PASSWORD,
+  openAdmin,
+  party,
+  test,
+  visit,
+} from "../fixtures";
 
 test.use({ storageState: ADMIN_STATE });
 
@@ -46,5 +56,28 @@ test.describe("the guest list", () => {
     await expect(row(page, "Nadim").getByText("No events")).toBeVisible();
     await expect(row(page, "Rania").getByText("No events")).toHaveCount(0);
     await expect(row(page, "Rania").getByTitle("Wedding")).toBeVisible();
+  });
+
+  test("previews the home page as a party sees it", async ({ page }) => {
+    await backend.seed([
+      party({ token: "e2e-preview", displayName: "Hala", surname: "Nassar", invitedToBrunch: true }),
+    ]);
+    // The preview is the guest page, so it sits behind the guest gate like any other visit.
+    await visit(page, "/enter");
+    await enterPassword(page, GUEST_PASSWORD);
+    await expect(page).toHaveURL("/");
+    await openAdmin(page);
+
+    const preview = row(page, "Hala").getByRole("link", { name: "Preview" });
+    await expect(preview).toHaveAttribute("target", "_blank");
+    await visit(page, (await preview.getAttribute("href"))!);
+
+    await expect(page.getByText("Viewing as Hala")).toBeVisible();
+    const schedule = page.getByRole("region", { name: "The weekend" });
+    await expect(schedule.getByRole("heading", { name: /Brunch/ })).toBeVisible();
+    await expect(schedule.getByRole("heading", { name: /Pre-wedding/ })).toHaveCount(0);
+
+    await page.getByRole("link", { name: "EXIT" }).click();
+    await expect(page.getByText("Viewing as")).toHaveCount(0);
   });
 });

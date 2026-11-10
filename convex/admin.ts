@@ -9,7 +9,7 @@ import { buildImportKey } from "../src/lib/guest-csv";
 import { MAX_BULK } from "../src/lib/party-bulk";
 import { deriveRsvp, type RsvpState } from "../src/lib/party-filters";
 import { replyOutcome } from "../src/lib/pipeline";
-import { type EventFlags, partyInvitedTo } from "../src/lib/rsvp-rules";
+import { effectiveInvite, type EventFlags, partyFlags, partyInvitedTo } from "../src/lib/rsvp-rules";
 import { internal } from "./_generated/api";
 import { mutation, query } from "./_generated/server";
 import {
@@ -588,6 +588,48 @@ export const namedGuests = query({
         invitedTo: guest.invitedTo,
         hasAnswers: hasAnswers(guest),
       }));
+  },
+});
+
+/**
+ * What the home page needs to show one party its own schedule, for the couple's
+ * "Preview" link. The same facts `rsvp.getByToken` gives a guest, without the
+ * token, so previewing a party never puts its link in a URL or a log.
+ *
+ * Takes a plain string: it arrives off a URL, and a junk id is "no such party",
+ * not a validation error.
+ */
+export const previewInvitation = query({
+  args: { partyId: v.string() },
+  returns: v.union(
+    v.null(),
+    v.object({
+      displayName: v.string(),
+      headCount: v.number(),
+      invitedTo: eventFlags,
+      defaultInvitedTo: eventFlags,
+      guests: v.array(v.object({ firstName: v.string(), isPlusOne: v.boolean(), invitedTo: eventFlags })),
+    }),
+  ),
+  handler: async (ctx, { partyId }) => {
+    await requireAdmin(ctx);
+
+    const id = ctx.db.normalizeId("parties", partyId);
+    const party = id ? await ctx.db.get(id) : null;
+    if (!party) return null;
+
+    const guests = await guestsOf(ctx, party._id);
+    return {
+      displayName: party.displayName,
+      headCount: party.headCount,
+      invitedTo: partyInvitedTo(party, guests),
+      defaultInvitedTo: partyFlags(party),
+      guests: guests.map((guest) => ({
+        firstName: guest.firstName,
+        isPlusOne: guest.isPlusOne,
+        invitedTo: effectiveInvite(party, guest),
+      })),
+    };
   },
 });
 

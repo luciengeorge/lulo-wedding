@@ -316,7 +316,7 @@ const columns = helper.columns([
   helper.display({
     id: "actions",
     header: "Actions",
-    meta: { width: 114, align: "right" },
+    meta: { width: 176, align: "right" },
     cell: ({ row, table }) => <RowActions party={row.original} meta={table.options.meta} />,
   }),
 ]);
@@ -393,6 +393,15 @@ function RowActions({ party, meta }: { party: PartyRow; meta: GuestListTableMeta
 
   return (
     <div className="flex items-center justify-end gap-2.5">
+      {/* The home page as this party sees it. By id, not token, so the preview never puts their link in a URL. */}
+      <a
+        href={`/?as=${party._id}`}
+        target="_blank"
+        rel="noopener"
+        className="text-[12.5px] text-[#52525B] underline-offset-4 hover:underline"
+      >
+        Preview
+      </a>
       <button
         type="button"
         onClick={() => void handleCopyLink()}

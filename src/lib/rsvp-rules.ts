@@ -84,6 +84,28 @@ export function partyInvitedTo(party: InviteFlags, guests: readonly { invitedTo?
 }
 
 /**
+ * Who in a party an event is for, when that is not everyone, so the schedule can
+ * say "For Sam and Alex" rather than let the other three plan on going.
+ *
+ * Empty when the whole party is invited, and also when someone invited has no
+ * name yet (a blank card, or a seat with no row): naming only some of them would
+ * read as if the unnamed seat were left out.
+ */
+export function invitedNames(
+  party: { headCount: number; defaultInvitedTo: EventFlags },
+  guests: readonly { firstName: string; isPlusOne: boolean; invitedTo: EventFlags }[],
+  event: RsvpEventKey,
+): string[] {
+  if (guests.every((guest) => guest.invitedTo[event])) return [];
+
+  const seatsWithoutRow = party.headCount - guests.filter((guest) => !guest.isPlusOne).length;
+  if (seatsWithoutRow > 0 && party.defaultInvitedTo[event]) return [];
+
+  const names = guests.filter((guest) => guest.invitedTo[event]).map((guest) => guest.firstName.trim());
+  return names.every(Boolean) ? names : [];
+}
+
+/**
  * The stored status for one event.
  *
  * An event the party was never invited to stays `pending` rather than becoming
