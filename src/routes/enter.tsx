@@ -90,12 +90,12 @@ function GatePage() {
     setPending(false);
   }
 
-  async function choose(token: string) {
+  async function choose(choice: number) {
     if (pending) return;
     setPending(true);
     setError(null);
     try {
-      if (await enterAs({ data: { token } })) {
+      if (await enterAs({ data: { choice } })) {
         await router.navigate({ to: redirectTo ?? "/" });
         return;
       }
@@ -199,11 +199,11 @@ function GatePage() {
               </p>
               <ul className="flex flex-col border-y border-[#E7D9C4] text-left">
                 {matches.map((match) => (
-                  <li key={match.token} className="border-b border-[#E7D9C4] last:border-b-0">
+                  <li key={match.choice} className="border-b border-[#E7D9C4] last:border-b-0">
                     <button
                       type="button"
                       disabled={pending}
-                      onClick={() => void choose(match.token)}
+                      onClick={() => void choose(match.choice)}
                       className="flex min-h-14 w-full items-center justify-between gap-3 px-1 py-3 text-left font-display text-[18px] text-bark transition-colors hover:text-ink focus-visible:text-ink focus-visible:outline-none disabled:opacity-60"
                     >
                       <span>{match.displayName}</span>

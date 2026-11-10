@@ -19,6 +19,12 @@ interface GuestSessionData {
    * gets the name search. "Not you?" clears it, for a shared phone.
    */
   token?: string;
+  /**
+   * The tokens the last name search found, in the order it listed them. The
+   * browser only ever sees the names and a position in this list, so a search
+   * never hands out a party's link.
+   */
+  matches?: string[];
 }
 
 function getGuestSessionPassword() {

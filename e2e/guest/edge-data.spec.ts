@@ -145,9 +145,9 @@ test.describe("email addresses", () => {
     await backend.seedGuests(TOKEN, [{ firstName: "Rae", lastName: "Haddad", wedding: "yes" }]);
     await visit(page, `/rsvp/${TOKEN}`);
     await page.getByRole("button", { name: "CHANGE OUR REPLY" }).click();
-    await expect(emailField(page)).toHaveValue("rae@example.com");
+    // Never sent to the page: anyone who can type a guest's name can open it.
+    await expect(emailField(page)).toHaveValue("");
 
-    await emailField(page).fill("");
     await sendReply(page);
     await expect(page.getByText("Thank you")).toBeVisible();
 

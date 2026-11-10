@@ -138,6 +138,22 @@ test.describe("a party of more than one", () => {
     ]);
     expect((await backend.activity(TOKEN)).sends).toEqual([]);
   });
+
+  test("never shows the address on file, and sends nothing when the field is left blank", async ({ page }) => {
+    await backend.seed([party({ token: TOKEN, headCount: 1, contactEmail: "rae@example.com" })]);
+    await visit(page, `/rsvp/${TOKEN}`);
+
+    await expect(page.getByLabel("Email me a copy (optional)")).toHaveValue("");
+    expect(await page.content()).not.toContain("rae@example.com");
+
+    await fillGuest(page, 0, { first: "Rae", last: "Haddad", days: ["Wedding"] });
+    await comingButton(page).click();
+
+    await expect(page.getByText("Thank you")).toBeVisible();
+    await expect(page.getByText(/A copy is on its way/)).toHaveCount(0);
+    expect((await backend.replyFor(TOKEN))?.contactEmail).toBe("rae@example.com");
+    expect((await backend.activity(TOKEN)).sends).toEqual([]);
+  });
 });
 
 test.describe("plus ones", () => {

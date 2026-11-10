@@ -129,17 +129,26 @@ export const submitRsvp = createServerFn({ method: "POST" })
 
 /**
  * Finds a party by name. This is how guests get in, so anyone may ask; Convex
- * holds every caller to a per-IP and a global limit, and a match hands back only
- * the party's name and its token.
+ * holds every caller to a per-IP and a global limit. The tokens stay on the
+ * server, in this device's sealed cookie: the page gets the names and a `choice`
+ * to pass to `enterAs`, never a link it could keep or share.
  */
 export const lookupParty = createServerFn({ method: "POST" })
   .validator(z.object({ query: z.string().trim().min(1).max(200) }))
   .handler(async ({ data }) => {
     return Sentry.startSpan({ name: "lookupParty" }, async () => {
-      return await fetchAuthMutation(api.rsvp.lookupByName, {
+      const result = await fetchAuthMutation(api.rsvp.lookupByName, {
         query: data.query,
         clientKey: getClientKey(),
         serverSecret: getAppServerSecret(),
       });
+      if (result.kind !== "matches") return result;
+
+      const session = await useGuestSession();
+      await session.update({ matches: result.matches.map((match) => match.token) });
+      return {
+        kind: "matches" as const,
+        matches: result.matches.map((match, choice) => ({ displayName: match.displayName, choice })),
+      };
     });
   });

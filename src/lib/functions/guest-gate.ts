@@ -18,20 +18,22 @@ const TokenSchema = z.object({ token: z.string().trim().min(1).max(64) });
 
 /**
  * Lets a guest in as the party they picked from the name search, and counts it
- * as that party seeing their invitation.
+ * as that party seeing their invitation. `choice` is the party's place in that
+ * search's list; the token itself was kept in the cookie and never sent out.
  */
 export const enterAs = createServerFn({ method: "POST" })
-  .validator(TokenSchema)
+  .validator(z.object({ choice: z.number().int().min(0).max(9) }))
   .handler(async ({ data }) => {
     return Sentry.startSpan({ name: "enterAs" }, async () => {
-      if (!(await fetchAuthQuery(api.rsvp.tokenIsValid, { token: data.token }))) return false;
-
       const session = await useGuestSession();
-      await session.update({ token: data.token, at: Date.now() });
+      const token = session.data.matches?.[data.choice];
+      if (!token || !(await fetchAuthQuery(api.rsvp.tokenIsValid, { token }))) return false;
+
+      await session.update({ token, at: Date.now(), matches: undefined });
 
       // Stats, not the page: a visit that could not be counted must not keep anyone out.
       try {
-        await fetchAuthMutation(api.rsvp.recordVisit, { token: data.token, source: "lookup" });
+        await fetchAuthMutation(api.rsvp.recordVisit, { token, source: "lookup" });
       } catch (error) {
         logger.warn("could not record visit", { error });
       }

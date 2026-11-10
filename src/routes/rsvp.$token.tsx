@@ -110,7 +110,8 @@ function RsvpFlow({ token, data }: { token: string; data: RsvpData }) {
   // A party who already answered opens on what they said, not on the form again.
   // `earlyDecline` came from the spreadsheet, so treat it as an answer too.
   const [mode, setMode] = useState<Mode | null>(hasReplied || party.earlyDecline ? null : "reply");
-  const [email, setEmail] = useState(party.contactEmail ?? "");
+  // Starts empty: the address on file is never sent to the page (see guestFacingParty).
+  const [email, setEmail] = useState("");
   const contactEmail = { value: email, set: setEmail };
 
   // Nothing to answer yet: the couple have not chosen this party's events.
@@ -118,7 +119,7 @@ function RsvpFlow({ token, data }: { token: string; data: RsvpData }) {
   if (deadlinePassed) return <ClosedSummary data={data} />;
   // Both ways out of the confirmation lead to the guest list: "change our reply"
   // and, for a party that declined, "actually, we can come".
-  if (mode === null) return <Confirmed data={data} onChange={() => setMode("reply")} />;
+  if (mode === null) return <Confirmed data={data} emailedTo={email.trim()} onChange={() => setMode("reply")} />;
   if (mode === "decline") {
     return (
       <DeclineForm
@@ -513,7 +514,7 @@ function formatNames(names: string[]): string {
   return `${names.slice(0, -1).join(", ")} and ${names[names.length - 1]}`;
 }
 
-function Confirmed({ data, onChange }: { data: RsvpData; onChange: () => void }) {
+function Confirmed({ data, emailedTo, onChange }: { data: RsvpData; emailedTo: string; onChange: () => void }) {
   const { party, guests } = data;
   // The sheet's early "no" stands only until the party answers online.
   const declined = party.respondedAt === undefined ? party.earlyDecline : party.declined === true;
@@ -531,9 +532,9 @@ function Confirmed({ data, onChange }: { data: RsvpData; onChange: () => void })
       {declined ? null : <ReplySummary data={data} />}
 
       <div className="mt-4 flex flex-col gap-2">
-        {party.contactEmail ? (
+        {emailedTo ? (
           <p className="font-display text-[14px] leading-5 text-faded">
-            A copy is on its way to {party.contactEmail}. Nothing is final; you can change any of this.
+            A copy is on its way to {emailedTo}. Nothing is final; you can change any of this.
           </p>
         ) : null}
 

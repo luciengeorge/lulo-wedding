@@ -86,7 +86,7 @@ test.describe("a party opening its link", () => {
     await expect(seatCards(page)).toHaveCount(0);
     await expect(chip(page, "Cherif", "wedding")).toBeChecked();
     await expect(card(page, "Rae").getByLabel("Rae can't make it")).not.toBeChecked();
-    await expect(emailField(page)).toHaveValue("rae@example.com");
+    await expect(emailField(page)).toHaveValue("");
   });
 
   test("replied for 2 of 5 seats: is told so, and can add the rest later", async ({ page }) => {

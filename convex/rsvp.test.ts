@@ -153,7 +153,6 @@ describe("getByToken", () => {
     expect(result).not.toBeNull();
     expect(Object.keys(result!.party).sort()).toEqual(
       [
-        "contactEmail",
         "declined",
         "defaultInvitedTo",
         "displayName",
@@ -167,6 +166,14 @@ describe("getByToken", () => {
         "respondedAt",
       ].sort(),
     );
+  });
+
+  it("sends no email address, the party's or a guest's, to whoever opened the page", async () => {
+    const stored = storedGuest("g1", { email: "nour@example.com" });
+    const { ctx } = harness([{ ...party, contactEmail: "rae@example.com" }], [stored]);
+    const serialised = JSON.stringify(await getByToken._handler(ctx, { token: TOKEN }));
+    expect(serialised).not.toContain("rae@example.com");
+    expect(serialised).not.toContain("nour@example.com");
   });
 
   it("does not hand out the token, the import key or the admin edit stamp", async () => {

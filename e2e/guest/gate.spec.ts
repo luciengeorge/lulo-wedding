@@ -27,6 +27,21 @@ test.describe("a guest this device does not know", () => {
     expect((await backend.activity(TOKEN)).visits).toEqual([{ source: "lookup" }]);
   });
 
+  test("never receives a party's link from the search, only its name", async ({ page }) => {
+    const bodies: string[] = [];
+    page.on("response", async (response) => {
+      if (response.request().method() === "POST") bodies.push(await response.text().catch(() => ""));
+    });
+
+    await visit(page, "/enter");
+    await searchName(page, "Rae Haddad");
+    await expect(page.getByText("Is this you?")).toBeVisible();
+
+    expect(bodies.join("\n")).toContain("Rae & Cherif");
+    expect(bodies.join("\n")).not.toContain(TOKEN);
+    expect(await page.content()).not.toContain(TOKEN);
+  });
+
   test("is told kindly when the name is not on the list, and who to ask", async ({ page }) => {
     await visit(page, "/enter");
     await searchName(page, "Zeina Nobody");

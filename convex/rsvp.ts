@@ -41,6 +41,10 @@ const eventFlags = v.object({ preWedding: v.boolean(), wedding: v.boolean(), bru
  * moment someone opened their invitation, and a field added to the schema later
  * would start leaking silently.
  *
+ * No email addresses either, the party's or any guest's. Anyone who can type a
+ * guest's name can open this, and the form never shows them; a guest who wants a
+ * copy types an address in.
+ *
  * The three `invitedTo*` flags are the party's effective invite: its own flags,
  * or any one person the couple invited further. `defaultInvitedTo` is what a seat
  * the couple did not single out is asked about, which is what a new card gets.
@@ -53,7 +57,6 @@ const guestFacingParty = v.object({
   invitedToWedding: v.boolean(),
   invitedToBrunch: v.boolean(),
   defaultInvitedTo: eventFlags,
-  contactEmail: v.optional(v.string()),
   guestNote: v.optional(v.string()),
   respondedAt: v.optional(v.number()),
   declined: v.optional(v.boolean()),
@@ -64,7 +67,6 @@ const guestFacingGuest = v.object({
   _id: v.id("guests"),
   firstName: v.string(),
   lastName: v.string(),
-  email: v.optional(v.string()),
   isPlusOne: v.boolean(),
   dietaryNotes: v.optional(v.string()),
   preWedding: rsvpStatus,
@@ -141,7 +143,6 @@ export const getByToken = query({
         invitedToWedding: invited.wedding,
         invitedToBrunch: invited.brunch,
         defaultInvitedTo: partyFlags(party),
-        contactEmail: party.contactEmail,
         guestNote: party.guestNote,
         respondedAt: party.respondedAt,
         declined: party.declined,
@@ -151,7 +152,6 @@ export const getByToken = query({
         _id: guest._id,
         firstName: guest.firstName,
         lastName: guest.lastName,
-        email: guest.email,
         isPlusOne: guest.isPlusOne,
         dietaryNotes: guest.dietaryNotes,
         preWedding: guest.preWedding,
