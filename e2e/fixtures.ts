@@ -344,10 +344,13 @@ export function funnelStep(page: Page, label: "Invited" | "Seen" | "Replied") {
   return page.getByRole("region", { name: "Invitation funnel" }).getByRole("group", { name: label, exact: true });
 }
 
-/** The channel and email numbers behind Invited, shown on hover. */
+/** The channel and email numbers behind Invited, opened by a click. Left open if it already is, since a second click closes it. */
 export async function invitedDetail(page: Page) {
-  await funnelStep(page, "Invited").locator("[data-slot=tooltip-trigger]").hover();
-  return page.locator("[data-slot=tooltip-content]");
+  const detail = page.locator("[data-slot=invited-detail]");
+  if (!(await detail.isVisible())) {
+    await funnelStep(page, "Invited").locator("[data-slot=invited-detail-trigger]").click();
+  }
+  return detail;
 }
 
 /**

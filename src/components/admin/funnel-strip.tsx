@@ -65,12 +65,18 @@ function Step({
       {detail.length > 0 ? (
         // A popover, not a tooltip: it opens on a tap, so the email counts are within reach on a phone.
         <Popover.Root>
-          <Popover.Trigger className="cursor-pointer rounded-sm text-muted-foreground outline-none focus-visible:ring-2 focus-visible:ring-ring/50">
+          <Popover.Trigger
+            data-slot="invited-detail-trigger"
+            className="cursor-pointer rounded-sm text-muted-foreground outline-none focus-visible:ring-2 focus-visible:ring-ring/50"
+          >
             {text}
           </Popover.Trigger>
           <Popover.Portal>
             <Popover.Positioner side="bottom" sideOffset={4} className="isolate z-50">
-              <Popover.Popup className="flex flex-col items-start gap-0.5 rounded-md bg-foreground px-3 py-1.5 text-xs text-background">
+              <Popover.Popup
+                data-slot="invited-detail"
+                className="flex flex-col items-start gap-0.5 rounded-md bg-foreground px-3 py-1.5 text-xs text-background"
+              >
                 {detail.map((line) => (
                   <span key={line}>{line}</span>
                 ))}
