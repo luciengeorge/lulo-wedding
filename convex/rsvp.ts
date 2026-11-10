@@ -1,8 +1,8 @@
 import { ConvexError, v } from "convex/values";
 
+import type { EventFlags, ReplyGuest, RsvpEventKey, RsvpStatus } from "../src/lib/rsvp-rules";
 import type { Doc, Id } from "./_generated/dataModel";
 import type { QueryCtx } from "./_generated/server";
-import type { EventFlags, ReplyGuest, RsvpEventKey, RsvpStatus } from "../src/lib/rsvp-rules";
 
 import { matches, nameKeys } from "../src/lib/name-search";
 import {
@@ -80,7 +80,7 @@ const guestFacingGuest = v.object({
  * The cutoff, read from the Convex deployment's env so it can move without a deploy.
  *
  * Absent means no deadline, which is the current truth: the couple have not set
- * one yet. Failing open is right here, unlike GUEST_PASSWORD where an unset value
+ * one yet. Failing open is right here, unlike APP_SERVER_SECRET where an unset value
  * has to fail closed. The worst case is a late reply, not an open door.
  */
 function deadlinePassed(): boolean {
@@ -245,7 +245,8 @@ function guestFieldsFor(
   const fields: GuestFields = {
     firstName: guest.firstName.trim(),
     lastName: guest.lastName.trim(),
-    email: trimmed(guest.email),
+    // The form no longer asks for one, so a reply keeps whatever was given before.
+    email: trimmed(guest.email) ?? previous?.email,
     isPlusOne: guest.isPlusOne,
     dietaryNotes: trimmed(guest.dietaryNotes),
     preWedding: "pending",
@@ -288,7 +289,8 @@ export const submit = mutation({
   args: {
     token: v.string(),
     declined: v.boolean(),
-    contactEmail: v.string(),
+    /** Optional: only for a guest who wants their reply emailed to them. */
+    contactEmail: v.optional(v.string()),
     guestNote: v.optional(v.string()),
     guests: v.array(submittedGuest),
   },
@@ -319,7 +321,8 @@ export const submit = mutation({
     }
 
     const now = Date.now();
-    const email = contactEmail.trim();
+    // Left blank, the address already on file stays, so no field is cleared by omission.
+    const email = trimmed(contactEmail);
 
     if (declined) {
       // The names stay. "Actually, we can come" then restores the reply instead of
@@ -332,7 +335,7 @@ export const submit = mutation({
         declined: true,
         respondedAt: now,
         firstRespondedAt: party.firstRespondedAt ?? now,
-        contactEmail: email,
+        ...(email ? { contactEmail: email } : {}),
         guestNote: trimmed(guestNote),
       });
 
@@ -377,10 +380,13 @@ export const submit = mutation({
     }
 
     await ctx.db.patch(party._id, {
-      declined: isEffectiveDecline(party, reply.filter((guest) => !isBlankCard(guest))),
+      declined: isEffectiveDecline(
+        party,
+        reply.filter((guest) => !isBlankCard(guest)),
+      ),
       respondedAt: now,
       firstRespondedAt: party.firstRespondedAt ?? now,
-      contactEmail: email,
+      ...(email ? { contactEmail: email } : {}),
       guestNote: trimmed(guestNote),
     });
 

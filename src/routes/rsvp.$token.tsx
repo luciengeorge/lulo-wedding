@@ -1,6 +1,6 @@
 import type { FunctionReturnType } from "convex/server";
 
-import { createFileRoute, Link, notFound, redirect, useRouter } from "@tanstack/react-router";
+import { createFileRoute, Link, notFound, useRouter } from "@tanstack/react-router";
 import { useMemo, useState } from "react";
 import z from "zod";
 
@@ -15,7 +15,7 @@ import { CardLabel, RsvpCard, RsvpHeader, RsvpShell } from "@/components/rsvp/rs
 import { convexErrorMessage } from "@/lib/convex-error";
 import { FEATURES } from "@/lib/flags";
 import { isGuestUnlocked, requireGuestUnlocked, unlockWithToken } from "@/lib/functions/guest-gate";
-import { getRsvp, submitRsvp, NextSchema, VisitViaSchema } from "@/lib/functions/rsvp";
+import { getRsvp, submitRsvp, VisitViaSchema } from "@/lib/functions/rsvp";
 import { invitedEvents, isBlankCard, RSVP_EVENTS, validateReply } from "@/lib/rsvp-rules";
 import { seo } from "@/lib/seo";
 
@@ -34,7 +34,6 @@ const EVENT_DATE: Record<RsvpEventKey, string> = {
 const RsvpSearchSchema = z.object({
   s: z.string().max(64).optional().catch(undefined),
   via: VisitViaSchema.optional().catch(undefined),
-  next: NextSchema,
   // The router reads `?test=1` as the number 1.
   test: z
     .union([z.literal(1), z.literal("1")])
@@ -49,20 +48,15 @@ export const Route = createFileRoute("/rsvp/$token")({
     // guessed the path should get the 404 the rest of the site gives.
     if (!FEATURES.rsvp) throw notFound();
     if (await isGuestUnlocked()) return;
-    // A valid link is its own way past the gate. Only a dead one gets the password page.
+    // A valid link is its own way in. Only a dead one gets the name search.
     if (await unlockWithToken({ data: { token: params.token } })) return;
     return requireGuestUnlocked(location.href);
   },
-  loaderDeps: ({ search }) => ({ s: search.s, via: search.via, test: search.test !== undefined, next: search.next }),
+  loaderDeps: ({ search }) => ({ s: search.s, via: search.via, test: search.test !== undefined }),
   // Loaded on the server, so the invitation is in the first response rather than
   // a round trip later, and so the page does not depend on the browser's Convex
   // client, which holds queries until an auth token a guest will never have.
-  loader: async ({ params, deps: { next, ...deps } }) => {
-    const data = await getRsvp({ data: { token: params.token, ...deps } });
-    // Loading it is what remembers the party on this device, so the home page can now show their own schedule.
-    if (data && next === "schedule") throw redirect({ to: "/", hash: "schedule", replace: true });
-    return data;
-  },
+  loader: ({ params, deps }) => getRsvp({ data: { token: params.token, ...deps } }),
   head: () => ({
     meta: seo({
       title: "RSVP",
@@ -77,11 +71,11 @@ export const Route = createFileRoute("/rsvp/$token")({
   pendingComponent: RsvpSkeleton,
 });
 
-type Mode = "ask" | "accept" | "decline";
+type Mode = "reply" | "decline";
 
 type SubmitPayload = Parameters<typeof submitRsvp>[0]["data"];
 type Submit = (payload: SubmitPayload) => Promise<void>;
-/** Held above both forms, so an address typed on one is still there on the other. */
+/** Optional, and held above both forms, so an address typed on one is still there on the other. */
 type ContactEmail = { value: string; set: (value: string) => void };
 
 /** Taken from the query itself, so the screens cannot drift from what it returns. */
@@ -112,9 +106,9 @@ function RsvpFlow({ token, data }: { token: string; data: RsvpData }) {
   };
 
   const hasReplied = party.respondedAt !== undefined;
-  // A party who already answered opens on what they said, not on the question
-  // again. `earlyDecline` came from the spreadsheet, so treat it as an answer too.
-  const [mode, setMode] = useState<Mode | null>(hasReplied || party.earlyDecline ? null : "ask");
+  // A party who already answered opens on what they said, not on the form again.
+  // `earlyDecline` came from the spreadsheet, so treat it as an answer too.
+  const [mode, setMode] = useState<Mode | null>(hasReplied || party.earlyDecline ? null : "reply");
   const [email, setEmail] = useState(party.contactEmail ?? "");
   const contactEmail = { value: email, set: setEmail };
 
@@ -123,8 +117,7 @@ function RsvpFlow({ token, data }: { token: string; data: RsvpData }) {
   if (deadlinePassed) return <ClosedSummary data={data} />;
   // Both ways out of the confirmation lead to the guest list: "change our reply"
   // and, for a party that declined, "actually, we can come".
-  if (mode === null) return <Confirmed data={data} onChange={() => setMode("accept")} />;
-  if (mode === "ask") return <Ask party={party} events={events} onChoose={setMode} />;
+  if (mode === null) return <Confirmed data={data} onChange={() => setMode("reply")} />;
   if (mode === "decline") {
     return (
       <DeclineForm
@@ -132,7 +125,7 @@ function RsvpFlow({ token, data }: { token: string; data: RsvpData }) {
         data={data}
         contactEmail={contactEmail}
         submit={submit}
-        onBack={() => setMode("accept")}
+        onBack={() => setMode("reply")}
         onDone={() => setMode(null)}
       />
     );
@@ -149,44 +142,7 @@ function RsvpFlow({ token, data }: { token: string; data: RsvpData }) {
   );
 }
 
-/* ---------------------------------------------------------------- screen one */
-
-function Ask({
-  party,
-  events,
-  onChoose,
-}: {
-  party: { displayName: string; headCount: number };
-  events: readonly RsvpEventKey[];
-  onChoose: (mode: Mode) => void;
-}) {
-  return (
-    <RsvpShell>
-      <RsvpHeader title={party.displayName} subtitle="You are invited" script />
-
-      <div className="mt-7 border-y border-[#E7D9C4] py-2">
-        {RSVP_EVENTS.filter((event) => events.includes(event.key)).map((event) => (
-          <div key={event.key} className="flex items-baseline gap-3 py-2">
-            <p className="grow font-display text-[17px] text-bark">{event.label}</p>
-            <p className="w-[104px] text-right font-display text-[15px] text-faded">{EVENT_DATE[event.key]}</p>
-          </div>
-        ))}
-      </div>
-
-      <div className="mt-7 flex flex-col gap-3">
-        <PrimaryButton onClick={() => onChoose("accept")}>JOYFULLY ACCEPT</PrimaryButton>
-        <OutlineButton onClick={() => onChoose("decline")}>REGRETFULLY DECLINE</OutlineButton>
-      </div>
-
-      <p className="mt-6 text-center font-display text-[14px] leading-5 text-faded">
-        Your invitation is for {party.headCount}
-        {party.headCount === 1 ? " person" : " people"}. You can change your reply later.
-      </p>
-    </RsvpShell>
-  );
-}
-
-/* --------------------------------------------------------------- screen two */
+/* ----------------------------------------------------------------- the reply */
 
 /**
  * A card marked not coming is sent as blank, which is how the server reads "this
@@ -201,7 +157,6 @@ function toReplyGuests(drafts: GuestDraft[]): ReplyGuest[] {
       : {
           firstName: draft.firstName,
           lastName: draft.lastName,
-          email: draft.noEmail || draft.email.trim() === "" ? undefined : draft.email,
           isPlusOne: draft.isPlusOne,
           attending: draft.attending,
           invitedTo: draft.invitedTo,
@@ -218,8 +173,6 @@ function storedDraft(guest: StoredGuest): GuestDraft {
     guestId: guest._id,
     firstName: guest.firstName,
     lastName: guest.lastName,
-    email: guest.email ?? "",
-    noEmail: guest.email === undefined,
     dietaryNotes: guest.dietaryNotes ?? "",
     isPlusOne: guest.isPlusOne,
     attending: Object.fromEntries(events.map((event) => [event.key, guest[event.key] === "yes"])),
@@ -288,7 +241,6 @@ function AcceptForm({
 
   const all = plusOne ? [...drafts, plusOne] : drafts;
   const { byGuest, general } = issuesByGuest(issues);
-  const contactInvalid = contactEmail.trim() === "" && issues.length > 0;
 
   async function onSubmit(formEvent: React.FormEvent) {
     formEvent.preventDefault();
@@ -297,9 +249,6 @@ function AcceptForm({
     // The same rules the server enforces, run here first so a problem appears
     // next to its field rather than as a rejected submit.
     const found = validateReply(party, toReplyGuests(all), { existingPlusOne: Boolean(storedPlusOne) });
-    if (contactEmail.trim() === "") {
-      found.push({ message: "We need one email address to send your confirmation to." });
-    }
     setIssues(found);
     setFormError(null);
     if (found.length > 0) return;
@@ -316,7 +265,6 @@ function AcceptForm({
             guestId: guest.guestId,
             firstName: guest.firstName,
             lastName: guest.lastName,
-            email: guest.noEmail || guest.email.trim() === "" ? undefined : guest.email,
             isPlusOne: guest.isPlusOne,
             dietaryNotes: guest.dietaryNotes || undefined,
             preWedding: guest.attending.preWedding === true,
@@ -334,7 +282,7 @@ function AcceptForm({
 
   return (
     <RsvpShell>
-      <RsvpHeader title={party.displayName} subtitle="Wonderful. Tell us who is coming, and which days." script />
+      <RsvpHeader title={party.displayName} subtitle="Tick the days each of you is coming to." script />
 
       <form onSubmit={onSubmit}>
         {drafts.map((guest, index) => (
@@ -342,16 +290,18 @@ function AcceptForm({
             key={guest.guestId ?? index}
             guest={guest}
             index={index}
-            label={`GUEST ${index + 1}`}
+            label={guest.guestId && guest.firstName ? "" : `GUEST ${index + 1}`}
             disabled={busy}
             errors={byGuest.get(index) ?? {}}
             onChange={(next) => setDrafts(drafts.map((current, i) => (i === index ? next : current)))}
           />
         ))}
 
-        <p className="mt-4 font-display text-[14px] leading-5 text-faded italic">
-          Your invitation is for {party.headCount}. Leave a card blank if that seat is not being used.
-        </p>
+        {drafts.some((guest) => !guest.guestId) ? (
+          <p className="mt-4 font-display text-[14px] leading-5 text-faded italic">
+            Your invitation is for {party.headCount}. Leave a card blank if that place is not being used.
+          </p>
+        ) : null}
 
         {party.plusOneAllowed || plusOne ? (
           <RsvpCard dashed>
@@ -385,26 +335,7 @@ function AcceptForm({
         ) : null}
 
         <div className="mt-6">
-          <LabelledField
-            label="Your email"
-            htmlFor="rsvp-contact-email"
-            error={contactInvalid ? "We need one email address to send your confirmation to." : undefined}
-            hint="So we can send your confirmation and any travel updates. Nothing else, we promise."
-          >
-            <input
-              id="rsvp-contact-email"
-              type="email"
-              autoComplete="email"
-              value={contactEmail}
-              disabled={busy}
-              onChange={(event) => setContactEmail(event.target.value)}
-              placeholder="you@example.com"
-              aria-invalid={contactInvalid || undefined}
-              className={`h-12 w-full rounded-[3px] border bg-[#FFFCF7] px-3.5 font-display text-[15px] text-bark outline-none placeholder:text-[#B0A091] focus-visible:border-ink/50 focus-visible:ring-2 focus-visible:ring-ink/15 ${
-                contactInvalid ? "border-ink" : "border-[#E7D9C4]"
-              }`}
-            />
-          </LabelledField>
+          <EmailField id="rsvp-contact-email" value={contactEmail} disabled={busy} onChange={setContactEmail} />
         </div>
 
         {general.length > 0 || formError ? (
@@ -418,24 +349,24 @@ function AcceptForm({
           </div>
         ) : null}
 
-        <div className="mt-6">
+        <div className="mt-6 flex flex-col gap-3">
           <PrimaryButton type="submit" disabled={busy}>
-            {busy ? "SENDING" : "SEND OUR REPLY"}
+            {busy ? "SENDING" : voice(party).coming}
           </PrimaryButton>
+          <OutlineButton disabled={busy} onClick={onDecline}>
+            {voice(party).notComing}
+          </OutlineButton>
         </div>
       </form>
 
-      <div className="mt-5 flex flex-col items-center gap-3.5 text-center">
-        <p className="font-display text-[14px] leading-5 text-faded">
-          Nothing is final. You can change your reply any time before the date we close replies.
-        </p>
-        <QuietLink onClick={onDecline}>Actually, we cannot make it</QuietLink>
-      </div>
+      <p className="mt-5 text-center font-display text-[14px] leading-5 text-faded">
+        You can change your reply any time before replies close.
+      </p>
     </RsvpShell>
   );
 }
 
-/* ------------------------------------------------------------- screen two b */
+/* ------------------------------------------------------------ the decline */
 
 function DeclineForm({
   token,
@@ -457,16 +388,9 @@ function DeclineForm({
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
 
-  const emailMissing = contactEmail.trim() === "";
-
   async function onSubmit(formEvent: React.FormEvent) {
     formEvent.preventDefault();
     if (busy) return;
-    if (emailMissing) {
-      setError("We need an email address so we can confirm we received this.");
-      return;
-    }
-
     setBusy(true);
     setError(null);
     try {
@@ -481,10 +405,10 @@ function DeclineForm({
 
   return (
     <RsvpShell>
-      <RsvpHeader title={party.displayName} subtitle="We will miss you. Before you go, two small things." script />
+      <RsvpHeader title={party.displayName} subtitle="We will miss you. Leave us a note if you like." script />
 
       <form onSubmit={onSubmit} className="mt-7 flex flex-col gap-5">
-        <LabelledField label="A note for us, if you like" htmlFor="rsvp-note">
+        <LabelledField label="A note for us" htmlFor="rsvp-note">
           <textarea
             id="rsvp-note"
             rows={4}
@@ -496,29 +420,15 @@ function DeclineForm({
           />
         </LabelledField>
 
-        <LabelledField
-          label="Your email"
-          htmlFor="rsvp-decline-email"
-          error={error ?? undefined}
-          hint="So we can confirm we received this. Nothing else, we promise."
-        >
-          <input
-            id="rsvp-decline-email"
-            type="email"
-            autoComplete="email"
-            value={contactEmail}
-            disabled={busy}
-            onChange={(event) => setContactEmail(event.target.value)}
-            placeholder="you@example.com"
-            aria-invalid={Boolean(error) || undefined}
-            className={`h-12 w-full rounded-[3px] border bg-[#FFFCF7] px-3.5 font-display text-[15px] text-bark outline-none placeholder:text-[#B0A091] focus-visible:border-ink/50 focus-visible:ring-2 focus-visible:ring-ink/15 ${
-              error ? "border-ink" : "border-[#E7D9C4]"
-            }`}
-          />
-        </LabelledField>
+        <EmailField id="rsvp-decline-email" value={contactEmail} disabled={busy} onChange={setContactEmail} />
+        {error ? (
+          <p role="alert" className="font-display text-[14px] leading-5 text-ink">
+            {error}
+          </p>
+        ) : null}
 
         <PrimaryButton type="submit" disabled={busy}>
-          {busy ? "SENDING" : "SEND OUR REGRETS"}
+          {busy ? "SENDING" : "SEND"}
         </PrimaryButton>
       </form>
 
@@ -526,9 +436,47 @@ function DeclineForm({
         <p className="font-display text-[14px] leading-5 text-faded">
           If anything changes, come back to this link any time.
         </p>
-        <QuietLink onClick={onBack}>Actually, we can come</QuietLink>
+        <QuietLink onClick={onBack}>{voice(party).canCome}</QuietLink>
       </div>
     </RsvpShell>
+  );
+}
+
+/** "I" for an invitation to one person, "we" for anything bigger. */
+function voice(party: { headCount: number }) {
+  const one = party.headCount === 1;
+  return {
+    coming: one ? "I'LL BE THERE" : "WE'LL BE THERE",
+    notComing: one ? "I CAN'T MAKE IT" : "WE CAN'T MAKE IT",
+    canCome: one ? "Actually, I can come" : "Actually, we can come",
+  };
+}
+
+/** One address for the whole party, only for those who want their reply emailed to them. */
+function EmailField({
+  id,
+  value,
+  disabled,
+  onChange,
+}: {
+  id: string;
+  value: string;
+  disabled: boolean;
+  onChange: (value: string) => void;
+}) {
+  return (
+    <LabelledField label="Email me a copy (optional)" htmlFor={id} hint="Only if you want your reply sent to you.">
+      <input
+        id={id}
+        type="email"
+        autoComplete="email"
+        value={value}
+        disabled={disabled}
+        onChange={(event) => onChange(event.target.value)}
+        placeholder="you@example.com"
+        className="h-12 w-full rounded-[3px] border border-[#E7D9C4] bg-[#FFFCF7] px-3.5 font-display text-[15px] text-bark outline-none placeholder:text-[#B0A091] focus-visible:border-ink/50 focus-visible:ring-2 focus-visible:ring-ink/15"
+      />
+    </LabelledField>
   );
 }
 
@@ -599,7 +547,9 @@ function Confirmed({ data, onChange }: { data: RsvpData; onChange: () => void })
       </div>
 
       <div className="mt-5">
-        <OutlineButton onClick={onChange}>{declined ? "ACTUALLY, WE CAN COME" : "CHANGE OUR REPLY"}</OutlineButton>
+        <OutlineButton onClick={onChange}>
+          {declined ? voice(party).canCome.toUpperCase() : "CHANGE OUR REPLY"}
+        </OutlineButton>
       </div>
 
       <div className="mt-8 flex flex-col items-center gap-2.5 text-center">
@@ -648,10 +598,15 @@ function NoEventsYet() {
 function NotFound() {
   return (
     <RsvpShell>
-      <RsvpHeader
-        title="We could not find that invitation"
-        subtitle="The link may be incomplete. Check the message it came in, or ask Laura and Lucien to send it again."
-      />
+      <RsvpHeader title="We could not find that invitation" subtitle="The link may be old or incomplete." />
+      <div className="mt-7">
+        <Link
+          to="/rsvp"
+          className="flex h-12 w-full items-center justify-center rounded-[3px] bg-ink font-display text-[15px] font-semibold tracking-caps text-paper"
+        >
+          FIND MY INVITATION
+        </Link>
+      </div>
     </RsvpShell>
   );
 }

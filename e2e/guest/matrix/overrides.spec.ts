@@ -1,13 +1,13 @@
 import type { EventKey } from "../../rsvp-form";
 
-import { ADMIN_STATE, backend, expect, GUEST_STATE, openAdmin, party, test, visit } from "../../fixtures";
+import { ADMIN_STATE, backend, expect, openAdmin, party, test, visit } from "../../fixtures";
 import {
   card,
   chip,
   EVENTS,
-  expectAskScreen,
   expectCardEvents,
   expectedStatus,
+  expectReplyForm,
   fillCard,
   flags,
   seatCards,
@@ -17,10 +17,10 @@ import {
 /**
  * Per-guest invites over a party of five. The couple name some people with their
  * own events; every other seat follows the party's flags. Each scenario walks the
- * whole loop: what each card asks, the "cannot make it" path, what is stored,
+ * whole loop: what each card asks, the "can't make it" path, what is stored,
  * what the form shows on return, and what the couple's list shows.
  */
-test.use({ storageState: GUEST_STATE, resetPerTest: false });
+test.use({ resetPerTest: false });
 
 type Scenario = {
   name: string;
@@ -99,34 +99,42 @@ for (const scenario of SCENARIOS) {
       (key) => scenario.partyEvents.includes(key) || scenario.named.some((guest) => guest.events.includes(key)),
     );
     const seatEvents = (seat: number) => scenario.named[seat]?.events ?? scenario.partyEvents;
+    /** A named person's card goes by their first name; an empty seat by its number. */
+    const legendOf = (seat: number) => scenario.named[seat]?.first ?? `GUEST ${seat + 1}`;
 
     await visit(page, `/rsvp/${scenario.token}`);
-    await expectAskScreen(page, union);
-    await page.getByRole("button", { name: "JOYFULLY ACCEPT" }).click();
-    await expect(seatCards(page)).toHaveCount(HEAD_COUNT);
+    await expectReplyForm(page);
+    await expect(seatCards(page)).toHaveCount(HEAD_COUNT - scenario.named.length);
 
     for (let seat = 0; seat < HEAD_COUNT; seat++) {
-      const legend = `GUEST ${seat + 1}`;
+      const legend = legendOf(seat);
       await expectCardEvents(page, legend, seatEvents(seat));
       const named = scenario.named[seat];
       if (named) {
-        await expect(page.getByLabel(`First name, guest ${seat + 1}`)).toHaveValue(named.first);
+        await expect(card(page, legend)).toContainText(`${named.first} Haddad`);
+        await expect(page.getByLabel(`First name, guest ${seat + 1}`)).toHaveCount(0);
         await expect(card(page, legend).getByRole("button", { name: "Remove" })).toHaveCount(0);
       }
+    }
+    // Between them, the cards ask about every event anyone in the party is invited to.
+    for (const event of EVENTS) {
+      await expect(page.getByRole("checkbox", { name: event.label, exact: true }).first()).toHaveCount(
+        union.includes(event.key) ? 1 : 0,
+      );
     }
 
     // The first named person cannot come; everyone else named says yes to all
     // they were asked; one unnamed seat is filled, the rest left blank.
     const [absent, ...present] = scenario.named;
-    await card(page, "GUEST 1").getByLabel(`${absent.first} cannot make it`).check();
-    await expectCardEvents(page, "GUEST 1", []);
-    for (const [offset, guest] of present.entries()) {
-      await fillCard(page, `GUEST ${offset + 2}`, offset + 1, { days: guest.events });
+    await card(page, absent.first).getByLabel(`${absent.first} can't make it`).check();
+    await expectCardEvents(page, absent.first, []);
+    for (const guest of present) {
+      await fillCard(page, guest.first, -1, { days: guest.events });
     }
     const extraSeat = scenario.named.length < HEAD_COUNT ? scenario.named.length : null;
     if (extraSeat !== null) {
       await fillCard(page, `GUEST ${extraSeat + 1}`, extraSeat, {
-        first: "Guest",
+        first: "Rami",
         last: "Haddad",
         days: scenario.partyEvents,
       });
@@ -142,7 +150,7 @@ for (const scenario of SCENARIOS) {
       // Still on the list by name: "no" to each event asked, nothing for the rest.
       { firstName: absent.first, addedByCouple: true, ...statuses(absent.events, []) },
       ...present.map((guest) => ({ firstName: guest.first, ...statuses(guest.events, guest.events) })),
-      ...(extraSeat === null ? [] : [{ firstName: "Guest", ...statuses(scenario.partyEvents, scenario.partyEvents) }]),
+      ...(extraSeat === null ? [] : [{ firstName: "Rami", ...statuses(scenario.partyEvents, scenario.partyEvents) }]),
     ];
     expect((await backend.replyFor(scenario.token))?.guests).toEqual(
       expected.map((guest) => expect.objectContaining(guest)),
@@ -155,13 +163,14 @@ for (const scenario of SCENARIOS) {
     // Coming back, the form opens on what was saved.
     await visit(page, `/rsvp/${scenario.token}`);
     await page.getByRole("button", { name: "CHANGE OUR REPLY" }).click();
-    await expect(card(page, "GUEST 1").getByLabel(`${absent.first} cannot make it`)).toBeChecked();
-    for (const [offset, guest] of present.entries()) {
-      for (const key of guest.events) await expect(chip(page, `GUEST ${offset + 2}`, key)).toBeChecked();
+    await expect(card(page, absent.first).getByLabel(`${absent.first} can't make it`)).toBeChecked();
+    for (const guest of present) {
+      for (const key of guest.events) await expect(chip(page, guest.first, key)).toBeChecked();
     }
     if (extraSeat !== null) {
-      await expect(page.getByLabel(`First name, guest ${extraSeat + 1}`)).toHaveValue("Guest");
-      for (const key of scenario.partyEvents) await expect(chip(page, `GUEST ${extraSeat + 1}`, key)).toBeChecked();
+      // Saved, so now a name rather than a seat to fill.
+      await expect(card(page, "Rami")).toContainText("Rami Haddad");
+      for (const key of scenario.partyEvents) await expect(chip(page, "Rami", key)).toBeChecked();
     }
 
     // The couple's list shows the party as invited to everything anyone in it is.

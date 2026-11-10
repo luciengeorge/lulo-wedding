@@ -1,9 +1,10 @@
-import { ADMIN_STATE, backend, expect, GUEST_PASSWORD, party, test, visit, enterPassword } from "../fixtures";
+import { ADMIN_STATE, backend, enterAsGuest, expect, party, test, visit } from "../fixtures";
+import { comingButton, expectReplyForm } from "../rsvp-form";
 
 /**
- * A guest arriving on their own link, cold: no gate cookie, no memory of any
+ * A guest arriving on their own link, cold: no cookie, no memory of any
  * invitation. This is how every one of the ~400 households first lands, from
- * WhatsApp or an email, so nothing here uses the parked guest cookie.
+ * WhatsApp or an email.
  *
  * Each arrival also leaves a visit behind, which is the only read receipt
  * WhatsApp gives the couple. These assert the stored visit as well as the page.
@@ -11,24 +12,35 @@ import { ADMIN_STATE, backend, expect, GUEST_PASSWORD, party, test, visit, enter
 
 const TOKEN = "e2e-arrival";
 
-// Two of these type the password, and the gate counts tries per IP.
-test.beforeEach(() => backend.resetRateLimits());
-
 test.describe("a party opening its own link", () => {
-  test("skips the password and lands on the reply form", async ({ page }) => {
+  test("is let straight in, onto the reply form", async ({ page }) => {
     await backend.seed([party({ token: TOKEN })]);
 
     await visit(page, `/rsvp/${TOKEN}`);
 
     await expect(page).toHaveURL(`/rsvp/${TOKEN}`);
     await expect(page.getByText("Rae & Cherif")).toBeVisible();
-    await expect(page.getByRole("button", { name: "JOYFULLY ACCEPT" })).toBeVisible();
+    await expectReplyForm(page);
     expect((await backend.activity(TOKEN)).visits).toEqual([{ source: "link" }]);
 
-    // The link unlocked the whole site, not just this page.
+    // The link let them into the whole site, as themselves, not just this page.
     await visit(page, "/");
     await expect(page).toHaveURL("/");
     await expect(page.getByText("FARAYA · LEBANON")).toBeVisible();
+    await expect(page.getByText("Welcome, Rae & Cherif")).toBeVisible();
+  });
+
+  /** A phone passed round the family: the last link opened is who the phone is now. */
+  test("takes over a device that belonged to another party", async ({ page }) => {
+    await backend.seed([party({ token: TOKEN }), party({ token: "e2e-other", displayName: "Lina", surname: "Saad" })]);
+
+    await visit(page, "/rsvp/e2e-other");
+    await expect(page.getByText("Lina")).toBeVisible();
+    await visit(page, `/rsvp/${TOKEN}`);
+    await expect(page.getByText("Rae & Cherif")).toBeVisible();
+
+    await visit(page, "/");
+    await expect(page.getByText("Welcome, Rae & Cherif")).toBeVisible();
   });
 
   test("is not counted twice for a reload, but a different way in is its own visit", async ({ page }) => {
@@ -91,18 +103,23 @@ test.describe("a party arriving from an email", () => {
 
 test.describe("a link that does not resolve", () => {
   /**
-   * A dead token is not a credential, so it meets the password like any other
-   * stranger. Past it, the guest is told kindly rather than shown an error.
+   * A dead token is not a credential, so it meets the name search like any other
+   * stranger. Past it, the guest is told kindly, and led to their own invitation.
    */
-  test("meets the password gate, then a kind not-found page", async ({ page }) => {
+  test("meets the name search, then a kind not-found page that leads to their own", async ({ page }) => {
+    await backend.seed([party({ token: TOKEN })]);
     await visit(page, "/rsvp/not-a-real-token");
     await expect(page).toHaveURL(/\/enter\?redirect=%2Frsvp%2Fnot-a-real-token/);
 
-    await enterPassword(page, GUEST_PASSWORD);
+    await enterAsGuest(page, "Rae Haddad");
 
     await expect(page).toHaveURL("/rsvp/not-a-real-token");
     await expect(page.getByText(/could not find that invitation/i)).toBeVisible();
-    await expect(page.getByRole("button", { name: "JOYFULLY ACCEPT" })).toHaveCount(0);
+    await expect(comingButton(page)).toHaveCount(0);
+
+    await page.getByRole("link", { name: "FIND MY INVITATION" }).click();
+    await expect(page).toHaveURL(`/rsvp/${TOKEN}?via=remembered`);
+    await expectReplyForm(page);
   });
 });
 

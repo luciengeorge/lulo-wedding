@@ -1,4 +1,4 @@
-import { createFileRoute, Link } from "@tanstack/react-router";
+import { createFileRoute, Link, useRouter } from "@tanstack/react-router";
 import z from "zod";
 
 import { AdminBar } from "@/components/wedding/admin-bar";
@@ -7,7 +7,7 @@ import { JumpBar } from "@/components/wedding/info/jump-bar";
 import { Monogram } from "@/components/wedding/monogram";
 import { FEATURES } from "@/lib/flags";
 import { getAdminSession } from "@/lib/functions/admin-session";
-import { requireGuestUnlocked } from "@/lib/functions/guest-gate";
+import { forgetGuest, requireGuestUnlocked } from "@/lib/functions/guest-gate";
 import { getHomeContent } from "@/lib/functions/home-content";
 import { canonical, seo } from "@/lib/seo";
 
@@ -18,12 +18,13 @@ const HomeSearchSchema = z.object({ as: z.string().max(64).optional().catch(unde
 export const Route = createFileRoute("/")({
   validateSearch: HomeSearchSchema,
   beforeLoad: async ({ location }) => {
-    await requireGuestUnlocked(location.href);
-
     // Only ever true for the two allowlisted accounts, so a guest never learns
-    // that an admin exists, let alone where it is.
+    // that an admin exists, let alone where it is. The couple are not a party,
+    // so they skip the name search; everyone else has to find their name first.
     const admin = await getAdminSession();
-    return { isAdmin: admin.status === "ok" };
+    const isAdmin = admin.status === "ok";
+    if (!isAdmin) await requireGuestUnlocked(location.href);
+    return { isAdmin };
   },
   loaderDeps: ({ search }) => ({ as: search.as }),
   loader: ({ deps }) => getHomeContent({ data: { as: deps.as } }),
@@ -38,7 +39,7 @@ export const Route = createFileRoute("/")({
 });
 
 function Home() {
-  const { preview, ...content } = Route.useLoaderData();
+  const { preview, guest, ...content } = Route.useLoaderData();
 
   return (
     <div
@@ -46,7 +47,7 @@ function Home() {
       className="flex min-h-svh w-full flex-col bg-paper [background-image:url('/art/paper-tile.webp')] bg-[length:560px_428px] bg-repeat"
     >
       {preview ? <PreviewBar name={preview} /> : null}
-      <Hero />
+      <Hero guest={guest} />
       <JumpBar />
       <InfoSections {...content} />
       <Closing />
@@ -72,7 +73,7 @@ function PreviewBar({ name }: { name: string }) {
  * The save-the-date, kept as the first screen. One bar's height short of it, so
  * the jump bar shows at the foot and a guest can tell there is more below.
  */
-function Hero() {
+function Hero({ guest }: { guest: string | null }) {
   const { isAdmin } = Route.useRouteContext();
 
   return (
@@ -82,6 +83,7 @@ function Hero() {
       {isAdmin ? <AdminBar /> : null}
 
       <div className="relative z-10 flex min-h-[calc(100svh-52px)] flex-col items-center justify-center px-6 text-center lg:min-h-[calc(100svh-64px)]">
+        {guest ? <Welcome name={guest} /> : null}
         <Monogram className="w-14 lg:w-[82px]" />
 
         <h1
@@ -126,6 +128,34 @@ function Hero() {
           </Link>
         ) : null}
       </div>
+    </div>
+  );
+}
+
+/** Whose page this is, and a way out for a shared phone or a wrong pick in the search. */
+function Welcome({ name }: { name: string }) {
+  const router = useRouter();
+
+  async function notMe() {
+    await forgetGuest();
+    await router.navigate({ to: "/enter" });
+  }
+
+  return (
+    <div
+      className="lulo-rise mb-8 flex flex-col items-center gap-1 lg:mb-10"
+      style={{ "--rise-delay": "1300ms" } as React.CSSProperties}
+    >
+      <p className="font-display text-[17px] leading-6 text-bark lg:text-[19px]">
+        Welcome, <span className="font-medium">{name}</span>
+      </p>
+      <button
+        type="button"
+        onClick={() => void notMe()}
+        className="font-display text-[14px] text-faded italic underline decoration-amber underline-offset-4 hover:text-ink"
+      >
+        Not you?
+      </button>
     </div>
   );
 }

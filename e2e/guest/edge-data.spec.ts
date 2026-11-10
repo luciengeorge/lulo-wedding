@@ -1,9 +1,17 @@
 import type { Page } from "@playwright/test";
 
-import { backend, expect, GUEST_STATE, party, test, visit, waitForEmail } from "../fixtures";
-import { expectStoredReply, fillCard, seatCards, sendReply } from "../rsvp-form";
-
-test.use({ storageState: GUEST_STATE });
+import { backend, enterAsGuest, expect, party, searchName, test, visit, waitForEmail } from "../fixtures";
+import {
+  comingButton,
+  decline,
+  emailField,
+  expectReplyForm,
+  expectStoredReply,
+  fillCard,
+  notComingButton,
+  seatCards,
+  sendReply,
+} from "../rsvp-form";
 
 /**
  * Data the guest list will actually contain: names from three alphabets,
@@ -12,9 +20,9 @@ test.use({ storageState: GUEST_STATE });
 
 const TOKEN = "e2e-edge";
 
-async function accept(page: Page) {
+async function openForm(page: Page) {
   await visit(page, `/rsvp/${TOKEN}`);
-  await page.getByRole("button", { name: "JOYFULLY ACCEPT" }).click();
+  await expectReplyForm(page);
 }
 
 async function expectNoSidewaysScroll(page: Page) {
@@ -25,7 +33,7 @@ async function expectNoSidewaysScroll(page: Page) {
 test.describe("names", () => {
   test("keeps apostrophes, hyphens and accents exactly as typed", async ({ page }) => {
     await backend.seed([party({ token: TOKEN, displayName: "Hélène & Jean-Luc", surname: "D'Souza" })]);
-    await accept(page);
+    await openForm(page);
     await fillCard(page, "GUEST 1", 0, { first: "Hélène", last: "D'Souza", days: ["wedding"] });
     await fillCard(page, "GUEST 2", 1, { first: "Jean-Luc", last: "D'Souza-Abou Jaoudé", days: ["wedding"] });
     await sendReply(page, "helene@example.com");
@@ -41,21 +49,18 @@ test.describe("names", () => {
 
   test("finds a punctuated name typed without its punctuation", async ({ page }) => {
     await backend.seed([party({ token: TOKEN, displayName: "Hélène & Jean-Luc", surname: "D'Souza" })]);
-    await visit(page, "/rsvp");
-    await page.getByLabel("Your first and last name").fill("jean luc dsouza");
-    await page.getByRole("button", { name: "FIND MY INVITATION" }).click();
-    await expect(page.getByRole("link", { name: /Hélène & Jean-Luc/ })).toBeVisible();
+    await visit(page, "/enter");
+    await searchName(page, "jean luc dsouza");
+    await expect(page.getByRole("button", { name: "Hélène & Jean-Luc", exact: true })).toBeVisible();
   });
 
   test("takes Arabic script in the form and in the name search", async ({ page }) => {
     await backend.seed([party({ token: TOKEN, displayName: "ليلى", surname: "حداد", headCount: 1 })]);
 
     await visit(page, "/rsvp");
-    await page.getByLabel("Your first and last name").fill("ليلى حداد");
-    await page.getByRole("button", { name: "FIND MY INVITATION" }).click();
-    await page.getByRole("link", { name: /ليلى/ }).click();
-    await expect(page).toHaveURL(`/rsvp/${TOKEN}?via=lookup`);
-    await page.getByRole("button", { name: "JOYFULLY ACCEPT" }).click();
+    await enterAsGuest(page, "ليلى حداد", "ليلى");
+    await expect(page).toHaveURL(`/rsvp/${TOKEN}?via=remembered`);
+    await expectReplyForm(page);
 
     await fillCard(page, "GUEST 1", 0, { first: "ليلى", last: "حداد", days: ["wedding"] });
     await sendReply(page, "layla@example.com");
@@ -67,7 +72,7 @@ test.describe("names", () => {
 
   test("stores an emoji in a name and reads it back", async ({ page }) => {
     await backend.seed([party({ token: TOKEN, headCount: 1 })]);
-    await accept(page);
+    await openForm(page);
     await fillCard(page, "GUEST 1", 0, { first: "Rae 🌸", last: "Haddad", days: ["wedding"] });
     await sendReply(page, "rae@example.com");
 
@@ -81,7 +86,6 @@ test.describe("names", () => {
     await backend.seed([party({ token: TOKEN, displayName: "Lucy", surname: "", headCount: 1 })]);
     await visit(page, `/rsvp/${TOKEN}`);
     await expect(page.getByText("Lucy", { exact: true })).toBeVisible();
-    await page.getByRole("button", { name: "JOYFULLY ACCEPT" }).click();
     await fillCard(page, "GUEST 1", 0, { first: "Lucy", last: "", days: ["wedding"] });
     await sendReply(page, "lucy@example.com");
 
@@ -105,7 +109,6 @@ test.describe("on a 375px phone", () => {
     await expect(page.getByText(LONG_PARTY)).toBeVisible();
     await expectNoSidewaysScroll(page);
 
-    await page.getByRole("button", { name: "JOYFULLY ACCEPT" }).click();
     await fillCard(page, "GUEST 1", 0, {
       first: "Wolfeschlegelsteinhausenbergerdorff",
       last: "Abou-Jaoudé-de-la-Tour-d'Auvergne-Lauraguais",
@@ -124,17 +127,49 @@ test.describe("on a 375px phone", () => {
 test.describe("email addresses", () => {
   test("trims what was typed around an address, and sends the receipt to it", async ({ page }) => {
     await backend.seed([party({ token: TOKEN, headCount: 2 })]);
-    await accept(page);
+    await openForm(page);
     await fillCard(page, "GUEST 1", 0, { first: "Rae", last: "Haddad", days: ["wedding"] });
-    await page.getByLabel("Email, guest 1").fill("  Rae.Haddad@Example.COM ");
     await fillCard(page, "GUEST 2", 1, { first: "Cherif", last: "Haddad", days: ["wedding"] });
     await sendReply(page, "  RAE@Example.COM  ");
     await expect(page.getByText("Thank you")).toBeVisible();
 
-    const reply = await backend.replyFor(TOKEN);
-    expect(reply?.contactEmail).toBe("RAE@Example.COM");
-    expect(reply?.guests[0].email).toBe("Rae.Haddad@Example.COM");
+    expect((await backend.replyFor(TOKEN))?.contactEmail).toBe("RAE@Example.COM");
     await waitForEmail("RAE@Example.COM");
+  });
+
+  /** A field left blank means "nothing new", not "forget the address you had". */
+  test("keeps the address on file when the field is cleared", async ({ page }) => {
+    await backend.seed([
+      party({ token: TOKEN, headCount: 1, respondedAt: Date.now(), contactEmail: "rae@example.com" }),
+    ]);
+    await backend.seedGuests(TOKEN, [{ firstName: "Rae", lastName: "Haddad", wedding: "yes" }]);
+    await visit(page, `/rsvp/${TOKEN}`);
+    await page.getByRole("button", { name: "CHANGE OUR REPLY" }).click();
+    await expect(emailField(page)).toHaveValue("rae@example.com");
+
+    await emailField(page).fill("");
+    await sendReply(page);
+    await expect(page.getByText("Thank you")).toBeVisible();
+
+    expect((await backend.replyFor(TOKEN))?.contactEmail).toBe("rae@example.com");
+  });
+
+  /** The form no longer asks each guest for an address, so it must not wipe the ones already stored. */
+  test("keeps each guest's stored address when the form sends none", async ({ page }) => {
+    await backend.seed([party({ token: TOKEN, headCount: 2, respondedAt: Date.now() })]);
+    await backend.seedGuests(TOKEN, [
+      { firstName: "Rae", lastName: "Haddad", email: "rae.haddad@example.com", wedding: "yes" },
+      { firstName: "Cherif", lastName: "Haddad", wedding: "yes" },
+    ]);
+    await visit(page, `/rsvp/${TOKEN}`);
+    await page.getByRole("button", { name: "CHANGE OUR REPLY" }).click();
+    await sendReply(page);
+    await expect(page.getByText("Thank you")).toBeVisible();
+
+    expect((await backend.replyFor(TOKEN))?.guests.map((guest) => [guest.firstName, guest.email])).toEqual([
+      ["Rae", "rae.haddad@example.com"],
+      ["Cherif", undefined],
+    ]);
   });
 });
 
@@ -150,8 +185,8 @@ test.describe("rows the sheet left incomplete", () => {
 
     await expect(page.getByRole("heading", { name: "Your invitation details are on their way" })).toBeVisible();
     await expect(page.getByText("Laura and Lucien will be in touch soon.")).toBeVisible();
-    await expect(page.getByRole("button", { name: "JOYFULLY ACCEPT" })).toHaveCount(0);
-    await expect(page.getByRole("button", { name: "REGRETFULLY DECLINE" })).toHaveCount(0);
+    await expect(comingButton(page)).toHaveCount(0);
+    await expect(notComingButton(page)).toHaveCount(0);
 
     // One person asked to the brunch is an event to answer for.
     await backend.seedGuests(TOKEN, [
@@ -163,7 +198,7 @@ test.describe("rows the sheet left incomplete", () => {
       },
     ]);
     await visit(page, `/rsvp/${TOKEN}`);
-    await expect(page.getByRole("button", { name: "JOYFULLY ACCEPT" })).toBeVisible();
+    await expectReplyForm(page);
   });
 
   /**
@@ -173,14 +208,9 @@ test.describe("rows the sheet left incomplete", () => {
    */
   test("a party with no seats at all: renders, and still takes a decline", async ({ page }) => {
     await backend.seed([party({ token: TOKEN, headCount: 0 })]);
-    await visit(page, `/rsvp/${TOKEN}`);
-    await expect(page.getByText(/Your invitation is for 0 people/)).toBeVisible();
-
-    await page.getByRole("button", { name: "JOYFULLY ACCEPT" }).click();
+    await openForm(page);
     await expect(seatCards(page)).toHaveCount(0);
-    await page.getByRole("button", { name: "Actually, we cannot make it" }).click();
-    await page.getByLabel("Your email").fill("rae@example.com");
-    await page.getByRole("button", { name: "SEND OUR REGRETS" }).click();
+    await decline(page, "rae@example.com");
     await expect(page.getByRole("heading", { name: "We will miss you" })).toBeVisible();
   });
 });

@@ -1,8 +1,7 @@
 import type { Page } from "@playwright/test";
 
-import { backend, expect, GUEST_STATE, linkFromEmail, party, test, visit, waitForEmail } from "../fixtures";
-
-test.use({ storageState: GUEST_STATE });
+import { backend, expect, linkFromEmail, party, test, visit, waitForEmail } from "../fixtures";
+import { decline, fillCard, sendReply } from "../rsvp-form";
 
 /**
  * The receipt a party gets after replying, and the tracking that rides on it.
@@ -15,15 +14,8 @@ const EMAIL = "rae@example.com";
 
 async function replyYes(page: Page) {
   await visit(page, `/rsvp/${TOKEN}`);
-  await page.getByRole("button", { name: "JOYFULLY ACCEPT" }).click();
-  await page.getByLabel("First name, guest 1").fill("Rae");
-  await page.getByLabel("Last name, guest 1").fill("Haddad");
-  await page.getByLabel("Email, guest 1").fill(EMAIL);
-  await page.getByRole("group", { name: "GUEST 1", exact: true }).getByRole("checkbox", { name: "Wedding" }).check({
-    force: true,
-  });
-  await page.getByLabel("Your email").fill(EMAIL);
-  await page.getByRole("button", { name: "SEND OUR REPLY" }).click();
+  await fillCard(page, "GUEST 1", 0, { first: "Rae", last: "Haddad", days: ["wedding"] });
+  await sendReply(page, EMAIL);
   await expect(page.getByText("Thank you")).toBeVisible();
 }
 
@@ -55,7 +47,7 @@ test.describe("the reply receipt", () => {
     const email = await waitForEmail(EMAIL);
     const [receipt] = (await backend.activity(TOKEN)).sends;
 
-    // Opened from a mail app: no gate cookie, nothing remembered.
+    // Opened from a mail app: nothing remembered.
     const context = await browser.newContext();
     const fresh = await context.newPage();
     await visit(fresh, linkFromEmail(email.html, `/rsvp/${TOKEN}`));
@@ -71,13 +63,24 @@ test.describe("the reply receipt", () => {
   test("sends the declined wording to a party who declined", async ({ page }) => {
     await backend.seed([party({ token: TOKEN, headCount: 1 })]);
     await visit(page, `/rsvp/${TOKEN}`);
-    await page.getByRole("button", { name: "REGRETFULLY DECLINE" }).click();
-    await page.getByLabel("Your email").fill(EMAIL);
-    await page.getByRole("button", { name: "SEND OUR REGRETS" }).click();
+    await decline(page, EMAIL);
     await expect(page.getByRole("heading", { name: "We will miss you" })).toBeVisible();
 
     const email = await waitForEmail(EMAIL);
     expect(email.subject).toBe("We got your reply");
+  });
+
+  /** The address is optional now. No address, no receipt, and no failed send for the couple to puzzle over. */
+  test("is not sent, nor queued, when the party gives no address", async ({ page }) => {
+    await backend.seed([party({ token: TOKEN, headCount: 1 })]);
+    await visit(page, `/rsvp/${TOKEN}`);
+    await fillCard(page, "GUEST 1", 0, { first: "Rae", last: "Haddad", days: ["wedding"] });
+    await sendReply(page);
+    await expect(page.getByText("Thank you")).toBeVisible();
+
+    // A send is scheduled after the mutation commits; give it the time it would take.
+    await new Promise((resolve) => setTimeout(resolve, 2_000));
+    expect((await backend.activity(TOKEN)).sends).toEqual([]);
   });
 });
 

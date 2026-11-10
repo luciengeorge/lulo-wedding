@@ -39,21 +39,28 @@ describe("GuestCard", () => {
     const onChange = vi.fn();
     render(<GuestCard guest={named()} index={0} label="GUEST 1" errors={{}} onChange={onChange} />);
     expect(screen.queryByRole("button", { name: "Remove" })).not.toBeInTheDocument();
-    fireEvent.click(screen.getByRole("checkbox", { name: "Nour cannot make it" }));
+    fireEvent.click(screen.getByRole("checkbox", { name: "Nour can't make it" }));
     expect(onChange).toHaveBeenCalledWith(expect.objectContaining({ notComing: true }));
   });
 
   it("hides the days and details once marked not coming, and keeps the name", () => {
     render(<GuestCard guest={named({ notComing: true })} index={0} label="GUEST 1" errors={{}} onChange={vi.fn()} />);
     expect(screen.queryByRole("checkbox", { name: "Wedding" })).not.toBeInTheDocument();
-    expect(screen.queryByLabelText("Email, guest 1")).not.toBeInTheDocument();
-    expect(screen.getByLabelText("First name, guest 1")).toHaveValue("Nour");
+    expect(screen.getByText("Nour Haddad")).toBeInTheDocument();
   });
 
-  it("offers no not-coming tick on a seat the party filled in itself", () => {
+  it("shows someone already on the list by name, with nothing to retype", () => {
     render(
       <GuestCard guest={named({ addedByCouple: false })} index={0} label="GUEST 1" errors={{}} onChange={vi.fn()} />,
     );
-    expect(screen.queryByRole("checkbox", { name: /cannot make it/ })).not.toBeInTheDocument();
+    expect(screen.getByText("Nour Haddad")).toBeInTheDocument();
+    expect(screen.queryByLabelText("First name, guest 1")).not.toBeInTheDocument();
+    expect(screen.getByRole("checkbox", { name: "Nour can't make it" })).toBeInTheDocument();
+  });
+
+  it("asks for a name on a place nobody has filled yet", () => {
+    render(<GuestCard guest={emptyGuest(weddingOnly)} index={1} label="GUEST 2" errors={{}} onChange={vi.fn()} />);
+    expect(screen.getByLabelText("First name, guest 2")).toBeInTheDocument();
+    expect(screen.queryByRole("checkbox", { name: /make it/ })).not.toBeInTheDocument();
   });
 });

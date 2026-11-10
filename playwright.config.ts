@@ -53,9 +53,9 @@ export default defineConfig({
   },
 
   projects: [
-    // Unlocks the guest gate and signs the admin in once, and parks both cookies.
-    // See e2e/guest.setup.ts: the gate and the magic link are both rate limited,
-    // and every test runs from the same IP.
+    // Signs the admin in once and parks the cookie. See e2e/admin.setup.ts: the
+    // magic link is rate limited, and every test runs from the same IP. Guests
+    // need no setup: each spec gets in the way a guest does, by its link or name.
     { name: "setup", testMatch: /.*\.setup\.ts/, use: { ...devices["Desktop Chrome"] } },
 
     {

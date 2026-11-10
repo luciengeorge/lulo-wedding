@@ -1,102 +1,146 @@
-import { backend, expect, GUEST_PASSWORD, test, visit, enterPassword } from "../fixtures";
+import { backend, enterAsGuest, expect, party, searchName, test, visit } from "../fixtures";
 
 /**
- * The shared-password gate. Nothing on the guest side is reachable without it,
- * including the save-the-date, so these are the first user stories in the site.
+ * Getting in. There is no shared password: a guest either follows their own link
+ * (arrival.spec.ts) or types their name on /enter and picks their party. Nothing
+ * on the guest side is reachable before one of those, the save-the-date included.
+ *
+ * How the search matches names is lookup.spec.ts; this is what getting in does.
  */
-/**
- * These type the password over and over from one IP, and the gate allows twenty
- * tries per fifteen minutes. Three device projects would drain it mid-run.
- */
-test.beforeEach(() => backend.resetRateLimits());
 
-test.describe("the guest gate", () => {
-  test("sends an unlocked visitor to the gate and lets the right password through", async ({ page }) => {
+const TOKEN = "e2e-gate";
+
+test.beforeEach(() => backend.seed([party({ token: TOKEN, displayName: "Rae & Cherif", surname: "Haddad" })]));
+
+test.describe("a guest this device does not know", () => {
+  test("is sent to the name search, and lands on their own home page once they pick themselves", async ({ page }) => {
     await visit(page, "/");
     await expect(page).toHaveURL(/\/enter$/);
 
-    await enterPassword(page, GUEST_PASSWORD);
+    await searchName(page, "Rae Haddad");
+    await expect(page.getByText("Is this you?")).toBeVisible();
+    await page.getByRole("button", { name: "Rae & Cherif", exact: true }).click();
 
     await expect(page).toHaveURL("/");
+    await expect(page.getByText("Welcome, Rae & Cherif")).toBeVisible();
     await expect(page.getByText("FARAYA · LEBANON")).toBeVisible();
+    expect((await backend.activity(TOKEN)).visits).toEqual([{ source: "lookup" }]);
   });
 
-  test("refuses a wrong password without saying which part was wrong", async ({ page }) => {
+  test("is told kindly when the name is not on the list, and who to ask", async ({ page }) => {
     await visit(page, "/enter");
-    await enterPassword(page, "not-the-password");
+    await searchName(page, "Zeina Nobody");
 
-    await expect(page.getByRole("status")).toContainText(/does not match/i);
-    await expect(page).toHaveURL(/\/enter/);
+    await expect(
+      page.getByText("We couldn't find that name. Try another spelling, or the name of someone you are coming with."),
+    ).toBeVisible();
+    await expect(page.getByText("Can't find your name? Send Laura or Lucien a message.")).toBeVisible();
+    await expect(page).toHaveURL(/\/enter$/);
   });
 
-  test("keeps the visitor unlocked once they have the cookie", async ({ page }) => {
+  test("is asked for a first and last name when they type one word", async ({ page }) => {
     await visit(page, "/enter");
-    await enterPassword(page, GUEST_PASSWORD);
+    await searchName(page, "Rae");
+
+    await expect(page.getByText("Try your first and last name together.")).toBeVisible();
+    await expect(page.getByText("Can't find your name? Send Laura or Lucien a message.")).toBeVisible();
+  });
+
+  test("is not told who to message before they have searched", async ({ page }) => {
+    await visit(page, "/enter");
+    await expect(page.getByText(/Can't find your name/)).toHaveCount(0);
+  });
+});
+
+test.describe("a guest this device knows", () => {
+  test("is kept in, and never sees the search again", async ({ page }) => {
+    await visit(page, "/enter");
+    await enterAsGuest(page, "Rae Haddad");
     await expect(page).toHaveURL("/");
 
-    // A second visit to the gate should bounce, not ask again. WebKit reports
+    // A second visit to the search should bounce, not ask again. WebKit reports
     // that bounce as the navigation being "interrupted", so only that error is
     // tolerated; where the page ends up is what is asserted.
     await page.goto("/enter").catch((error: Error) => {
       if (!/interrupted by another navigation/.test(error.message)) throw error;
     });
     await expect(page).toHaveURL("/");
-    await expect(page.getByText("FARAYA · LEBANON")).toBeVisible();
+    await expect(page.getByText("Welcome, Rae & Cherif")).toBeVisible();
+  });
+
+  /** A shared phone, or the wrong name picked from the list. */
+  test('can say "Not you?" and is asked for their name again', async ({ page }) => {
+    await visit(page, "/enter");
+    await enterAsGuest(page, "Rae Haddad");
+    await expect(page.getByText("Welcome, Rae & Cherif")).toBeVisible();
+
+    await page.getByRole("button", { name: "Not you?" }).click();
+    await expect(page).toHaveURL(/\/enter$/);
+    await expect(page.getByLabel("Please enter your first and last name")).toBeVisible();
+
+    // Forgotten for real, not just navigated away from.
+    await visit(page, "/");
+    await expect(page).toHaveURL(/\/enter$/);
   });
 
   /**
-   * The whole reason the gate carries a redirect. A guest who lost their link and
-   * types the bare RSVP address has no cookie; a gate that always lands on the
-   * home page sends them away from the page they asked for. (A party's own link
-   * no longer meets the gate at all: see arrival.spec.ts.)
+   * The bug the owner hit: the couple re-imported the list, the party this phone
+   * remembered is gone, and the guest was stranded on "we could not find that
+   * invitation" with no way back. A dead token is forgotten, and the guest is
+   * simply asked for their name again.
+   */
+  test("whose party has since been deleted is asked for their name again, not stranded", async ({ page }) => {
+    await visit(page, `/rsvp/${TOKEN}`);
+    await expect(page.getByText("Rae & Cherif")).toBeVisible();
+
+    await backend.reset();
+    await backend.seed([party({ token: "e2e-gate-new", displayName: "Rae & Cherif", surname: "Haddad" })]);
+
+    await visit(page, "/");
+    await expect(page).toHaveURL(/\/enter$/);
+
+    // And /rsvp, which used to replay the dead token, asks too.
+    await visit(page, "/rsvp");
+    await expect(page).toHaveURL(/\/enter\?redirect=%2Frsvp$/);
+
+    await enterAsGuest(page, "Rae Haddad");
+    await expect(page).toHaveURL("/rsvp/e2e-gate-new?via=remembered");
+    await expect(page.getByText("Rae & Cherif")).toBeVisible();
+  });
+});
+
+test.describe("where the search sends a guest afterwards", () => {
+  /**
+   * The whole reason the search carries a redirect. A guest who lost their link
+   * and types the bare RSVP address has no cookie; a search that always lands on
+   * the home page sends them away from the page they asked for.
    */
   test("returns a guest to the page they actually asked for", async ({ page }) => {
     await visit(page, "/rsvp");
     await expect(page).toHaveURL(/\/enter\?redirect=%2Frsvp$/);
 
-    await enterPassword(page, GUEST_PASSWORD);
+    await enterAsGuest(page, "Rae Haddad");
 
-    await expect(page).toHaveURL("/rsvp");
-    await expect(page.getByRole("heading", { name: "Find your invitation" })).toBeVisible();
+    await expect(page).toHaveURL(`/rsvp/${TOKEN}?via=remembered`);
+    await expect(page.getByText("Tick the days each of you is coming to.")).toBeVisible();
   });
 
   /**
-   * The gate takes its destination from the URL, so without validation it is an
+   * The search takes its destination from the URL, so without validation it is an
    * open redirect, and these guests are the ideal mark: the link arrives from
    * someone they trust and nobody checks the host.
    */
   test("refuses to be pointed at another site", async ({ page }) => {
     await visit(page, "/enter?redirect=https://evil.example/login");
-    await enterPassword(page, GUEST_PASSWORD);
+    await enterAsGuest(page, "Rae Haddad");
 
     await expect(page).toHaveURL("/");
   });
 
   test("refuses a scheme-relative redirect, which a browser reads as another host", async ({ page }) => {
     await visit(page, "/enter?redirect=//evil.example");
-    await enterPassword(page, GUEST_PASSWORD);
+    await enterAsGuest(page, "Rae Haddad");
 
     await expect(page).toHaveURL("/");
-  });
-});
-
-/**
- * The gate's rate limit is keyed by the caller's IP, which only our server can
- * vouch for. A direct caller choosing a fresh key per guess would never meet it.
- */
-test.describe("a password guess sent straight to the backend", () => {
-  test("is refused without the app server's secret, even with the right password", async ({ request }) => {
-    for (const serverSecret of [undefined, "", "a-guess"]) {
-      const response = await request.post("http://127.0.0.1:3210/api/mutation", {
-        data: {
-          path: "guests:verifyGuestPassword",
-          args: { password: GUEST_PASSWORD, clientKey: "203.0.113.7", serverSecret },
-          format: "json",
-        },
-      });
-      const body = (await response.json()) as { status: string; value?: unknown };
-      expect(body.status).toBe("error");
-      expect(body.value).toBeUndefined();
-    }
   });
 });

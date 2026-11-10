@@ -10,7 +10,7 @@ import { useGuestSession } from "@/lib/guest-session.server";
 import { createLogger } from "@/lib/logger";
 import { type EventFlags, invitedNames, RSVP_EVENTS } from "@/lib/rsvp-rules";
 import { FAQS, TRAVEL_NOTES, WEDDING_EVENTS } from "@/lib/wedding-details.server";
-import { isPublic, showTo } from "@/lib/wedding-info";
+import { showTo } from "@/lib/wedding-info";
 
 const logger = createLogger("home-content");
 
@@ -35,11 +35,8 @@ const HomeContentSchema = z.object({ as: z.string().max(64).optional() });
  *
  * The pre-wedding and brunch are for some guests only, so a party is sent just
  * its own events and the details tagged with them; the rest never leave the
- * server. The page only knows the party when this device has opened its
- * invitation link before. Everyone else got in with the shared password and gets
- * what is public, plus `hidden`: how much is held back in each section, so the
- * page can tell them there is more once they find their invitation. A known party
- * is never told about events it is not invited to.
+ * server. Every guest past the name search is a known party. Only the couple,
+ * who are let in without picking one, see the public page.
  *
  * `as` is the couple's preview: a party id, honoured only for a signed-in admin
  * (Convex checks), and otherwise ignored.
@@ -60,17 +57,11 @@ export const getHomeContent = createServerFn({ method: "GET" })
           : [scheduleEvent("wedding", [])];
 
       return {
-        known: invitation !== null,
+        guest: preview ? null : (invitation?.displayName ?? null),
         preview: preview?.displayName ?? null,
         events,
         faqs: showTo(FAQS, keys),
         travelNotes: showTo(TRAVEL_NOTES, keys),
-        hidden: invitation
-          ? { travel: 0, faq: 0 }
-          : {
-              travel: TRAVEL_NOTES.filter((note) => !isPublic(note)).length,
-              faq: FAQS.filter((faq) => !isPublic(faq)).length,
-            },
       };
     });
   });
@@ -90,8 +81,7 @@ async function previewOf(partyId: string): Promise<Invitation | null> {
 async function invitationFor(token: string | undefined): Promise<Invitation | null> {
   if (!token) return null;
 
-  // The schedule is the only part of the page that needs the party, so a failed
-  // lookup shows the password view rather than an error page.
+  // A failed lookup shows the public page rather than an error page.
   const result = await fetchAuthQuery(api.rsvp.getByToken, { token }).catch((error: unknown) => {
     logger.warn("could not load schedule", { error });
     return null;

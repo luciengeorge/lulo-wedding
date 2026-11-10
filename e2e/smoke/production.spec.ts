@@ -16,15 +16,15 @@ test.beforeEach(async ({ context, baseURL }) => {
   await passProtection(context, baseURL!);
 });
 
-test("the site loads and asks for the password", async ({ page }) => {
+test("the site loads and asks for a name", async ({ page }) => {
   const response = await page.goto("/");
   expect(response?.ok()).toBe(true);
   await expect(page).toHaveURL(/\/enter/);
-  await expect(page.getByLabel(/password from your invitation/i)).toBeVisible();
+  await expect(page.getByLabel("Please enter your first and last name")).toBeVisible();
 });
 
 /**
- * Either a 404 while the RSVP is switched off in production, or the password page
+ * Either a 404 while the RSVP is switched off in production, or the name search
  * once it is on. Never an invitation.
  */
 test("a link that names no party opens nothing", async ({ page }) => {
@@ -32,7 +32,7 @@ test("a link that names no party opens nothing", async ({ page }) => {
   const status = response?.status();
   const gated = /\/enter\?redirect=/.test(page.url());
   expect(status === 404 || gated, `status ${status} at ${page.url()}`).toBe(true);
-  await expect(page.getByRole("button", { name: "JOYFULLY ACCEPT" })).toHaveCount(0);
+  await expect(page.getByRole("button", { name: /^(WE|I)'LL BE THERE$/ })).toHaveCount(0);
 });
 
 test("the Resend webhook is routed and refuses an unsigned event", async ({ request }) => {

@@ -5,8 +5,9 @@ import { expect } from "./fixtures";
 /**
  * Driving the RSVP form, shared by the specs that walk many shapes of it.
  *
- * Cards are found by their legend ("GUEST 3", "PLUS ONE"), not by position:
- * position would pick up the nested "Coming to" fieldsets. The day chips are
+ * Cards are found by their legend, not by position: position would pick up the
+ * nested "Coming to" fieldsets. A seat nobody has named yet is "GUEST 3" (or
+ * "PLUS ONE"); someone already on the list is their first name. The day chips are
  * real checkboxes under a covering label, which Playwright sees as an
  * interceptor, hence `force`.
  */
@@ -48,17 +49,41 @@ export function chip(page: Page, legend: string, key: EventKey) {
   return card(page, legend).getByRole("checkbox", { name: labelOf(key), exact: true });
 }
 
-/** The ask screen lists exactly these events, each with its date. */
-export async function expectAskScreen(page: Page, invited: readonly EventKey[]) {
-  await expect(page.getByRole("button", { name: "JOYFULLY ACCEPT" })).toBeVisible();
-  for (const event of EVENTS) {
-    if (invited.includes(event.key)) {
-      await expect(page.getByText(event.label, { exact: true })).toBeVisible();
-      await expect(page.getByText(event.date, { exact: true })).toBeVisible();
-    } else {
-      await expect(page.getByText(event.label, { exact: true })).toHaveCount(0);
-    }
-  }
+/**
+ * The reply form's buttons. Their wording follows the party: "I" for an
+ * invitation to one person, "we" for anything bigger.
+ */
+export const COMING = /^(WE|I)'LL BE THERE$/;
+export const NOT_COMING = /^(WE|I) CAN'T MAKE IT$/;
+/** The way back from the decline screen to the form. */
+export const CAN_COME = /^Actually, (we|I) can come$/;
+/** The way back from a stored decline, on the confirmation. */
+export const CAN_COME_AFTER_ALL = /^ACTUALLY, (WE|I) CAN COME$/;
+
+export function comingButton(page: Page) {
+  return page.getByRole("button", { name: COMING });
+}
+
+export function notComingButton(page: Page) {
+  return page.getByRole("button", { name: NOT_COMING });
+}
+
+export function emailField(page: Page) {
+  return page.getByLabel("Email me a copy (optional)");
+}
+
+/** An unanswered party opens straight on the form, with no question in front of it. */
+export async function expectReplyForm(page: Page) {
+  await expect(page.getByText("Tick the days each of you is coming to.")).toBeVisible();
+  await expect(comingButton(page)).toBeVisible();
+  await expect(notComingButton(page)).toBeVisible();
+}
+
+/** Opens the decline screen from the form, optionally types an address, and sends. */
+export async function decline(page: Page, email?: string) {
+  await notComingButton(page).click();
+  if (email !== undefined) await emailField(page).fill(email);
+  await page.getByRole("button", { name: "SEND", exact: true }).click();
 }
 
 /** One card offers exactly these day chips, no more. */
@@ -79,9 +104,10 @@ export async function fillCard(
   for (const day of days) await chip(page, legend, day).check({ force: true });
 }
 
-export async function sendReply(page: Page, email: string) {
-  await page.getByLabel("Your email").fill(email);
-  await page.getByRole("button", { name: "SEND OUR REPLY" }).click();
+/** Sends the form. The address is optional: without one, nothing is emailed. */
+export async function sendReply(page: Page, email?: string) {
+  if (email !== undefined) await emailField(page).fill(email);
+  await comingButton(page).click();
 }
 
 /** The status the server must store: invited and ticked is yes, invited and not is no, never asked is pending. */

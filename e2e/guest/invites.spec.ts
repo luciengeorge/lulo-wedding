@@ -1,8 +1,7 @@
 import type { APIRequestContext, Page } from "@playwright/test";
 
-import { backend, expect, GUEST_STATE, party, test, visit } from "../fixtures";
-
-test.use({ storageState: GUEST_STATE });
+import { backend, expect, party, test, visit } from "../fixtures";
+import { comingButton, emailField } from "../rsvp-form";
 
 /**
  * Per-guest invites: the couple name two of a family of five and ask just those
@@ -47,14 +46,12 @@ test.describe("a family where the couple asked two people to the brunch", () => 
     await seedFamily();
     await visit(page, `/rsvp/${TOKEN}`);
 
-    // Screen one is for the household: the brunch is part of this invitation.
-    await expect(page.getByText("Brunch")).toBeVisible();
-    await page.getByRole("button", { name: "JOYFULLY ACCEPT" }).click();
-
-    // The couple's names come pre-filled, in the first two cards.
-    await expect(page.getByLabel("First name, guest 1")).toHaveValue("Nadia");
-    await expect(page.getByLabel("First name, guest 2")).toHaveValue("Omar");
-    for (const legend of ["GUEST 1", "GUEST 2"]) {
+    // The couple's names come first, as names: nothing to type for them.
+    await expect(card(page, "Nadia")).toContainText("Nadia Haddad");
+    await expect(card(page, "Omar")).toContainText("Omar Haddad");
+    await expect(page.getByLabel("First name, guest 1")).toHaveCount(0);
+    await expect(page.getByLabel("First name, guest 2")).toHaveCount(0);
+    for (const legend of ["Nadia", "Omar"]) {
       await expect(chip(page, legend, "Brunch")).toHaveCount(1);
       await expect(chip(page, legend, "Wedding")).toHaveCount(1);
     }
@@ -63,17 +60,14 @@ test.describe("a family where the couple asked two people to the brunch", () => 
       await expect(chip(page, legend, "Wedding")).toHaveCount(1);
     }
 
-    await chip(page, "GUEST 1", "Wedding").check({ force: true });
-    await chip(page, "GUEST 1", "Brunch").check({ force: true });
-    await card(page, "GUEST 1").getByLabel("No email address").check({ force: true });
-    await chip(page, "GUEST 2", "Wedding").check({ force: true });
-    await card(page, "GUEST 2").getByLabel("No email address").check({ force: true });
+    await chip(page, "Nadia", "Wedding").check({ force: true });
+    await chip(page, "Nadia", "Brunch").check({ force: true });
+    await chip(page, "Omar", "Wedding").check({ force: true });
     await page.getByLabel("First name, guest 3").fill("Sara");
     await page.getByLabel("Last name, guest 3").fill("Haddad");
-    await card(page, "GUEST 3").getByLabel("No email address").check({ force: true });
     await chip(page, "GUEST 3", "Wedding").check({ force: true });
-    await page.getByLabel("Your email").fill("nadia@example.com");
-    await page.getByRole("button", { name: "SEND OUR REPLY" }).click();
+    await emailField(page).fill("nadia@example.com");
+    await comingButton(page).click();
 
     await expect(page.getByText("Thank you")).toBeVisible();
     expect((await backend.replyFor(TOKEN))?.guests).toEqual([
@@ -89,17 +83,14 @@ test.describe("a family where the couple asked two people to the brunch", () => 
   test("never lets a guest remove someone the couple named, only mark them not coming", async ({ page }) => {
     await seedFamily();
     await visit(page, `/rsvp/${TOKEN}`);
-    await page.getByRole("button", { name: "JOYFULLY ACCEPT" }).click();
 
-    await expect(card(page, "GUEST 1").getByRole("button", { name: "Remove" })).toHaveCount(0);
-    await card(page, "GUEST 1").getByLabel("Nadia cannot make it").check();
+    await expect(card(page, "Nadia").getByRole("button", { name: "Remove" })).toHaveCount(0);
+    await card(page, "Nadia").getByLabel("Nadia can't make it").check();
     // Marked not coming, the card stops asking about days.
-    await expect(chip(page, "GUEST 1", "Wedding")).toHaveCount(0);
+    await expect(chip(page, "Nadia", "Wedding")).toHaveCount(0);
 
-    await chip(page, "GUEST 2", "Wedding").check({ force: true });
-    await card(page, "GUEST 2").getByLabel("No email address").check({ force: true });
-    await page.getByLabel("Your email").fill("omar@example.com");
-    await page.getByRole("button", { name: "SEND OUR REPLY" }).click();
+    await chip(page, "Omar", "Wedding").check({ force: true });
+    await comingButton(page).click();
     await expect(page.getByText("Thank you")).toBeVisible();
 
     const nadia = (await backend.replyFor(TOKEN))?.guests.find((guest) => guest.firstName === "Nadia");
@@ -116,10 +107,10 @@ test.describe("a family where the couple asked two people to the brunch", () => 
       }),
     );
 
-    // Coming back, her card opens as "cannot make it", not as a blank seat.
+    // Coming back, her card opens as "can't make it", not as a blank seat.
     await visit(page, `/rsvp/${TOKEN}`);
     await page.getByRole("button", { name: "CHANGE OUR REPLY" }).click();
-    await expect(card(page, "GUEST 1").getByLabel("Nadia cannot make it")).toBeChecked();
+    await expect(card(page, "Nadia").getByLabel("Nadia can't make it")).toBeChecked();
   });
 });
 
