@@ -321,7 +321,7 @@ export const submit = mutation({
     }
 
     const now = Date.now();
-    // Left blank, the address already on file stays, so no field is cleared by omission.
+    // Left blank: no receipt this time, and the address already on file stays for the couple's invitations.
     const email = trimmed(contactEmail);
 
     if (declined) {
@@ -339,7 +339,7 @@ export const submit = mutation({
         guestNote: trimmed(guestNote),
       });
 
-      await ctx.scheduler.runAfter(0, internal.rsvp.sendConfirmation, { partyId: party._id });
+      if (email) await ctx.scheduler.runAfter(0, internal.rsvp.sendConfirmation, { partyId: party._id });
       return { ok: true as const, seatsNamed: 0, headCount: party.headCount };
     }
 
@@ -390,7 +390,7 @@ export const submit = mutation({
       guestNote: trimmed(guestNote),
     });
 
-    await ctx.scheduler.runAfter(0, internal.rsvp.sendConfirmation, { partyId: party._id });
+    if (email) await ctx.scheduler.runAfter(0, internal.rsvp.sendConfirmation, { partyId: party._id });
 
     return {
       ok: true as const,
@@ -554,7 +554,10 @@ export const lookupByName = mutation({
     const limit = await rateLimiter.limit(ctx, "nameLookup", { key: clientKey });
     if (!limit.ok) return { kind: "rateLimited" as const, retryAfterMs: Math.ceil(limit.retryAfter ?? 0) };
 
-    const global = await rateLimiter.limit(ctx, "nameLookupGlobal");
+    // Checked here, spent only on a search that hands out a link (below). A miss
+    // gives nothing away, so someone typing junk from many addresses cannot use up
+    // the budget and shut every guest out of the site.
+    const global = await rateLimiter.check(ctx, "nameLookupGlobal");
     if (!global.ok) return { kind: "rateLimited" as const, retryAfterMs: Math.ceil(global.retryAfter ?? 0) };
 
     const query = typed.slice(0, 200);
@@ -570,6 +573,7 @@ export const lookupByName = mutation({
 
     const found = parties.filter((party) => matches(query, nameKeys(party, guestsByParty.get(party._id) ?? [])));
     if (found.length > MAX_LOOKUP_MATCHES) return { kind: "tooMany" as const };
+    if (found.length > 0) await rateLimiter.limit(ctx, "nameLookupGlobal");
 
     return {
       kind: "matches" as const,

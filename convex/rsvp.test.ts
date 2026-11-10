@@ -430,6 +430,14 @@ describe("submit: a party coming back to change their reply", () => {
 
     expect(partyRows.get(party._id)).toHaveProperty("contactEmail", "rae@example.com");
   });
+
+  it("sends no receipt when the guest leaves the email blank", async () => {
+    const { ctx, scheduler } = harness([{ ...party, contactEmail: "rae@example.com" }]);
+
+    await submit._handler(ctx, { token: TOKEN, declined: false, contactEmail: "", guests: [card()] });
+
+    expect(scheduler.runAfter).not.toHaveBeenCalled();
+  });
 });
 
 describe("submit: plus ones", () => {

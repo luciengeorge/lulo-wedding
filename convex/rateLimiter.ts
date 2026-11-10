@@ -37,7 +37,8 @@ export const rateLimiter = new RateLimiter(components.rateLimiter, {
   //   always the IP our server saw and cannot be rotated per call. What is left is
   //   someone with many real IPs, each held to the limit above. Raised from 200,
   //   because at 200 one such person could lock every guest out of the search; at
-  //   1,000 the whole list searching on invitation day stays well under it.
+  //   1,000 the whole list searching on invitation day stays well under it. Only
+  //   searches that find a party count, so misses cannot use it up.
   nameLookupGlobal: { kind: "fixed window", rate: 1000, period: HOUR },
   // Generic: per-second hot-loop guard
   hotPath: { kind: "token bucket", rate: 1, period: SECOND, capacity: 5 },
