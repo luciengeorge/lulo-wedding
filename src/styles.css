@@ -22,6 +22,8 @@
   --font-script: "Pinyon Script", "Snell Roundhand", cursive;
 
   --color-paper: #f9f1e5;
+  /* A shade under paper, for a note set apart from the text around it. */
+  --color-paper-deep: #f3e7d6;
   --color-ink: #9b0d17;
   --color-bark: #3e2f26;
   --color-amber: #d89353;
