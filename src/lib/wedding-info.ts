@@ -64,6 +64,8 @@ export type WeddingEvent = {
   time: string | null;
   dress: string | null;
   shuttle: { from: string; time: string | null } | null;
+  /** What only this day's guests need: grass underfoot, the swim, the late finish. */
+  goodToKnow: string | null;
   /** Offer an add-to-calendar link. */
   calendar: boolean;
 };
@@ -102,7 +104,7 @@ export const PLACES: readonly { name: string; kind: string; text: string }[] = [
   {
     name: "Batroun",
     kind: "The coast",
-    text: "A coastal town in the north and one of the oldest continuously inhabited places in the world. Bolero, Almaza Bay, Butler's Beach Club and the Phoenician Wall are all worth a visit.",
+    text: "A coastal town in the north and one of the oldest continuously inhabited places in the world. Bolero, Almaza Bay, Lumi Beach House and the Phoenician Wall are all worth a visit.",
   },
   {
     name: "Cedars of God",
@@ -118,8 +120,20 @@ export const WINERIES: readonly { name: string; town: string }[] = [
   { name: "Atibaia", town: "Smar Jbeil" },
 ];
 
-/** What the registry section says once there is something to say. */
-export const REGISTRY: { text: string; href?: string } | null = null;
+/**
+ * Two ways to give, because not everyone can send money abroad. `detail` is the
+ * account or the shop, null until the couple have it.
+ */
+export const REGISTRY: readonly { title: string; text: string; detail: string | null }[] = [
+  { title: "From abroad", text: "A bank transfer.", detail: null },
+  { title: "In Lebanon", text: "A gift list at a local shop.", detail: null },
+];
+
+/** The planner's advice for guests landing in Beirut: one safe app, with a code for the wedding. */
+export const AIRPORT_TAXI = { name: "Allo Taxi", code: null as string | null };
+
+/** Day tours, for guests making a trip of it. `contact` is null until the planner sends it. */
+export const TOURS = { contact: null as string | null };
 
 /** `tel:` wants no spaces. */
 export function telHref(number: string) {

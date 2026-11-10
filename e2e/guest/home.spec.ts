@@ -111,6 +111,25 @@ test.describe("a party whose invitation this device has opened", () => {
     await expect(section.getByRole("heading", { name: /Brunch/ })).toBeVisible();
   });
 
+  test("reads the weekend in date order, with the wedding open and the other days folded", async ({ page }) => {
+    await backend.seed([party({ token: "e2e-home-fold", invitedToPreWedding: true, invitedToBrunch: true })]);
+
+    await visit(page, "/rsvp/e2e-home-fold");
+    await visit(page, "/");
+
+    const section = schedule(page);
+    await expect(section.getByRole("listitem").nth(0)).toContainText("Two days before");
+    await expect(section.getByRole("listitem").nth(1)).toContainText("The day");
+    await expect(section.getByRole("listitem").nth(2)).toContainText("The day after");
+    await expect(section.getByText("Shuttle from the InterContinental Mzaar")).toBeVisible();
+
+    const brunch = section.getByRole("listitem").nth(2);
+    await expect(brunch.getByText("Place, time and dress code to come", { exact: true })).toBeVisible();
+    await expect(brunch.getByText("Place, time and dress code to come.", { exact: true })).toBeHidden();
+    await brunch.getByRole("heading", { name: /Brunch/ }).click();
+    await expect(brunch.getByText("Place, time and dress code to come.", { exact: true })).toBeVisible();
+  });
+
   test("does not see an event it is not invited to", async ({ page }) => {
     await backend.seed([party({ token: "e2e-home-brunch", invitedToBrunch: true })]);
 

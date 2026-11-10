@@ -21,6 +21,7 @@ export const WEDDING_EVENTS: readonly WeddingEvent[] = [
     time: null,
     dress: null,
     shuttle: null,
+    goodToKnow: null,
     calendar: false,
   },
   {
@@ -33,6 +34,7 @@ export const WEDDING_EVENTS: readonly WeddingEvent[] = [
     time: null,
     dress: "Formal. Comfortable shoes and a light layer for the mountain evening.",
     shuttle: { from: "the InterContinental Mzaar", time: null },
+    goodToKnow: null,
     calendar: true,
   },
   {
@@ -45,6 +47,7 @@ export const WEDDING_EVENTS: readonly WeddingEvent[] = [
     time: null,
     dress: null,
     shuttle: null,
+    goodToKnow: null,
     calendar: false,
   },
 ];
