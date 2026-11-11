@@ -488,6 +488,9 @@ function hasAnswers(guest: Doc<"guests">): boolean {
  * Refused once the party's named seats are full. The reply form will not accept
  * more names than the head count, and a party that could not reply because of a
  * guest the couple added would have no way out.
+ *
+ * `isPlusOne` names the party's plus one instead, which takes no seat but needs
+ * the party to be allowed one and to have none yet.
  */
 export const addNamedGuest = mutation({
   args: {
@@ -496,9 +499,10 @@ export const addNamedGuest = mutation({
     lastName: v.string(),
     phone: v.optional(v.string()),
     invitedTo: v.optional(eventFlags),
+    isPlusOne: v.optional(v.boolean()),
   },
   returns: v.id("guests"),
-  handler: async (ctx, { partyId, firstName, lastName, phone, invitedTo }) => {
+  handler: async (ctx, { partyId, firstName, lastName, phone, invitedTo, isPlusOne = false }) => {
     await requireAdmin(ctx);
 
     const party = await ctx.db.get(partyId);
@@ -508,7 +512,12 @@ export const addNamedGuest = mutation({
       .query("guests")
       .withIndex("by_party", (q) => q.eq("partyId", partyId))
       .collect();
-    if (guests.filter((guest) => !guest.isPlusOne).length >= party.headCount) {
+    if (isPlusOne) {
+      if (!party.plusOneAllowed) throw new ConvexError(`${party.displayName} is not allowed a plus one.`);
+      if (guests.some((guest) => guest.isPlusOne)) {
+        throw new ConvexError(`${party.displayName} already has a plus one.`);
+      }
+    } else if (guests.filter((guest) => !guest.isPlusOne).length >= party.headCount) {
       throw new ConvexError(
         `${party.displayName} already has ${party.headCount} named seat(s). Raise the head count first.`,
       );
@@ -519,7 +528,7 @@ export const addNamedGuest = mutation({
       partyId,
       ...guestName(firstName, lastName),
       ...(trimmedPhone ? { phone: trimmedPhone } : {}),
-      isPlusOne: false,
+      isPlusOne,
       preWedding: "pending",
       wedding: "pending",
       brunch: "pending",
@@ -592,6 +601,7 @@ export const namedGuests = query({
       phone: v.optional(v.string()),
       /** Absent when this person follows the party's flags. */
       invitedTo: v.optional(eventFlags),
+      isPlusOne: v.boolean(),
       hasAnswers: v.boolean(),
     }),
   ),
@@ -611,6 +621,7 @@ export const namedGuests = query({
         lastName: guest.lastName,
         phone: guest.phone,
         invitedTo: guest.invitedTo,
+        isPlusOne: guest.isPlusOne,
         hasAnswers: hasAnswers(guest),
       }));
   },
