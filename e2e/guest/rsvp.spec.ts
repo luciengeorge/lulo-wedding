@@ -461,3 +461,37 @@ test.describe("the invitation arrives without a round trip", () => {
     expect(await response.text()).toContain("Rae &amp; Cherif");
   });
 });
+
+test.describe("a plus one the couple named", () => {
+  test("arrives filled in: the party only picks the days, and can't remove them", async ({ page }) => {
+    await backend.seed([
+      party({ token: TOKEN, displayName: "Lucy", surname: "Haddad", headCount: 1, plusOneAllowed: true }),
+    ]);
+    await backend.seedGuests(TOKEN, [
+      { firstName: "Lucy", lastName: "Haddad", addedByCouple: true },
+      { firstName: "Sami", lastName: "Aoun", addedByCouple: true, isPlusOne: true },
+    ]);
+    await visit(page, `/rsvp/${TOKEN}`);
+
+    await expect(page.getByText("YOUR PLUS ONE")).toBeVisible();
+    await expect(card(page, "Sami")).toContainText("Sami Aoun, plus one");
+    await expect(card(page, "Sami").getByRole("button", { name: "Remove" })).toHaveCount(0);
+    await expect(page.getByRole("button", { name: "+ Add a plus one" })).toHaveCount(0);
+
+    await card(page, "Lucy").getByRole("checkbox", { name: "Wedding", exact: true }).check({ force: true });
+    await card(page, "Sami").getByRole("checkbox", { name: "Wedding", exact: true }).check({ force: true });
+    await sendButton(page).click();
+    await expect(page.getByText("Thank you")).toBeVisible();
+
+    const sami = (await backend.replyFor(TOKEN))?.guests.find((guest) => guest.firstName === "Sami");
+    expect(sami).toEqual(expect.objectContaining({ isPlusOne: true, lastName: "Aoun", wedding: "yes" }));
+  });
+
+  test("left unnamed, the party still adds their own", async ({ page }) => {
+    await backend.seed([party({ token: TOKEN, headCount: 1, plusOneAllowed: true })]);
+    await visit(page, `/rsvp/${TOKEN}`);
+
+    await page.getByRole("button", { name: "+ Add a plus one" }).click();
+    await expect(page.getByLabel("First name, guest 2")).toBeVisible();
+  });
+});

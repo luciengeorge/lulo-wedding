@@ -331,7 +331,8 @@ function ReplyForm({
                 disabled={busy}
                 errors={byGuest.get(drafts.length) ?? {}}
                 onChange={editPlusOne}
-                onRemove={() => editPlusOne(null)}
+                // Named by the couple: like any seat they named, it can be marked not coming but not removed.
+                onRemove={plusOne.addedByCouple ? undefined : () => editPlusOne(null)}
               />
             ) : (
               <button

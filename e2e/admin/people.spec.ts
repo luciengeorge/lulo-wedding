@@ -122,6 +122,34 @@ test.describe("people the couple name in a party", () => {
   });
 });
 
+test.describe("a plus one the couple name", () => {
+  test("is offered only to a party allowed one, and only once", async ({ page }) => {
+    const LUCY = "e2e-people-lucy";
+    await backend.seed([
+      party({ token: TOKEN, displayName: "Nadia & Omar", surname: "Haddad", headCount: 2 }),
+      party({ token: LUCY, displayName: "Lucy", surname: "Aoun", headCount: 1, plusOneAllowed: true }),
+    ]);
+    await openAdmin(page);
+    let dialog = await editParty(page, "Nadia & Omar");
+    await expect(person(page, "Add a person")).toBeVisible();
+    await expect(person(page, "Add their plus one")).toHaveCount(0);
+    await dialog.getByRole("button", { name: "Cancel" }).click();
+
+    dialog = await editParty(page, "Lucy");
+    const adding = person(page, "Add their plus one");
+    await adding.getByLabel("First name").fill("Sami");
+    await adding.getByLabel("Last name").fill("Haddad");
+    await adding.getByRole("button", { name: "Add plus one" }).click();
+
+    await expect(page.getByText("Added Sami Haddad to Lucy as their plus one")).toBeVisible();
+    await expect(person(page, "Sami Haddad").getByText("Plus one", { exact: true })).toBeVisible();
+    await expect(person(page, "Add their plus one")).toHaveCount(0);
+    expect((await backend.replyFor(LUCY))?.guests).toEqual([
+      expect.objectContaining({ firstName: "Sami", isPlusOne: true, addedByCouple: true }),
+    ]);
+  });
+});
+
 test.describe("the party's phone number", () => {
   test("is saved from the party dialog", async ({ page }) => {
     await seedFamily();
