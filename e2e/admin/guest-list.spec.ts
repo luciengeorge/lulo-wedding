@@ -71,11 +71,26 @@ test.describe("the guest list", () => {
     await expect(page.getByText("Viewing as")).toHaveCount(0);
   });
 
-  test("opens the home page without being asked for a name", async ({ page }) => {
+  test("opens the home page without being asked for a name, with every event", async ({ page }) => {
     await visit(page, "/");
 
     await expect(page).toHaveURL("/");
     await expect(page.getByText("FARAYA · LEBANON")).toBeVisible();
     await expect(page.getByText(/^Welcome,/)).toHaveCount(0);
+    const schedule = page.getByRole("region", { name: "The weekend" });
+    for (const event of [/Pre-wedding/, /The wedding/, /Brunch/]) {
+      await expect(schedule.getByRole("heading", { name: event })).toBeVisible();
+    }
+  });
+
+  test("still sees every event after opening a party's link on the same device", async ({ page }) => {
+    await backend.seed([party({ token: "e2e-admin-link", displayName: "Hala", invitedToBrunch: false })]);
+    await visit(page, "/rsvp/e2e-admin-link");
+    await visit(page, "/");
+
+    await expect(page.getByText(/^Welcome,/)).toHaveCount(0);
+    const schedule = page.getByRole("region", { name: "The weekend" });
+    await expect(schedule.getByRole("heading", { name: /Pre-wedding/ })).toBeVisible();
+    await expect(schedule.getByRole("heading", { name: /Brunch/ })).toBeVisible();
   });
 });
