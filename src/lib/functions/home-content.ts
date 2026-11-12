@@ -6,6 +6,7 @@ import type { Faq, Shown, TravelNote, WeddingEvent } from "@/lib/wedding-info";
 
 import { api } from "@/../convex/_generated/api";
 import { fetchAuthQuery } from "@/lib/auth-server";
+import { getAdminSession } from "@/lib/functions/admin-session";
 import { useGuestSession } from "@/lib/guest-session.server";
 import { createLogger } from "@/lib/logger";
 import { type EventFlags, invitedNames, RSVP_EVENTS } from "@/lib/rsvp-rules";
@@ -35,8 +36,8 @@ const HomeContentSchema = z.object({ as: z.string().max(64).optional() });
  *
  * The pre-wedding and brunch are for some guests only, so a party is sent just
  * its own events and the details tagged with them; the rest never leave the
- * server. Every guest past the name search is a known party. Only the couple,
- * who are let in without picking one, see the public page.
+ * server. Every guest past the name search is a known party. The couple,
+ * signed in as admins, see every event and every detail.
  *
  * `as` is the couple's preview: a party id, honoured only for a signed-in admin
  * (Convex checks), and otherwise ignored.
@@ -46,18 +47,23 @@ export const getHomeContent = createServerFn({ method: "GET" })
   .handler(async ({ data }) => {
     return Sentry.startSpan({ name: "getHomeContent" }, async () => {
       const preview = data.as ? await previewOf(data.as) : null;
+      // Checked before the guest cookie: a couple who once picked a party on this
+      // device still get the whole page.
+      const admin = !preview && (await getAdminSession()).status === "ok";
       const session = await useGuestSession();
-      const invitation = preview ?? (await invitationFor(session.data.token));
+      const invitation = preview ?? (admin ? null : await invitationFor(session.data.token));
 
-      const keys = invitation ? RSVP_EVENTS.map((event) => event.key).filter((key) => invitation.invitedTo[key]) : [];
+      const keys = RSVP_EVENTS.map((event) => event.key).filter((key) =>
+        invitation ? invitation.invitedTo[key] : admin,
+      );
       // A party with nothing attached yet still gets the wedding day rather than an empty list.
       const events =
-        invitation && keys.length > 0
-          ? keys.map((key) => scheduleEvent(key, invitedNames(invitation, invitation.guests, key)))
+        keys.length > 0
+          ? keys.map((key) => scheduleEvent(key, invitation ? invitedNames(invitation, invitation.guests, key) : []))
           : [scheduleEvent("wedding", [])];
 
       return {
-        guest: preview ? null : (invitation?.displayName ?? null),
+        guest: preview || admin ? null : (invitation?.displayName ?? null),
         preview: preview?.displayName ?? null,
         events,
         faqs: showTo(FAQS, keys),
