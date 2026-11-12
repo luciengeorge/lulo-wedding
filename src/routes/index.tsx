@@ -78,7 +78,7 @@ function Hero({ guest }: { guest: string | null }) {
   const { isAdmin } = Route.useRouteContext();
 
   return (
-    <div className="lulo-hero relative flex min-h-[calc(100svh-52px)] w-full flex-col overflow-hidden text-ink lg:min-h-[calc(100svh-64px)]">
+    <div className="lulo-hero relative flex min-h-[calc(100svh-var(--jump-h))] w-full flex-col overflow-hidden text-ink">
       <VenueSketch />
       <OliveBranch />
 
@@ -89,7 +89,7 @@ function Hero({ guest }: { guest: string | null }) {
           on a short screen the content moves up instead, and below about 660px
           tall the type and gaps shrink with the height (the svh sizes) so the
           whole save-the-date fits. Wide screens: sized off --hero-u. */}
-      <div className="relative z-10 flex min-h-[calc(100svh-52px)] flex-col items-center justify-center px-6 text-center before:flex-1 after:min-h-[calc(var(--scene-party)*0.147+12px)] after:flex-1 lg:min-h-[calc(100svh-64px)] lg:pb-[calc(var(--scene-party)*0.15)] lg:after:min-h-0">
+      <div className="relative z-10 flex min-h-[calc(100svh-var(--jump-h))] flex-col items-center justify-center px-6 text-center before:flex-1 after:min-h-[calc(var(--scene-party)*0.147+12px)] after:flex-1 lg:pb-[calc(var(--scene-party)*0.15)] lg:after:min-h-0">
         {guest ? <Welcome name={guest} /> : null}
         <Monogram className="w-[min(56px,8svh)] lg:w-[calc(var(--hero-u)*9.1)] short:w-[7svh]" />
 
@@ -97,10 +97,10 @@ function Hero({ guest }: { guest: string | null }) {
           className="lulo-rise mt-[min(20px,2.8svh)] font-script leading-[1.08] lg:mt-[calc(var(--hero-u)*2.2)]"
           style={{ "--rise-delay": "1500ms" } as React.CSSProperties}
         >
-          <span className="block text-[length:min(70px,10.5svh)] lg:text-[length:calc(var(--hero-u)*11.56)] short:text-[length:9svh]">
+          <span className="block text-[length:min(70px,10.5svh)] lg:text-[length:calc(var(--hero-u)*11.56)] compact:text-[length:9svh] short:text-[length:8svh]">
             Laura
           </span>
-          <span className="block text-[length:min(70px,10.5svh)] lg:text-[length:calc(var(--hero-u)*11.56)] short:text-[length:9svh]">
+          <span className="block text-[length:min(70px,10.5svh)] lg:text-[length:calc(var(--hero-u)*11.56)] compact:text-[length:9svh] short:text-[length:8svh]">
             {/* Real space inside the small span, not padding on it: padding
                 looks right but makes the accessible name and any copied text
                 read "andLucien". */}
@@ -132,9 +132,11 @@ function Hero({ guest }: { guest: string | null }) {
         {FEATURES.rsvp ? (
           <Link
             to="/rsvp"
-            className="lulo-rise mt-[min(28px,3.8svh)] flex h-[46px] items-center rounded-[3px] border border-ink px-[26px] font-display text-sm font-semibold tracking-[0.16em] transition-colors hover:bg-ink hover:text-paper lg:mt-[calc(var(--hero-u)*3.1)] lg:h-[52px] lg:px-8 lg:text-[15px] short:h-10"
+            className="lulo-rise relative mt-[min(28px,3.8svh)] flex h-[46px] items-center rounded-[3px] border border-ink px-[26px] font-display text-sm font-semibold tracking-[0.16em] transition-colors hover:bg-ink hover:text-paper lg:mt-[calc(var(--hero-u)*3.1)] lg:h-[52px] lg:px-8 lg:text-[15px] compact:h-10 short:h-9 short:px-[22px]"
             style={{ "--rise-delay": "2200ms" } as React.CSSProperties}
           >
+            {/* Keeps a full-size tap target when the button is drawn short. */}
+            <span aria-hidden className="absolute inset-x-0 top-1/2 h-11 -translate-y-1/2" />
             RSVP
           </Link>
         ) : null}
@@ -154,7 +156,7 @@ function Welcome({ name }: { name: string }) {
 
   return (
     <div
-      className="lulo-rise mb-[min(32px,4.4svh)] flex flex-col items-center gap-1 lg:mb-[calc(var(--hero-u)*3.1)] short:mb-2 short:flex-row short:items-baseline short:gap-3"
+      className="lulo-rise mb-[min(32px,4.4svh)] flex flex-col items-center gap-1 lg:mb-[calc(var(--hero-u)*3.1)] compact:mb-2 compact:flex-row compact:flex-wrap compact:items-baseline compact:justify-center compact:gap-x-3"
       style={{ "--rise-delay": "1300ms" } as React.CSSProperties}
     >
       <p className="font-display text-[17px] leading-6 text-bark lg:text-[19px]">
