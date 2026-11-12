@@ -338,7 +338,8 @@
  * Narrow screens: the party is as big as the gap between the two lifts allows
  * (139.2vw), or as the hero's height allows (68.6svh - 36px). On a short phone
  * the room under the RSVP button runs out faster than either, so a third limit
- * (344svh - 1981px) keeps the fairy lights clear of it. The lifts are drawn a
+ * (344svh - 1981px) keeps the fairy lights clear of it (a guest name long enough
+ * to wrap is held clear by the hero's bottom spacer). The lifts are drawn a
  * little smaller than the party, with each base mast 58px in from its edge.
  *
  * Wide screens: everything is as tall as the hero, unless the page is too
@@ -351,9 +352,9 @@
   --scene-bleed: calc(var(--scene-lift) * 0.3526 - 58px);
 }
 
-@media (min-width: 1024px) {
+@media (min-width: 64rem) {
   .lulo-hero {
-    --hero-u: clamp(7px, 1svh, 10px);
+    --hero-u: min(1svh, 10px);
     --scene-party: min(100svh - 64px, 60.6vw + 80px);
     --scene-lift: var(--scene-party);
     --scene-bleed: 80px;
@@ -398,7 +399,7 @@
 /* The wide lifts draw the crest and the ground on towards the middle of the
    page. Each is cut 90px short of it, so the crest stops either side of the
    monogram whatever the shape of the screen. */
-@media (min-width: 1024px) {
+@media (min-width: 64rem) {
   .lulo-scene-teleski {
     clip-path: inset(0 calc(100% - 50vw - var(--scene-bleed) + 90px) 0 0);
   }

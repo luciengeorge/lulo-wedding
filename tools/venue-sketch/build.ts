@@ -133,7 +133,8 @@ function party(variant: Variant) {
     const washes = (layer.fills ?? [])
       .map(([c, d, o]) => `<path class="wash" fill="${c}"${o ? ` style="fill-opacity:${o}"` : ""} d="${d}"/>`)
       .join("");
-    // The seed moves on for every layer, shown or not, so both versions are drawn by the same hand.
+    // Layers left out of this version are skipped before the seed moves on, so the
+    // two versions' wobble can differ a little. No one sees both at once.
     seed += 3;
     const own =
       (layer.body ? `<path class="body" d="${layer.body}"/>` : "") + washes + paths(layer.strokes, seed, variant);

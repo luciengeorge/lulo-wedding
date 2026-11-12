@@ -84,9 +84,11 @@ function Hero({ guest }: { guest: string | null }) {
 
       {isAdmin ? <AdminBar /> : null}
 
-      {/* On wide screens the type is sized off the screen's height (--hero-u) and
-          kept clear of the party drawn along the bottom; see `.lulo-hero`. */}
-      <div className="relative z-10 flex min-h-[calc(100svh-52px)] flex-col items-center justify-center px-6 text-center lg:min-h-[calc(100svh-64px)] lg:pb-[calc(var(--scene-party)*0.141)]">
+      {/* Kept clear of the party drawn along the bottom; see `.lulo-hero`. Phones:
+          centred, but the bottom spacer never shrinks below the fairy lights, so
+          on a short screen the content moves up instead. Wide screens: the type
+          is sized off the screen's height (--hero-u). */}
+      <div className="relative z-10 flex min-h-[calc(100svh-52px)] flex-col items-center justify-center px-6 text-center before:flex-1 after:min-h-[calc(var(--scene-party)*0.147+12px)] after:flex-1 lg:min-h-[calc(100svh-64px)] lg:pb-[calc(var(--scene-party)*0.15)] lg:after:min-h-0">
         {guest ? <Welcome name={guest} /> : null}
         <Monogram className="w-14 lg:w-[calc(var(--hero-u)*9.1)]" />
 
