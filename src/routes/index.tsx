@@ -86,28 +86,33 @@ function Hero({ guest }: { guest: string | null }) {
 
       {/* Kept clear of the party drawn along the bottom; see `.lulo-hero`. Phones:
           centred, but the bottom spacer never shrinks below the fairy lights, so
-          on a short screen the content moves up instead. Wide screens: the type
-          is sized off the screen's height (--hero-u). */}
+          on a short screen the content moves up instead, and below about 660px
+          tall the type and gaps shrink with the height (the svh sizes) so the
+          whole save-the-date fits. Wide screens: sized off --hero-u. */}
       <div className="relative z-10 flex min-h-[calc(100svh-52px)] flex-col items-center justify-center px-6 text-center before:flex-1 after:min-h-[calc(var(--scene-party)*0.147+12px)] after:flex-1 lg:min-h-[calc(100svh-64px)] lg:pb-[calc(var(--scene-party)*0.15)] lg:after:min-h-0">
         {guest ? <Welcome name={guest} /> : null}
-        <Monogram className="w-14 lg:w-[calc(var(--hero-u)*9.1)]" />
+        <Monogram className="w-[min(56px,8svh)] lg:w-[calc(var(--hero-u)*9.1)] short:w-[7svh]" />
 
         <h1
-          className="lulo-rise mt-5 font-script leading-[1.08] lg:mt-[calc(var(--hero-u)*2.2)]"
+          className="lulo-rise mt-[min(20px,2.8svh)] font-script leading-[1.08] lg:mt-[calc(var(--hero-u)*2.2)]"
           style={{ "--rise-delay": "1500ms" } as React.CSSProperties}
         >
-          <span className="block text-[70px] lg:text-[length:calc(var(--hero-u)*11.56)]">Laura</span>
-          <span className="block text-[70px] lg:text-[length:calc(var(--hero-u)*11.56)]">
+          <span className="block text-[length:min(70px,10.5svh)] lg:text-[length:calc(var(--hero-u)*11.56)] short:text-[length:9svh]">
+            Laura
+          </span>
+          <span className="block text-[length:min(70px,10.5svh)] lg:text-[length:calc(var(--hero-u)*11.56)] short:text-[length:9svh]">
             {/* Real space inside the small span, not padding on it: padding
                 looks right but makes the accessible name and any copied text
                 read "andLucien". */}
-            <span className="align-baseline text-[32px] lg:text-[length:calc(var(--hero-u)*5.2)]">{"and "}</span>
+            <span className="align-baseline text-[length:min(32px,4.8svh)] lg:text-[length:calc(var(--hero-u)*5.2)]">
+              {"and "}
+            </span>
             Lucien
           </span>
         </h1>
 
         <p
-          className="lulo-rise mt-8 flex items-center gap-[0.42em] font-display text-[30px] font-semibold tracking-[0.1em] lg:mt-[calc(var(--hero-u)*3.56)] lg:text-[length:calc(var(--hero-u)*5.1)]"
+          className="lulo-rise mt-[min(32px,4.4svh)] flex items-center gap-[0.42em] font-display text-[length:min(30px,4.3svh)] font-semibold tracking-[0.1em] lg:mt-[calc(var(--hero-u)*3.56)] lg:text-[length:calc(var(--hero-u)*5.1)]"
           style={{ "--rise-delay": "1800ms" } as React.CSSProperties}
         >
           <span>17</span>
@@ -118,7 +123,7 @@ function Hero({ guest }: { guest: string | null }) {
         </p>
 
         <p
-          className="lulo-rise mt-5 font-display text-[14px] font-semibold tracking-place lg:mt-[calc(var(--hero-u)*2.2)] lg:text-[19px]"
+          className="lulo-rise mt-[min(20px,2.8svh)] font-display text-[14px] font-semibold tracking-place lg:mt-[calc(var(--hero-u)*2.2)] lg:text-[19px]"
           style={{ "--rise-delay": "2000ms" } as React.CSSProperties}
         >
           FARAYA · LEBANON
@@ -127,7 +132,7 @@ function Hero({ guest }: { guest: string | null }) {
         {FEATURES.rsvp ? (
           <Link
             to="/rsvp"
-            className="lulo-rise mt-7 flex h-[46px] items-center rounded-[3px] border border-ink px-[26px] font-display text-sm font-semibold tracking-[0.16em] transition-colors hover:bg-ink hover:text-paper lg:mt-[calc(var(--hero-u)*3.1)] lg:h-[52px] lg:px-8 lg:text-[15px]"
+            className="lulo-rise mt-[min(28px,3.8svh)] flex h-[46px] items-center rounded-[3px] border border-ink px-[26px] font-display text-sm font-semibold tracking-[0.16em] transition-colors hover:bg-ink hover:text-paper lg:mt-[calc(var(--hero-u)*3.1)] lg:h-[52px] lg:px-8 lg:text-[15px] short:h-10"
             style={{ "--rise-delay": "2200ms" } as React.CSSProperties}
           >
             RSVP
@@ -149,7 +154,7 @@ function Welcome({ name }: { name: string }) {
 
   return (
     <div
-      className="lulo-rise mb-8 flex flex-col items-center gap-1 lg:mb-[calc(var(--hero-u)*3.1)]"
+      className="lulo-rise mb-[min(32px,4.4svh)] flex flex-col items-center gap-1 lg:mb-[calc(var(--hero-u)*3.1)] short:mb-2 short:flex-row short:items-baseline short:gap-3"
       style={{ "--rise-delay": "1300ms" } as React.CSSProperties}
     >
       <p className="font-display text-[17px] leading-6 text-bark lg:text-[19px]">
@@ -174,7 +179,7 @@ function OliveBranch() {
   return (
     <div
       aria-hidden
-      className="lulo-sway pointer-events-none absolute -top-9 -left-12 w-[168px] lg:-top-13 lg:-left-16 lg:w-[262px]"
+      className="lulo-sway pointer-events-none absolute -top-9 -left-12 w-[min(168px,25svh)] lg:-top-13 lg:-left-16 lg:w-[262px]"
       style={{ "--sway-duration": "13s" } as React.CSSProperties}
     >
       <img alt="" src="/art/olive-branch.webp" className="lulo-grow block w-full" />
