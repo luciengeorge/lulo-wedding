@@ -40,7 +40,7 @@ export function JumpBar() {
   return (
     <nav
       aria-label="On this page"
-      className="sticky top-0 z-30 flex h-[52px] items-center border-b border-rule bg-paper lg:h-16 lg:px-12"
+      className="sticky top-0 z-30 flex h-(--jump-h) items-center border-b border-rule bg-paper lg:px-12"
     >
       {/* Name from xl up: at 1024px the side columns must narrow for the links to fit. */}
       <a
@@ -82,7 +82,7 @@ export function JumpBar() {
         <div className="flex shrink-0 justify-end lg:w-[140px] xl:w-[220px]">
           <Link
             to="/rsvp"
-            className="flex h-[52px] items-center bg-ink px-[18px] font-display text-xs font-semibold tracking-[0.18em] text-paper transition-opacity hover:opacity-90 lg:h-10 lg:rounded-[3px] lg:px-6 lg:text-[13px]"
+            className="flex h-(--jump-h) items-center bg-ink px-[18px] font-display text-xs font-semibold tracking-[0.18em] text-paper transition-opacity hover:opacity-90 lg:h-10 lg:rounded-[3px] lg:px-6 lg:text-[13px]"
           >
             RSVP
           </Link>

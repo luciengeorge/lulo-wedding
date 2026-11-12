@@ -8,8 +8,9 @@ const DRAWINGS = ["teleski", "chairlift", "party"] as const;
  */
 const STILL = "?still#still";
 
-/** A blank pixel for screens under 640px tall, where the scene is hidden, so the drawings are not downloaded. */
-const BLANK = "data:image/gif;base64,R0lGODlhAQABAAAAACH5BAEKAAEALAAAAAABAAEAAAICTAEAOw==";
+/** Where the wide drawings fit: desktop, and any screen wider than 13:10. Matches `.lulo-hero` in styles.css. */
+const WIDE = ["(min-width: 64rem)", "(min-aspect-ratio: 13/10)"];
+const REDUCED = "(prefers-reduced-motion: reduce)";
 
 /**
  * Le Refuge in pencil, behind the hero: the teleski climbs from the bottom left
@@ -26,13 +27,12 @@ export function VenueSketch() {
     <div aria-hidden className="lulo-scene pointer-events-none absolute inset-0">
       {DRAWINGS.map((name) => (
         <picture key={name}>
-          <source media="(max-height: 639px)" srcSet={BLANK} />
           <source
-            media="(prefers-reduced-motion: reduce) and (min-width: 64rem)"
+            media={WIDE.map((query) => `${REDUCED} and ${query}`).join(", ")}
             srcSet={`/art/venue/${name}.svg${STILL}`}
           />
-          <source media="(prefers-reduced-motion: reduce)" srcSet={`/art/venue/${name}-narrow.svg${STILL}`} />
-          <source media="(min-width: 64rem)" srcSet={`/art/venue/${name}.svg`} />
+          <source media={REDUCED} srcSet={`/art/venue/${name}-narrow.svg${STILL}`} />
+          <source media={WIDE.join(", ")} srcSet={`/art/venue/${name}.svg`} />
           {/* Low priority: on a slow connection the names and fonts come first; the
               scene only fades in at 1.7s anyway. */}
           <img

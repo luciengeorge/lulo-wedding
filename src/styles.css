@@ -8,8 +8,37 @@
 @plugin "@tailwindcss/typography";
 
 @custom-variant dark (&:is(.dark *));
-/* A phone on its side: the hero tightens further so the save-the-date still fits. */
+/* A short screen below desktop width: a very short phone, or a wide one under
+   640px tall (a phone on its side, an unfolded iPhone Duo). The hero's welcome
+   goes on one line, the names shrink and the jump bar slims, so the whole
+   venue sketch still fits under the save-the-date. */
+@custom-variant compact {
+  @media (width < 64rem) and (max-height: 500px) {
+    @slot;
+  }
+  @media (width < 64rem) and (min-aspect-ratio: 13/10) and (max-height: 639px) {
+    @slot;
+  }
+}
+/* A phone on its side: the hero tightens further still. */
 @custom-variant short (@media (max-height: 420px));
+
+/* The jump bar's height, which the hero leaves room for. */
+:root {
+  --jump-h: 52px;
+}
+
+@variant compact {
+  :root {
+    --jump-h: 44px;
+  }
+}
+
+@media (min-width: 64rem) {
+  :root {
+    --jump-h: 64px;
+  }
+}
 
 /*
  * Wedding design system. Colours sampled from the save-the-date card
@@ -336,30 +365,43 @@
  * corner, the chairlift in the bottom right, the wedding party between them.
  * Each is an SVG file that animates itself (tools/venue-sketch); this only
  * sizes and places them. All three are 936 units tall, so a height sets a scale.
+ * The hero keeps the bottom 14.7% of the party, plus 12px, clear of its content:
+ * that is where the fairy lights hang.
  *
  * Narrow screens: the party is as big as the gap between the two lifts allows
- * (139.2vw), or as the hero's height allows (68.6svh - 36px). On a short phone
- * the room under the RSVP button runs out faster than either, so a third limit
- * (344svh - 1981px) keeps the fairy lights clear of it (a guest name long enough
- * to wrap is held clear by the hero's bottom spacer). The lifts are drawn a
+ * (139.2vw), or as the hero's height allows (68.6svh - 36px). On a phone under
+ * about 660px tall the room under the RSVP button runs out faster than either,
+ * so it shrinks with the screen (45svh), as the hero's type does. Between those,
+ * 344svh - 1981px carries it smoothly up to full size. The lifts are drawn a
  * little smaller than the party, with each base mast 58px in from its edge.
  *
- * Wide screens: everything is as tall as the hero, unless the page is too
- * narrow for the tables to fit between the lifts, in which case width decides.
- * The hero's type is sized off --hero-u, 1% of the screen's height, so the
- * names and the party both fit on a short laptop screen. */
+ * Wide screens, and any screen wider than 13:10 (a phone on its side, an
+ * unfolded iPhone Duo): the wide drawings, with the crest, the dinner tables and
+ * the outer lights. The lifts stand beside the type, so they are as tall as the
+ * hero, unless the page is too narrow for the tables to fit between them, in
+ * which case width decides. The party sits under the type, so on a short screen
+ * it shrinks with the height, down to 120px: under about 520px tall on a phone
+ * (200svh - 520px), and sooner on desktop (300svh - 1550px), whose type is
+ * bigger. The desktop hero's type is sized off --hero-u, 1% of the screen's
+ * height. */
 .lulo-hero {
-  --scene-party: min(139.2vw, 68.6svh - 36px, 344svh - 1981px);
+  --scene-party: min(139.2vw, 68.6svh - 36px, max(344svh - 1981px, 45svh));
   --scene-lift: calc(var(--scene-party) * 0.897);
   --scene-bleed: calc(var(--scene-lift) * 0.3526 - 58px);
+}
+
+@media (min-width: 64rem), (min-aspect-ratio: 13/10) {
+  .lulo-hero {
+    --scene-lift: min(100svh - var(--jump-h), 60.6vw + 80px);
+    --scene-party: min(var(--scene-lift), max(120px, 200svh - 520px));
+    --scene-bleed: 80px;
+  }
 }
 
 @media (min-width: 64rem) {
   .lulo-hero {
     --hero-u: min(1svh, 10px);
-    --scene-party: min(100svh - 64px, 60.6vw + 80px);
-    --scene-lift: var(--scene-party);
-    --scene-bleed: 80px;
+    --scene-party: min(var(--scene-lift), max(120px, 300svh - 1550px));
   }
 }
 
@@ -401,22 +443,12 @@
 /* The wide lifts draw the crest and the ground on towards the middle of the
    page. Each is cut 90px short of it, so the crest stops either side of the
    monogram whatever the shape of the screen. */
-@media (min-width: 64rem) {
+@media (min-width: 64rem), (min-aspect-ratio: 13/10) {
   .lulo-scene-teleski {
     clip-path: inset(0 calc(100% - 50vw - var(--scene-bleed) + 90px) 0 0);
   }
   .lulo-scene-chairlift {
     clip-path: inset(0 0 0 calc(100% - 50vw - var(--scene-bleed) + 90px));
-  }
-}
-
-/* Too short for the party to fit under the button at any size. */
-@media (max-height: 639px) {
-  .lulo-hero {
-    --scene-party: 0px;
-  }
-  .lulo-scene {
-    display: none;
   }
 }
 
