@@ -50,22 +50,17 @@ export function chip(page: Page, legend: string, key: EventKey) {
 }
 
 /**
- * The reply form's buttons. Their wording follows the party: "I" for an
- * invitation to one person, "we" for anything bigger.
+ * The reply form's one button. Its wording follows the party: "my" for an
+ * invitation to one person, "our" for anything bigger.
  */
-export const COMING = /^(WE|I)'LL BE THERE$/;
-export const NOT_COMING = /^(WE|I) CAN'T MAKE IT$/;
-/** The way back from the decline screen to the form. */
-export const CAN_COME = /^Actually, (we|I) can come$/;
+export const SEND = /^SEND (OUR|MY) REPLY$/;
+/** Asked when the form goes in with nobody on it, before that counts as a no. */
+export const CONFIRM_DECLINE = "YES, SEND";
 /** The way back from a stored decline, on the confirmation. */
 export const CAN_COME_AFTER_ALL = /^ACTUALLY, (WE|I) CAN COME$/;
 
-export function comingButton(page: Page) {
-  return page.getByRole("button", { name: COMING });
-}
-
-export function notComingButton(page: Page) {
-  return page.getByRole("button", { name: NOT_COMING });
+export function sendButton(page: Page) {
+  return page.getByRole("button", { name: SEND });
 }
 
 export function emailField(page: Page) {
@@ -75,15 +70,19 @@ export function emailField(page: Page) {
 /** An unanswered party opens straight on the form, with no question in front of it. */
 export async function expectReplyForm(page: Page) {
   await expect(page.getByText("Tick the days each of you is coming to.")).toBeVisible();
-  await expect(comingButton(page)).toBeVisible();
-  await expect(notComingButton(page)).toBeVisible();
+  await expect(sendButton(page)).toBeVisible();
 }
 
-/** Opens the decline screen from the form, optionally types an address, and sends. */
+/**
+ * Says nobody can come: ticks "can't make it" on every named card, or, for a
+ * party with no names, sends the empty form and confirms.
+ */
 export async function decline(page: Page, email?: string) {
-  await notComingButton(page).click();
+  const boxes = await page.getByRole("checkbox", { name: /can't make it$/ }).all();
+  for (const box of boxes) await box.check();
   if (email !== undefined) await emailField(page).fill(email);
-  await page.getByRole("button", { name: "SEND", exact: true }).click();
+  await sendButton(page).click();
+  if (boxes.length === 0) await page.getByRole("button", { name: CONFIRM_DECLINE }).click();
 }
 
 /** One card offers exactly these day chips, no more. */
@@ -107,7 +106,7 @@ export async function fillCard(
 /** Sends the form. The address is optional: without one, nothing is emailed. */
 export async function sendReply(page: Page, email?: string) {
   if (email !== undefined) await emailField(page).fill(email);
-  await comingButton(page).click();
+  await sendButton(page).click();
 }
 
 /** The status the server must store: invited and ticked is yes, invited and not is no, never asked is pending. */

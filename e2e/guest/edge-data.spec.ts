@@ -2,13 +2,12 @@ import type { Page } from "@playwright/test";
 
 import { backend, enterAsGuest, expect, party, searchName, test, visit, waitForEmail } from "../fixtures";
 import {
-  comingButton,
+  sendButton,
   decline,
   emailField,
   expectReplyForm,
   expectStoredReply,
   fillCard,
-  notComingButton,
   seatCards,
   sendReply,
 } from "../rsvp-form";
@@ -185,8 +184,7 @@ test.describe("rows the sheet left incomplete", () => {
 
     await expect(page.getByRole("heading", { name: "Your invitation details are on their way" })).toBeVisible();
     await expect(page.getByText("Laura and Lucien will be in touch soon.")).toBeVisible();
-    await expect(comingButton(page)).toHaveCount(0);
-    await expect(notComingButton(page)).toHaveCount(0);
+    await expect(sendButton(page)).toHaveCount(0);
 
     // One person asked to the brunch is an event to answer for.
     await backend.seedGuests(TOKEN, [

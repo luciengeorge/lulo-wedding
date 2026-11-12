@@ -54,7 +54,8 @@ export function NamedGuestsSection({ party }: { party: PartyRow }) {
         </h3>
         <p className="text-[12.5px] text-[#71717A]">
           Name someone before the party replies, to invite them to different events from the rest. Changes here save
-          straight away. Their card cannot be removed by the party, only marked not coming.
+          straight away. Their card cannot be removed by the party, only marked not coming. A plus one you name here
+          shows up already filled in; leave it out and the party can still add their own.
         </p>
       </div>
 
@@ -65,12 +66,26 @@ export function NamedGuestsSection({ party }: { party: PartyRow }) {
       )}
 
       <NamedGuestForm party={party} flags={flags} />
+      {party.plusOneAllowed && guests !== undefined && !guests.some((guest) => guest.isPlusOne) ? (
+        <NamedGuestForm party={party} flags={flags} plusOne />
+      ) : null}
     </section>
   );
 }
 
-/** One person, or with no `guest` the blank row that adds one. */
-function NamedGuestForm({ party, flags, guest }: { party: PartyRow; flags: EventFlags; guest?: NamedGuest }) {
+/** One person, or with no `guest` the blank row that adds one. `plusOne` makes that blank row add the plus one. */
+function NamedGuestForm({
+  party,
+  flags,
+  guest,
+  plusOne = false,
+}: {
+  party: PartyRow;
+  flags: EventFlags;
+  guest?: NamedGuest;
+  plusOne?: boolean;
+}) {
+  const isPlusOne = guest?.isPlusOne ?? plusOne;
   const addNamedGuest = useMutation(api.admin.addNamedGuest);
   const updateNamedGuest = useMutation(api.admin.updateNamedGuest);
   const removeNamedGuest = useMutation(api.admin.removeNamedGuest);
@@ -109,8 +124,9 @@ function NamedGuestForm({ party, flags, guest }: { party: PartyRow; flags: Event
               lastName: parsed.lastName,
               ...(parsed.phone ? { phone: parsed.phone } : {}),
               ...(invitedTo ? { invitedTo } : {}),
+              ...(isPlusOne ? { isPlusOne } : {}),
             });
-            toast.success(`Added ${fullName(parsed)} to ${party.displayName}`);
+            toast.success(`Added ${fullName(parsed)} to ${party.displayName}${isPlusOne ? " as their plus one" : ""}`);
             form.reset();
           }
         } catch (error) {
@@ -134,11 +150,11 @@ function NamedGuestForm({ party, flags, guest }: { party: PartyRow; flags: Event
     }
   };
 
-  const idPrefix = guest ? `named-${guest._id}` : "named-new";
+  const idPrefix = guest ? `named-${guest._id}` : plusOne ? "named-new-plus-one" : "named-new";
 
   return (
     <form
-      aria-label={guest ? fullName(guest) : "Add a person"}
+      aria-label={guest ? fullName(guest) : plusOne ? "Add their plus one" : "Add a person"}
       onSubmit={(event) => {
         event.preventDefault();
         event.stopPropagation();
@@ -146,6 +162,7 @@ function NamedGuestForm({ party, flags, guest }: { party: PartyRow; flags: Event
       }}
       className={`flex flex-col gap-3 rounded-lg border p-3 ${guest ? "border-[#E4E4E7]" : "border-dashed border-[#D4D4D8]"}`}
     >
+      {isPlusOne ? <p className="text-[12.5px] font-medium text-[#71717A]">Plus one</p> : null}
       <FieldGroup className="grid grid-cols-2 gap-3">
         <form.Field name="firstName">
           {(field) => (
@@ -262,7 +279,7 @@ function NamedGuestForm({ party, flags, guest }: { party: PartyRow; flags: Event
                 disabled={isSubmitting || removing || (guest !== undefined && !isDirty)}
               >
                 {isSubmitting ? <Spinner /> : null}
-                {guest ? "Save person" : "Add person"}
+                {guest ? "Save person" : plusOne ? "Add plus one" : "Add person"}
               </Button>
             </div>
           </div>
