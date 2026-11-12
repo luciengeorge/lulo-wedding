@@ -8,6 +8,8 @@
 @plugin "@tailwindcss/typography";
 
 @custom-variant dark (&:is(.dark *));
+/* A phone on its side: the hero tightens further so the save-the-date still fits. */
+@custom-variant short (@media (max-height: 420px));
 
 /*
  * Wedding design system. Colours sampled from the save-the-date card

@@ -115,14 +115,14 @@ function GatePage() {
     <div className="relative flex min-h-svh w-full flex-col items-center justify-center overflow-hidden bg-paper [background-image:url('/art/paper-tile.webp')] bg-[length:560px_428px] bg-repeat px-6 text-ink">
       <div
         aria-hidden
-        className="lulo-sway pointer-events-none absolute -top-9 -left-12 w-[168px] lg:-top-12 lg:-left-14 lg:w-[236px]"
+        className="lulo-sway pointer-events-none absolute -top-9 -left-12 w-[min(168px,22svh)] lg:-top-12 lg:-left-14 lg:w-[236px]"
         style={{ "--sway-duration": "13s" } as React.CSSProperties}
       >
         <img alt="" src="/art/olive-branch.webp" className="lulo-grow block w-full" />
       </div>
       <div
         aria-hidden
-        className="lulo-sway pointer-events-none absolute -right-12 -bottom-9 w-[168px] lg:-right-14 lg:-bottom-12 lg:w-[236px]"
+        className="lulo-sway pointer-events-none absolute -right-12 -bottom-9 w-[min(168px,22svh)] lg:-right-14 lg:-bottom-12 lg:w-[236px]"
         style={
           {
             "--sway-duration": "16s",
@@ -142,26 +142,27 @@ function GatePage() {
 
       {/* Sits slightly above true centre — optically centred rather than
           mathematically, since the eye reads a form as bottom-heavy. */}
-      <div className="relative z-10 mb-14 flex w-full max-w-[340px] flex-col items-center text-center">
-        <Monogram className="w-[58px] lg:w-[78px]" />
+      <div className="relative z-10 mb-14 flex w-full max-w-[340px] flex-col items-center text-center short:mb-0">
+        <Monogram className="w-[58px] lg:w-[78px] short:w-10" />
 
         <h1
-          className="lulo-rise mt-5 font-script text-[46px] leading-[1.15] lg:mt-6 lg:text-[56px]"
+          className="lulo-rise mt-5 font-script text-[length:min(46px,12vw)] leading-[1.15] whitespace-nowrap lg:mt-6 lg:text-[56px] short:mt-2"
           style={{ "--rise-delay": "1500ms" } as React.CSSProperties}
         >
           {/* Spaces, not padding — padding renders the gap but leaves the
-              accessible name and copied text as "LauraandLucien". */}
-          Laura <span className="text-[24px] lg:text-[28px]">and</span> Lucien
+              accessible name and copied text as "LauraandLucien". One line,
+              shrinking with the width on the narrowest phones. */}
+          Laura <span className="text-[length:min(24px,6.25vw)] lg:text-[28px]">and</span> Lucien
         </h1>
 
         <span
-          className="lulo-rise mt-8 block h-px w-11 bg-amber"
+          className="lulo-rise mt-8 block h-px w-11 bg-amber short:mt-4"
           style={{ "--rise-delay": "1700ms" } as React.CSSProperties}
         />
 
         <form
           onSubmit={onSubmit}
-          className="lulo-rise mt-5 flex w-full flex-col items-center"
+          className="lulo-rise mt-5 flex w-full flex-col items-center short:mt-3"
           style={{ "--rise-delay": "1820ms" } as React.CSSProperties}
         >
           <label htmlFor="guest-name" className="font-display text-[16px] text-bark lg:text-[17px]">
@@ -177,13 +178,13 @@ function GatePage() {
             value={query}
             onChange={(e) => setQuery(e.target.value)}
             aria-describedby="guest-name-status"
-            className="mt-6 h-[54px] w-full rounded-[3px] border border-field bg-[#fffcf7]/75 px-[18px] text-center font-display text-[18px] text-ink outline-none placeholder:text-[#a8998b] focus-visible:border-ink/50 focus-visible:ring-2 focus-visible:ring-ink/15"
+            className="mt-6 h-[54px] w-full rounded-[3px] border border-field bg-[#fffcf7]/75 px-[18px] text-center font-display text-[18px] text-ink outline-none placeholder:text-[#a8998b] focus-visible:border-ink/50 focus-visible:ring-2 focus-visible:ring-ink/15 short:mt-3 short:h-12"
           />
 
           <button
             type="submit"
             disabled={pending || query.trim().length === 0}
-            className="mt-3.5 h-[54px] w-full rounded-[3px] bg-ink font-display text-[15px] font-semibold tracking-caps text-paper transition-opacity hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-45"
+            className="mt-3.5 h-[54px] w-full rounded-[3px] bg-ink font-display text-[15px] font-semibold tracking-caps text-paper transition-opacity hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-45 short:mt-2.5 short:h-12"
           >
             {pending ? "ONE MOMENT" : "FIND MY INVITATION"}
           </button>
