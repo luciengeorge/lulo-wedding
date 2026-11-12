@@ -174,7 +174,7 @@ function Welcome({ name }: { name: string }) {
 }
 
 function Dot() {
-  return <span aria-hidden className="block size-[5px] rounded-full bg-amber" />;
+  return <span aria-hidden className="block size-[5px] rounded-full bg-current" />;
 }
 
 function OliveBranch() {
