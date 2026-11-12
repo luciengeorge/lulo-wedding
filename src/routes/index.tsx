@@ -5,6 +5,7 @@ import { AdminBar } from "@/components/wedding/admin-bar";
 import { InfoSections } from "@/components/wedding/info/info-sections";
 import { JumpBar } from "@/components/wedding/info/jump-bar";
 import { Monogram } from "@/components/wedding/monogram";
+import { VenueSketch } from "@/components/wedding/venue-sketch";
 import { FEATURES } from "@/lib/flags";
 import { getAdminSession } from "@/lib/functions/admin-session";
 import { forgetGuest, requireGuestUnlocked } from "@/lib/functions/guest-gate";
@@ -77,31 +78,34 @@ function Hero({ guest }: { guest: string | null }) {
   const { isAdmin } = Route.useRouteContext();
 
   return (
-    <div className="relative flex min-h-[calc(100svh-52px)] w-full flex-col overflow-hidden text-ink lg:min-h-[calc(100svh-64px)]">
+    <div className="lulo-hero relative flex min-h-[calc(100svh-52px)] w-full flex-col overflow-hidden text-ink lg:min-h-[calc(100svh-64px)]">
+      <VenueSketch />
       <OliveBranch />
 
       {isAdmin ? <AdminBar /> : null}
 
-      <div className="relative z-10 flex min-h-[calc(100svh-52px)] flex-col items-center justify-center px-6 text-center lg:min-h-[calc(100svh-64px)]">
+      {/* On wide screens the type is sized off the screen's height (--hero-u) and
+          kept clear of the party drawn along the bottom; see `.lulo-hero`. */}
+      <div className="relative z-10 flex min-h-[calc(100svh-52px)] flex-col items-center justify-center px-6 text-center lg:min-h-[calc(100svh-64px)] lg:pb-[calc(var(--scene-party)*0.141)]">
         {guest ? <Welcome name={guest} /> : null}
-        <Monogram className="w-14 lg:w-[82px]" />
+        <Monogram className="w-14 lg:w-[calc(var(--hero-u)*9.1)]" />
 
         <h1
-          className="lulo-rise mt-5 font-script leading-[1.08] lg:mt-7"
+          className="lulo-rise mt-5 font-script leading-[1.08] lg:mt-[calc(var(--hero-u)*2.2)]"
           style={{ "--rise-delay": "1500ms" } as React.CSSProperties}
         >
-          <span className="block text-[70px] lg:text-[116px]">Laura</span>
-          <span className="block text-[70px] lg:text-[116px]">
+          <span className="block text-[70px] lg:text-[length:calc(var(--hero-u)*11.56)]">Laura</span>
+          <span className="block text-[70px] lg:text-[length:calc(var(--hero-u)*11.56)]">
             {/* Real space inside the small span, not padding on it: padding
                 looks right but makes the accessible name and any copied text
                 read "andLucien". */}
-            <span className="align-baseline text-[32px] lg:text-[52px]">{"and "}</span>
+            <span className="align-baseline text-[32px] lg:text-[length:calc(var(--hero-u)*5.2)]">{"and "}</span>
             Lucien
           </span>
         </h1>
 
         <p
-          className="lulo-rise mt-8 flex items-center gap-[0.42em] font-display text-[30px] font-semibold tracking-[0.1em] lg:mt-11 lg:text-[46px]"
+          className="lulo-rise mt-8 flex items-center gap-[0.42em] font-display text-[30px] font-semibold tracking-[0.1em] lg:mt-[calc(var(--hero-u)*3.56)] lg:text-[length:calc(var(--hero-u)*5.1)]"
           style={{ "--rise-delay": "1800ms" } as React.CSSProperties}
         >
           <span>17</span>
@@ -112,7 +116,7 @@ function Hero({ guest }: { guest: string | null }) {
         </p>
 
         <p
-          className="lulo-rise mt-5 font-display text-[14px] font-semibold tracking-place lg:mt-7 lg:text-[19px]"
+          className="lulo-rise mt-5 font-display text-[14px] font-semibold tracking-place lg:mt-[calc(var(--hero-u)*2.2)] lg:text-[19px]"
           style={{ "--rise-delay": "2000ms" } as React.CSSProperties}
         >
           FARAYA · LEBANON
@@ -121,7 +125,7 @@ function Hero({ guest }: { guest: string | null }) {
         {FEATURES.rsvp ? (
           <Link
             to="/rsvp"
-            className="lulo-rise mt-7 flex h-[46px] items-center rounded-[3px] border border-ink px-[26px] font-display text-sm font-semibold tracking-[0.16em] transition-colors hover:bg-ink hover:text-paper lg:mt-9 lg:h-[52px] lg:px-8 lg:text-[15px]"
+            className="lulo-rise mt-7 flex h-[46px] items-center rounded-[3px] border border-ink px-[26px] font-display text-sm font-semibold tracking-[0.16em] transition-colors hover:bg-ink hover:text-paper lg:mt-[calc(var(--hero-u)*3.1)] lg:h-[52px] lg:px-8 lg:text-[15px]"
             style={{ "--rise-delay": "2200ms" } as React.CSSProperties}
           >
             RSVP
@@ -143,7 +147,7 @@ function Welcome({ name }: { name: string }) {
 
   return (
     <div
-      className="lulo-rise mb-8 flex flex-col items-center gap-1 lg:mb-10"
+      className="lulo-rise mb-8 flex flex-col items-center gap-1 lg:mb-[calc(var(--hero-u)*3.1)]"
       style={{ "--rise-delay": "1300ms" } as React.CSSProperties}
     >
       <p className="font-display text-[17px] leading-6 text-bark lg:text-[19px]">
