@@ -2,9 +2,11 @@
  * Parser for the couple's exported guest-list sheet.
  *
  * The invite unit is a party, not a person: one row is one invitation, and
- * `Head Count` is how many named seats it carries. Per-person names mostly do not
- * exist in the sheet ("Rae & Cherif et famille", head count 4), so this parser
- * produces parties only — guests are created later, when a party RSVPs.
+ * `Head Count` is how many named seats it carries. Each seat is named from the
+ * optional `Guests` column, or failing that from `Name(s)` when it plainly names
+ * one person per seat ("Nayla & Paul", head count 2). A row like "Rae & Cherif et
+ * famille" (head count 4) cannot be read that way, so its seats stay unnamed
+ * until `Guests` is filled in.
  *
  * Deliberately free of Convex imports so the admin UI can reuse it in the browser.
  */
@@ -12,6 +14,8 @@
 export type PartyLink = "family" | "friends";
 export type PartyWho = "lucien" | "laura" | "mutual" | "zeina" | "nayla";
 export type PartyWave = "tier1" | "tier2";
+
+export type GuestName = { firstName: string; lastName: string };
 
 export type ParsedParty = {
   importKey: string;
@@ -29,6 +33,10 @@ export type ParsedParty = {
   note?: string;
   contactEmail?: string;
   contactPhone?: string;
+  /** One per named seat, in sheet order. Absent when the sheet does not say who they are. */
+  guests?: GuestName[];
+  /** The plus-one, when the couple already know who it is. */
+  plusOne?: GuestName;
 };
 
 export type ParseGuestCsvResult = { rows: ParsedParty[]; warnings: string[] };
@@ -50,49 +58,62 @@ export class GuestCsvError extends Error {
 }
 
 /**
- * Row 1 of the export is a spreadsheet totals banner, row 2 is this header, and the
- * data starts at row 3. Columns 16+ are an empty pivot overflow and are ignored.
- * The header is asserted on every import: if the couple reorders a column, silently
- * reading the wrong field would mislabel 400 invitations.
+ * Row 1 of the export is a spreadsheet totals banner, row 2 is the header, and the
+ * data starts at row 3. Columns are found by their title, not their position, so
+ * the couple can add, drop or reorder helper columns freely. A required column that
+ * is missing or appears twice stops the import: guessing which one was meant would
+ * mislabel 400 invitations.
  */
-const EXPECTED_HEADERS = [
-  "Name(s)",
-  "Surname",
-  "Head Count",
-  "Email(s)",
-  "Any +1",
-  "Total Head Count",
-  "<50?",
-  "Link",
-  "Where From",
-  "Who",
-  "Wave",
-  "StD Sent",
-  "RSVP",
-  "Engagement",
-  "Note",
-  "Visible?",
-] as const;
-
 const HEADER_ROW_INDEX = 1;
 const FIRST_DATA_ROW_INDEX = 2;
 
-const COL = {
-  name: 0,
-  surname: 1,
-  headCount: 2,
-  email: 3,
-  plusOne: 4,
-  totalHeadCount: 5,
-  under50: 6,
-  link: 7,
-  whereFrom: 8,
-  who: 9,
-  wave: 10,
-  stdSent: 11,
-  rsvp: 12,
-  note: 14,
+const REQUIRED_COLUMNS = {
+  name: "Name(s)",
+  surname: "Surname",
+  headCount: "Head Count",
+  email: "Email(s)",
+  plusOne: "Any +1",
+  totalHeadCount: "Total Head Count",
+  under50: "<50?",
+  link: "Link",
+  whereFrom: "Where From",
+  who: "Who",
+  wave: "Wave",
+  stdSent: "StD Sent",
+  rsvp: "RSVP",
+  note: "Note",
 } as const;
+
+/** Columns the sheet may not have yet. Matched loosely, since the couple type these titles themselves. */
+const OPTIONAL_COLUMNS = {
+  phone: { title: "Phone", pattern: /^phone(\(s\))?$/i },
+  guests: { title: "Guests", pattern: /^guests$/i },
+  plusOneName: { title: "+1 Name", pattern: /^\+ ?1 name$/i },
+} as const;
+
+type ColumnKey = keyof typeof REQUIRED_COLUMNS | keyof typeof OPTIONAL_COLUMNS;
+
+function findColumns(header: readonly string[]): { columns: Partial<Record<ColumnKey, number>>; problems: string[] } {
+  const titles = header.map((title) => title.trim());
+  const columns: Partial<Record<ColumnKey, number>> = {};
+  const problems: string[] = [];
+
+  const locate = (key: ColumnKey, matches: (title: string) => boolean, label: string, required: boolean) => {
+    const found = titles.flatMap((title, index) => (matches(title) ? [index] : []));
+    if (found.length > 1) problems.push(`the column ${JSON.stringify(label)} appears ${found.length} times`);
+    else if (found.length === 1) columns[key] = found[0];
+    else if (required) problems.push(`the column ${JSON.stringify(label)} is missing`);
+  };
+
+  for (const [key, title] of Object.entries(REQUIRED_COLUMNS)) {
+    locate(key as ColumnKey, (actual) => actual === title, title, true);
+  }
+  for (const [key, { title, pattern }] of Object.entries(OPTIONAL_COLUMNS)) {
+    locate(key as ColumnKey, (actual) => pattern.test(actual), title, false);
+  }
+
+  return { columns, problems };
+}
 
 const LINK_BY_SHEET_VALUE: Record<string, PartyLink | undefined> = {
   Family: "family",
@@ -189,8 +210,40 @@ export function buildImportKey(displayName: string, surname: string): string {
   return `${normaliseKeyPart(displayName)}|${normaliseKeyPart(surname)}`;
 }
 
-function cell(record: readonly string[], index: number): string {
-  return (record[index] ?? "").trim();
+function cell(record: readonly string[], index: number | undefined): string {
+  return index === undefined ? "" : (record[index] ?? "").trim();
+}
+
+/**
+ * The first names in a `Name(s)` cell: "Nayla & Paul", "Rae, Cherif et Lea".
+ * Null when the cell stands for people it does not name ("et famille"), or is
+ * unsure of them ("? & Wasim", "Elias?"): a place card should never read "?".
+ */
+export function splitNames(value: string): string[] | null {
+  if (/famil|\bkids\b|\benfants\b|\?/i.test(value)) return null;
+  return value
+    .split(/\s*(?:&|,|\+|\band\b|\bet\b)\s*/i)
+    .map((name) => name.replace(/\s+/g, " ").trim())
+    .filter((name) => name !== "");
+}
+
+/**
+ * One person written by hand: "Lea" takes the row's surname, "Lea Sahyoun" and
+ * "Karim Haddad" carry their own. A surname of several words is only recognised
+ * when it is the row's, so any other split of three or more words is a guess, and
+ * `onGuess` is told so the couple can check it before importing.
+ */
+export function personName(value: string, surname: string, onGuess: (name: GuestName) => void): GuestName {
+  const name = value.replace(/\s+/g, " ").trim();
+  if (surname !== "" && name.toLowerCase().endsWith(` ${surname.toLowerCase()}`)) {
+    return { firstName: name.slice(0, name.length - surname.length).trim(), lastName: surname };
+  }
+  const space = name.lastIndexOf(" ");
+  if (space === -1) return { firstName: name, lastName: surname };
+
+  const split = { firstName: name.slice(0, space), lastName: name.slice(space + 1) };
+  if (split.firstName.includes(" ")) onGuess(split);
+  return split;
 }
 
 /** `TRUE`/`FALSE` as the sheet writes them; blank is "not filled in", not `false`. */
@@ -214,25 +267,10 @@ export function parseGuestCsv(text: string): ParseGuestCsvResult {
     throw new GuestCsvError(["The file has no data rows (expected a banner on row 1 and a header on row 2)."]);
   }
 
-  const header = records[HEADER_ROW_INDEX] ?? [];
-  const headerMismatch = EXPECTED_HEADERS.map((expected, index) => {
-    const actual = cell(header, index);
-    return expected === actual
-      ? null
-      : `column ${index}: expected ${JSON.stringify(expected)}, found ${JSON.stringify(actual)}`;
-  }).filter((problem) => problem !== null);
-
-  if (headerMismatch.length > 0) {
-    throw new GuestCsvError([
-      `Row 2 is not the expected header — the sheet's columns have moved. ${headerMismatch.join("; ")}`,
-    ]);
+  const { columns: COL, problems: headerProblems } = findColumns(records[HEADER_ROW_INDEX] ?? []);
+  if (headerProblems.length > 0) {
+    throw new GuestCsvError([`Row 2 is not the expected header: ${headerProblems.join("; ")}.`]);
   }
-
-  // Optional and found by name rather than position: the sheet has no phone column
-  // yet, and the couple may add one wherever is handy after the fixed ones.
-  const phoneColumn = header.findIndex(
-    (title, index) => index >= EXPECTED_HEADERS.length && /^phone(\(s\))?$/i.test(title.trim()),
-  );
 
   const rows: ParsedParty[] = [];
   const warnings: string[] = [];
@@ -303,6 +341,66 @@ export function parseGuestCsv(text: string): ParseGuestCsvResult {
       );
     }
 
+    const guessed = (name: GuestName) =>
+      warnings.push(
+        `${label}: read ${JSON.stringify(`${name.firstName} ${name.lastName}`)} as first name ` +
+          `${JSON.stringify(name.firstName)}, surname ${JSON.stringify(name.lastName)}. Check this is right.`,
+      );
+
+    // A place card needs a surname. "Fatte / Bohsali" is two families' names,
+    // "??" and a blank are none, so no guest takes the row's: each needs a full name.
+    const sharedSurname = /[/?]/.test(surname) ? "" : surname;
+    let guests: GuestName[] | undefined;
+    const guestsCell = cell(record, COL.guests);
+    if (headCount !== undefined && guestsCell !== "") {
+      const entries = guestsCell
+        .split(";")
+        .map((entry) => entry.trim())
+        .filter((entry) => entry !== "");
+      if (entries.some((entry) => entry.includes("?"))) {
+        rowProblems.push(`"Guests" has a "?" in it. Write the name, or leave "Guests" blank for now`);
+      } else if (sharedSurname === "" && entries.some((entry) => !entry.includes(" "))) {
+        rowProblems.push(`"Surname" is not one family name, so write each guest's full name in "Guests"`);
+      } else if (entries.length === headCount) {
+        guests = entries.map((entry) => personName(entry, sharedSurname, guessed));
+      } else {
+        rowProblems.push(`"Guests" names ${entries.length} people but "Head Count" is ${headCount}`);
+      }
+    } else if (headCount !== undefined) {
+      const names = splitNames(displayName);
+      if (names?.length === headCount && sharedSurname !== "") {
+        guests = names.map((name) => {
+          // "Nayla Sahyoun" already carries the surname; "Jean Lou" is a double
+          // first name or another surname, which only the couple can tell.
+          const firstName = name.toLowerCase().endsWith(` ${surname.toLowerCase()}`)
+            ? name.slice(0, name.length - surname.length).trim()
+            : name;
+          if (firstName.includes(" ")) {
+            warnings.push(
+              `${label}: named ${JSON.stringify(`${firstName} ${surname}`)} from "Name(s)". If that is wrong, ` +
+                `write the names in "Guests".`,
+            );
+          }
+          return { firstName, lastName: surname };
+        });
+      } else {
+        warnings.push(
+          `${label}: cannot tell who the ${headCount} guest(s) are from "Name(s)". Fill in "Guests" to name ` +
+            `them; until then they type their own names when they reply.`,
+        );
+      }
+    }
+
+    let plusOne: GuestName | undefined;
+    const plusOneCell = cell(record, COL.plusOneName);
+    if (plusOneCell.includes("?")) {
+      rowProblems.push(`"+1 Name" has a "?" in it. Write the name, or leave it blank for now`);
+    } else if (plusOneCell !== "") {
+      if (!plusOneAllowed) rowProblems.push(`"+1 Name" is filled in but "Any +1" is not TRUE`);
+      else if (!plusOneCell.includes(" ")) rowProblems.push(`"+1 Name" needs a surname too`);
+      else plusOne = personName(plusOneCell, "", guessed);
+    }
+
     const importKey = buildImportKey(displayName, surname);
     const clash = seenKeys.get(importKey);
     if (clash !== undefined) {
@@ -328,7 +426,7 @@ export function parseGuestCsv(text: string): ParseGuestCsvResult {
     const whereFrom = cell(record, COL.whereFrom);
     const note = cell(record, COL.note);
     const contactEmail = cell(record, COL.email);
-    const contactPhone = phoneColumn === -1 ? "" : cell(record, phoneColumn);
+    const contactPhone = cell(record, COL.phone);
 
     rows.push({
       importKey,
@@ -346,6 +444,8 @@ export function parseGuestCsv(text: string): ParseGuestCsvResult {
       ...(note === "" ? {} : { note }),
       ...(contactEmail === "" ? {} : { contactEmail }),
       ...(contactPhone === "" ? {} : { contactPhone }),
+      ...(guests ? { guests } : {}),
+      ...(plusOne ? { plusOne } : {}),
     });
   }
 

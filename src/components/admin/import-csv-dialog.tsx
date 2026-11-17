@@ -22,6 +22,7 @@ type ImportReport = {
   created: number;
   updated: number;
   unchanged: number;
+  guestsNamed: number;
   missingFromCsv: { importKey: string; displayName: string }[];
   warnings: string[];
 };
@@ -89,7 +90,7 @@ function ImportCsvBody({ onDone }: { onDone: () => void }) {
     try {
       const report = await importParties({ rows });
       toast.success(`Imported ${rows.length} parties`, {
-        description: `${report.created} created, ${report.updated} updated, ${report.unchanged} unchanged.`,
+        description: `${report.created} created, ${report.updated} updated, ${report.unchanged} unchanged, ${report.guestsNamed} guests named.`,
       });
       setStage({ step: "done", report });
     } catch (error) {
@@ -106,7 +107,8 @@ function ImportCsvBody({ onDone }: { onDone: () => void }) {
         <DialogTitle>Import the guest sheet</DialogTitle>
         <DialogDescription>
           Export the sheet as CSV and drop it in. Matching is on name and surname, so existing parties keep their magic
-          link and their invite flags. Nothing is ever deleted.
+          link and their invite flags. Empty seats are named from the Guests and +1 Name columns. Nothing is ever
+          deleted.
         </DialogDescription>
       </DialogHeader>
 
@@ -204,11 +206,12 @@ function ReportPanel({
           : `${rowCount} parties read from the file. Nothing has been written yet — this is what applying it would do.`}
       </p>
 
-      <div className="grid grid-cols-4 gap-3 rounded-md border border-[#E4E4E7] p-3">
+      <div className="grid grid-cols-3 gap-3 rounded-md border border-[#E4E4E7] p-3 sm:grid-cols-5">
         <ReportStat label="Created" value={report.created} />
         <ReportStat label="Updated" value={report.updated} />
         <ReportStat label="Unchanged" value={report.unchanged} />
         <ReportStat label="Not in file" value={report.missingFromCsv.length} />
+        <ReportStat label="Guests named" value={report.guestsNamed} />
       </div>
 
       {report.missingFromCsv.length > 0 ? (

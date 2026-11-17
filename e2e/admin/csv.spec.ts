@@ -87,7 +87,7 @@ test.describe("the guest sheet", () => {
 
     await page.getByRole("button", { name: "Import CSV" }).click();
     await dialog.locator("input[type=file]").setInputFiles(csvFile(sheetRow("? & Wasim", "Alexandroff", "", "", "2")));
-    await dialog.getByText("1 warning(s)").click();
+    await dialog.getByText(/warning\(s\)/).click();
     await expect(dialog.getByText(/"Head Count" is blank — derived 2/)).toBeVisible();
     await dialog.getByRole("button", { name: "Apply import" }).click();
     await expect(page.getByText("Imported 1 parties")).toBeVisible();
@@ -95,5 +95,41 @@ test.describe("the guest sheet", () => {
 
     const row = page.getByRole("row").filter({ has: page.getByText("? & Wasim", { exact: true }) });
     await expect(row.getByRole("cell").nth(2)).toHaveText("2");
+  });
+
+  /**
+   * The point of naming seats in the sheet: the party opens its reply and sees
+   * each person, not empty name fields to fill in.
+   */
+  test("names a family's seats from the Guests column, so their reply shows each person", async ({ page }) => {
+    await openAdmin(page);
+    await page.getByRole("button", { name: "Import CSV" }).click();
+    const dialog = page.getByRole("dialog");
+    await dialog.locator("input[type=file]").setInputFiles({
+      name: "guests.csv",
+      mimeType: "text/csv",
+      buffer: Buffer.from(
+        [
+          BANNER,
+          `${HEADER},Guests,+1 Name`,
+          `${sheetRow("Rae & Cherif et famille", "Khoury", "", "3", "3")},Rae; Cherif; Lea Haddad,`,
+        ].join("\n"),
+      ),
+    });
+    await expect(dialog.getByText("Guests named")).toBeVisible();
+    await dialog.getByRole("button", { name: "Apply import" }).click();
+    await expect(page.getByText(/3 guests named/)).toBeVisible();
+    await dialog.getByRole("button", { name: "Done" }).click();
+
+    const download = page.waitForEvent("download");
+    await page.getByRole("button", { name: "Export CSV" }).click();
+    const link = (await readFile(await (await download).path(), "utf8")).match(/\/rsvp\/[A-Za-z0-9_-]+/)?.[0];
+    expect(link).toBeTruthy();
+
+    await page.goto(link!);
+    for (const name of ["Rae Khoury", "Cherif Khoury", "Lea Haddad"]) {
+      await expect(page.getByText(name, { exact: true })).toBeVisible();
+    }
+    await expect(page.getByPlaceholder("First name")).toHaveCount(0);
   });
 });

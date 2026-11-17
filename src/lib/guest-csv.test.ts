@@ -1,6 +1,14 @@
 import { describe, expect, it } from "vitest";
 
-import { buildImportKey, GuestCsvError, normaliseKeyPart, parseCsvRecords, parseGuestCsv } from "./guest-csv";
+import {
+  buildImportKey,
+  GuestCsvError,
+  normaliseKeyPart,
+  parseCsvRecords,
+  parseGuestCsv,
+  personName,
+  splitNames,
+} from "./guest-csv";
 
 const BANNER = ",,,,,,,,,,,,,,,,,Lo,Lu,Zeina & Michel,Nayla & Paul,Mutual,Total";
 const HEADER =
@@ -147,6 +155,10 @@ describe("parseGuestCsv", () => {
         under50: false,
         saveTheDateSent: true,
         earlyDecline: false,
+        guests: [
+          { firstName: "Nayla", lastName: "Sahyoun" },
+          { firstName: "Paul", lastName: "Sahyoun" },
+        ],
       },
     ]);
   });
@@ -169,9 +181,10 @@ describe("parseGuestCsv", () => {
       sheet(row({ name: "? & Wasim", surname: "Alexandroff", headCount: "", totalHeadCount: "2", plusOne: "FALSE" })),
     );
     expect(rows[0]?.headCount).toBe(2);
-    expect(warnings).toHaveLength(1);
+    expect(warnings).toHaveLength(2);
     expect(warnings[0]).toContain("? & Wasim");
     expect(warnings[0]).toContain("derived 2");
+    expect(warnings[1]).toMatch(/cannot tell who/);
   });
 
   it("subtracts the plus-one when deriving a missing head count", () => {
@@ -271,12 +284,182 @@ describe("parseGuestCsv", () => {
     expect(() => parseGuestCsv(sheet(row(), row({ name: "B", surname: "", who: "Grandma" })))).toThrow(/Row 4 \("B"\)/);
   });
 
-  it("rejects a sheet whose columns have moved", () => {
-    const moved = [BANNER, "Surname,Name(s),Head Count", row()].join("\n");
-    expect(() => parseGuestCsv(moved)).toThrow(/columns have moved/);
+  it("finds columns by title, so reordered or dropped helper columns still import", () => {
+    const header = HEADER.split(",");
+    const reordered = [...header.slice(1, 2), header[0], ...header.slice(2)].filter((title) => title !== "Engagement");
+    const values = row().split(",");
+    const data = [...values.slice(1, 2), values[0], ...values.slice(2)].filter(
+      (_, index) => header[index] !== "Engagement",
+    );
+    const parsed = parseGuestCsv([BANNER, reordered.join(","), data.join(",")].join("\n"));
+    expect(parsed.rows[0]).toMatchObject({ displayName: "Nayla & Paul", surname: "Sahyoun" });
+  });
+
+  it("rejects a sheet missing a column it needs", () => {
+    const missing = [BANNER, "Surname,Name(s),Head Count", row()].join("\n");
+    expect(() => parseGuestCsv(missing)).toThrow(/"Any \+1" is missing/);
+  });
+
+  it("rejects a sheet with the same column twice", () => {
+    expect(() => parseGuestCsv([BANNER, `${HEADER},Note`, row()].join("\n"))).toThrow(/"Note" appears 2 times/);
   });
 
   it("rejects a file with no data rows", () => {
     expect(() => parseGuestCsv([BANNER, HEADER].join("\n"))).toThrow(GuestCsvError);
+  });
+});
+
+describe("splitNames", () => {
+  it("splits on &, commas, and and et", () => {
+    expect(splitNames("Nayla & Paul")).toEqual(["Nayla", "Paul"]);
+    expect(splitNames("Rae, Cherif et Lea")).toEqual(["Rae", "Cherif", "Lea"]);
+    expect(splitNames("Marie Claire and Joe")).toEqual(["Marie Claire", "Joe"]);
+  });
+
+  it("gives up on a family it does not name", () => {
+    expect(splitNames("Nayla & Joe et famille")).toBeNull();
+  });
+
+  it("gives up on a name the couple are unsure of", () => {
+    expect(splitNames("? & Wasim")).toBeNull();
+    expect(splitNames("Dominique & Elias?")).toBeNull();
+  });
+});
+
+describe("personName", () => {
+  const noGuess = () => {
+    throw new Error("unexpected guess");
+  };
+
+  it("gives a lone first name the row's surname", () => {
+    expect(personName("Lea", "Sahyoun", noGuess)).toEqual({ firstName: "Lea", lastName: "Sahyoun" });
+  });
+
+  it("recognises the row's surname, even when it has several words", () => {
+    expect(personName("Marie Claire Abou Jaoudé", "Abou Jaoudé", noGuess)).toEqual({
+      firstName: "Marie Claire",
+      lastName: "Abou Jaoudé",
+    });
+  });
+
+  it("reads another surname from the last word", () => {
+    expect(personName("Karim Haddad", "Sahyoun", noGuess)).toEqual({ firstName: "Karim", lastName: "Haddad" });
+  });
+
+  it("flags a three-word split as a guess", () => {
+    const guesses: unknown[] = [];
+    expect(personName("Jean Pierre Khoury", "", (name) => guesses.push(name))).toEqual({
+      firstName: "Jean Pierre",
+      lastName: "Khoury",
+    });
+    expect(guesses).toHaveLength(1);
+  });
+});
+
+describe("parseGuestCsv: naming seats", () => {
+  const NAMED = `${HEADER},Guests,+1 Name`;
+  const named = (guests: string, plusOneName = "", overrides: Partial<Record<string, string>> = {}) =>
+    [BANNER, NAMED, `${row(overrides)},${guests},${plusOneName}`].join("\n");
+
+  it("names a couple from Name(s) when the sheet has no Guests column", () => {
+    expect(parseGuestCsv(sheet(row())).rows[0]?.guests).toEqual([
+      { firstName: "Nayla", lastName: "Sahyoun" },
+      { firstName: "Paul", lastName: "Sahyoun" },
+    ]);
+  });
+
+  it("does not repeat a surname already written in Name(s)", () => {
+    const parsed = parseGuestCsv(sheet(row({ name: "Nayla Sahyoun & Paul" })));
+    expect(parsed.rows[0]?.guests).toEqual([
+      { firstName: "Nayla", lastName: "Sahyoun" },
+      { firstName: "Paul", lastName: "Sahyoun" },
+    ]);
+    expect(parsed.warnings).toEqual([]);
+  });
+
+  it("names a two-word name from Name(s) but asks the couple to check it", () => {
+    const parsed = parseGuestCsv(sheet(row({ name: "Karim Haddad & Nour" })));
+    expect(parsed.rows[0]?.guests?.[0]).toEqual({ firstName: "Karim Haddad", lastName: "Sahyoun" });
+    expect(parsed.warnings.join()).toMatch(/named "Karim Haddad Sahyoun" from "Name\(s\)"/);
+  });
+
+  it("names an optional column by its title when it appears twice", () => {
+    expect(() => parseGuestCsv([BANNER, `${HEADER},+1 Name,+1 name`, `${row()},,`].join("\n"))).toThrow(
+      /the column "\+1 Name" appears 2 times/,
+    );
+  });
+
+  it("leaves a family unnamed and says to fill in Guests", () => {
+    const parsed = parseGuestCsv(sheet(row({ name: "Rae & Cherif et famille", headCount: "4", totalHeadCount: "4" })));
+    expect(parsed.rows[0]?.guests).toBeUndefined();
+    expect(parsed.warnings.join()).toMatch(/Fill in "Guests"/);
+  });
+
+  it("leaves a row unnamed when Name(s) and Head Count disagree", () => {
+    const parsed = parseGuestCsv(sheet(row({ name: "Lina", headCount: "2", totalHeadCount: "2" })));
+    expect(parsed.rows[0]?.guests).toBeUndefined();
+  });
+
+  it("prefers the Guests column, and lets one guest carry another surname", () => {
+    const parsed = parseGuestCsv(
+      named("Rae; Cherif; Lea; Marc Khoury", "", {
+        name: "Rae & Cherif et famille",
+        headCount: "4",
+        totalHeadCount: "4",
+      }),
+    );
+    expect(parsed.rows[0]?.guests).toEqual([
+      { firstName: "Rae", lastName: "Sahyoun" },
+      { firstName: "Cherif", lastName: "Sahyoun" },
+      { firstName: "Lea", lastName: "Sahyoun" },
+      { firstName: "Marc", lastName: "Khoury" },
+    ]);
+  });
+
+  it("refuses a Guests list that does not match the head count", () => {
+    expect(() => parseGuestCsv(named("Nayla; Paul; Lea"))).toThrow(/"Guests" names 3 people but "Head Count" is 2/);
+  });
+
+  it("leaves a couple with two surnames unnamed, and wants full names for them", () => {
+    const twoFamilies = { name: "Talia + Ghazi", surname: "Fatte / Bohsali" };
+    expect(parseGuestCsv(sheet(row(twoFamilies))).rows[0]?.guests).toBeUndefined();
+    expect(() => parseGuestCsv(named("Talia; Ghazi", "", twoFamilies))).toThrow(/not one family name/);
+    expect(parseGuestCsv(named("Talia Fatte; Ghazi Bohsali", "", twoFamilies)).rows[0]?.guests).toEqual([
+      { firstName: "Talia", lastName: "Fatte" },
+      { firstName: "Ghazi", lastName: "Bohsali" },
+    ]);
+  });
+
+  it("leaves a party with an unknown or blank surname unnamed", () => {
+    expect(parseGuestCsv(sheet(row({ name: "Céline & Jack", surname: "??" }))).rows[0]?.guests).toBeUndefined();
+    expect(parseGuestCsv(sheet(row({ name: "Pascale & Biche", surname: "" }))).rows[0]?.guests).toBeUndefined();
+  });
+
+  it("wants full names in Guests when the row has no surname", () => {
+    const noSurname = { name: "Pascale & Biche", surname: "" };
+    expect(() => parseGuestCsv(named("Pascale; Biche", "", noSurname))).toThrow(/not one family name/);
+    expect(parseGuestCsv(named("Pascale Aoun; Biche Rizk", "", noSurname)).rows[0]?.guests).toEqual([
+      { firstName: "Pascale", lastName: "Aoun" },
+      { firstName: "Biche", lastName: "Rizk" },
+    ]);
+  });
+
+  it("refuses a plus-one with no surname", () => {
+    expect(() => parseGuestCsv(named("", "Karim", { plusOne: "TRUE", totalHeadCount: "3" }))).toThrow(
+      /"\+1 Name" needs a surname too/,
+    );
+  });
+
+  it("refuses a question mark in Guests", () => {
+    expect(() => parseGuestCsv(named("Nayla; ?"))).toThrow(/"Guests" has a "\?" in it/);
+  });
+
+  it("reads the plus-one's name", () => {
+    const parsed = parseGuestCsv(named("", "Karim Haddad", { plusOne: "TRUE", totalHeadCount: "3" }));
+    expect(parsed.rows[0]?.plusOne).toEqual({ firstName: "Karim", lastName: "Haddad" });
+  });
+
+  it("refuses a plus-one's name on a party without a plus-one", () => {
+    expect(() => parseGuestCsv(named("", "Karim Haddad"))).toThrow(/"\+1 Name" is filled in but "Any \+1" is not TRUE/);
   });
 });
