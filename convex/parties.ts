@@ -1,6 +1,9 @@
 import { type Infer, v } from "convex/values";
 
-import { mutation } from "./_generated/server";
+import type { Doc } from "./_generated/dataModel";
+
+import { buildImportKey } from "../src/lib/guest-csv";
+import { internalMutation, type MutationCtx, mutation } from "./_generated/server";
 import { requireAdmin } from "./lib/adminAuth";
 
 /**
@@ -25,6 +28,17 @@ const partyCsvFields = v.object({
   contactEmail: v.optional(v.string()),
   contactPhone: v.optional(v.string()),
 });
+
+const guestName = v.object({ firstName: v.string(), lastName: v.string() });
+
+/** A sheet row: the party's own fields, plus who sits in its seats when the sheet says. */
+const partyCsvRow = v.object({
+  ...partyCsvFields.fields,
+  guests: v.optional(v.array(guestName)),
+  plusOne: v.optional(guestName),
+});
+
+type PartyCsvRow = Infer<typeof partyCsvRow>;
 
 export type PartyCsvFields = Infer<typeof partyCsvFields>;
 
@@ -92,6 +106,62 @@ export function diffSheetFields(existing: PartyCsvFields, desired: PartyCsvField
 }
 
 /**
+ * Names a party's seats from the sheet, the same way naming someone in /admin
+ * does: the RSVP form then shows each person instead of empty name fields.
+ *
+ * Only ever fills empty seats. A party that has replied, or that already has
+ * someone named, is left alone: those names came from the guests or the couple
+ * and are newer than the sheet. Returns how many guests were (or, in a dry run,
+ * would be) created, and why a party was skipped when the sheet and the stored
+ * party disagree.
+ */
+async function nameSeats(
+  ctx: MutationCtx,
+  party: { _id?: Doc<"parties">["_id"]; displayName: string; headCount: number; plusOneAllowed: boolean; respondedAt?: number },
+  row: PartyCsvRow,
+  dryRun: boolean,
+): Promise<{ named: number; mismatch?: string }> {
+  if (!row.guests && !row.plusOne) return { named: 0 };
+  if (party.respondedAt !== undefined) return { named: 0 };
+
+  const existing = party._id
+    ? await ctx.db
+        .query("guests")
+        .withIndex("by_party", (q) => q.eq("partyId", party._id!))
+        .collect()
+    : [];
+
+  const toName: (Infer<typeof guestName> & { isPlusOne: boolean })[] = [];
+  let mismatch: string | undefined;
+
+  if (row.guests && !existing.some((guest) => !guest.isPlusOne)) {
+    // An admin edit to the head count wins over the sheet, so the sheet's names may no longer fit.
+    if (row.guests.length === party.headCount) toName.push(...row.guests.map((g) => ({ ...g, isPlusOne: false })));
+    else mismatch = `${party.displayName} (sheet names ${row.guests.length}, head count is ${party.headCount})`;
+  }
+  if (row.plusOne && party.plusOneAllowed && !existing.some((guest) => guest.isPlusOne)) {
+    toName.push({ ...row.plusOne, isPlusOne: true });
+  }
+
+  if (!dryRun && party._id) {
+    for (const guest of toName) {
+      await ctx.db.insert("guests", {
+        partyId: party._id,
+        firstName: guest.firstName,
+        lastName: guest.lastName,
+        isPlusOne: guest.isPlusOne,
+        preWedding: "pending",
+        wedding: "pending",
+        brunch: "pending",
+        addedByCouple: true,
+      });
+    }
+  }
+
+  return { named: toName.length, mismatch };
+}
+
+/**
  * Upserts the parsed sheet into the `parties` table.
  *
  * Idempotent by design: matching is on `importKey`, existing parties keep their token
@@ -102,16 +172,20 @@ export function diffSheetFields(existing: PartyCsvFields, desired: PartyCsvField
  * Admin-only. A public mutation here would let anyone who knows the deployment URL
  * rewrite the entire guest list, and the /admin UI calls it straight from the browser.
  *
+ * Seats are named from the sheet's names too (see `nameSeats`), so a re-import
+ * after filling in `Guests` names everyone who has not replied yet.
+ *
  * `dryRun` produces the identical report without touching the table, so the admin
  * UI can show the couple exactly what an import would do before they commit to it.
  * Running the real logic beats reimplementing a preview that could disagree with it.
  */
 export const importParties = mutation({
-  args: { rows: v.array(partyCsvFields), dryRun: v.optional(v.boolean()) },
+  args: { rows: v.array(partyCsvRow), dryRun: v.optional(v.boolean()) },
   returns: v.object({
     created: v.number(),
     updated: v.number(),
     unchanged: v.number(),
+    guestsNamed: v.number(),
     missingFromCsv: v.array(v.object({ importKey: v.string(), displayName: v.string() })),
     warnings: v.array(v.string()),
   }),
@@ -142,47 +216,61 @@ export const importParties = mutation({
     let created = 0;
     let updated = 0;
     let unchanged = 0;
+    let guestsNamed = 0;
+    const seatMismatches: string[] = [];
     const skippedAdminEdited: { importKey: string; displayName: string }[] = [];
 
     for (const row of rows) {
       const existing = byImportKey.get(row.importKey);
+      const { guests: _guests, plusOne: _plusOne, ...fields } = row;
+      let seated: Parameters<typeof nameSeats>[1];
 
       if (!existing) {
         let token = generateToken();
         while (usedTokens.has(token)) token = generateToken();
         usedTokens.add(token);
 
-        if (!dryRun) {
-          await ctx.db.insert("parties", {
-            ...row,
-            token,
-            // Set once, on insert. The couple owns these from the admin UI afterwards.
-            invitedToPreWedding: false,
-            invitedToWedding: true,
-            invitedToBrunch: false,
-          });
-        }
+        const partyId = dryRun
+          ? undefined
+          : await ctx.db.insert("parties", {
+              ...fields,
+              token,
+              // Set once, on insert. The couple owns these from the admin UI afterwards.
+              invitedToPreWedding: false,
+              invitedToWedding: true,
+              invitedToBrunch: false,
+            });
         created++;
-        continue;
+        seated = { ...fields, _id: partyId };
+      } else {
+        const patch = diffSheetFields(existing, fields);
+        if (!patch) {
+          unchanged++;
+          seated = existing;
+        } else if (existing.editedInAdminAt !== undefined) {
+          // Admin edits win. A correction typed in /admin is deliberate and current;
+          // the sheet is the stale copy. Skipping loudly rather than silently, so a
+          // real divergence between the two is visible instead of being discovered
+          // months later when a name is wrong on a place card.
+          skippedAdminEdited.push({ importKey: existing.importKey, displayName: existing.displayName });
+          seated = existing;
+        } else {
+          if (!dryRun) await ctx.db.patch(existing._id, patch);
+          updated++;
+          seated = { ...existing, ...patch };
+        }
       }
 
-      const patch = diffSheetFields(existing, row);
-      if (!patch) {
-        unchanged++;
-        continue;
-      }
+      const { named, mismatch } = await nameSeats(ctx, seated, row, dryRun);
+      guestsNamed += named;
+      if (mismatch) seatMismatches.push(mismatch);
+    }
 
-      // Admin edits win. A correction typed in /admin is deliberate and current;
-      // the sheet is the stale copy. Skipping loudly rather than silently, so a
-      // real divergence between the two is visible instead of being discovered
-      // months later when a name is wrong on a place card.
-      if (existing.editedInAdminAt !== undefined) {
-        skippedAdminEdited.push({ importKey: existing.importKey, displayName: existing.displayName });
-        continue;
-      }
-
-      if (!dryRun) await ctx.db.patch(existing._id, patch);
-      updated++;
+    if (seatMismatches.length > 0) {
+      warnings.push(
+        `${seatMismatches.length} party/parties were not named because the sheet and /admin disagree on the head ` +
+          `count: ${seatMismatches.join(", ")}. Name them in /admin.`,
+      );
     }
 
     if (skippedAdminEdited.length > 0) {
@@ -204,6 +292,37 @@ export const importParties = mutation({
       );
     }
 
-    return { created, updated, unchanged, missingFromCsv, warnings };
+    return { created, updated, unchanged, guestsNamed, missingFromCsv, warnings };
+  },
+});
+
+/**
+ * Follows a rename in the sheet. The import matches a party on its name and
+ * surname, so a party renamed in the sheet would come back as a second party;
+ * this moves the stored one to the new name instead, keeping its link, invites
+ * and replies. Run by hand, once per rename:
+ * `npx convex run --prod parties:renameToMatchSheet '{"importKey":"…","displayName":"…","surname":"…"}'`
+ */
+export const renameToMatchSheet = internalMutation({
+  args: { importKey: v.string(), displayName: v.string(), surname: v.string() },
+  returns: v.string(),
+  handler: async (ctx, { importKey, displayName, surname }) => {
+    const party = await ctx.db
+      .query("parties")
+      .withIndex("by_import_key", (q) => q.eq("importKey", importKey))
+      .unique();
+    if (!party) throw new Error(`No party has the import key ${JSON.stringify(importKey)}`);
+
+    const next = buildImportKey(displayName, surname);
+    const clash = await ctx.db
+      .query("parties")
+      .withIndex("by_import_key", (q) => q.eq("importKey", next))
+      .unique();
+    if (clash && clash._id !== party._id) {
+      throw new Error(`${JSON.stringify(next)} already belongs to another party`);
+    }
+
+    await ctx.db.patch(party._id, { displayName: displayName.trim(), surname: surname.trim(), importKey: next });
+    return next;
   },
 });
