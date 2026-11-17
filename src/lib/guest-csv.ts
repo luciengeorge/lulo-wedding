@@ -86,9 +86,9 @@ const REQUIRED_COLUMNS = {
 
 /** Columns the sheet may not have yet. Matched loosely, since the couple type these titles themselves. */
 const OPTIONAL_COLUMNS = {
-  phone: /^phone(\(s\))?$/i,
-  guests: /^guests$/i,
-  plusOneName: /^\+ ?1 name$/i,
+  phone: { title: "Phone", pattern: /^phone(\(s\))?$/i },
+  guests: { title: "Guests", pattern: /^guests$/i },
+  plusOneName: { title: "+1 Name", pattern: /^\+ ?1 name$/i },
 } as const;
 
 type ColumnKey = keyof typeof REQUIRED_COLUMNS | keyof typeof OPTIONAL_COLUMNS;
@@ -108,8 +108,8 @@ function findColumns(header: readonly string[]): { columns: Partial<Record<Colum
   for (const [key, title] of Object.entries(REQUIRED_COLUMNS)) {
     locate(key as ColumnKey, (actual) => actual === title, title, true);
   }
-  for (const [key, pattern] of Object.entries(OPTIONAL_COLUMNS)) {
-    locate(key as ColumnKey, (actual) => pattern.test(actual), key, false);
+  for (const [key, { title, pattern }] of Object.entries(OPTIONAL_COLUMNS)) {
+    locate(key as ColumnKey, (actual) => pattern.test(actual), title, false);
   }
 
   return { columns, problems };
@@ -369,7 +369,20 @@ export function parseGuestCsv(text: string): ParseGuestCsvResult {
     } else if (headCount !== undefined) {
       const names = splitNames(displayName);
       if (names?.length === headCount && sharedSurname !== "") {
-        guests = names.map((firstName) => ({ firstName, lastName: surname }));
+        guests = names.map((name) => {
+          // "Nayla Sahyoun" already carries the surname; "Jean Lou" is a double
+          // first name or another surname, which only the couple can tell.
+          const firstName = name.toLowerCase().endsWith(` ${surname.toLowerCase()}`)
+            ? name.slice(0, name.length - surname.length).trim()
+            : name;
+          if (firstName.includes(" ")) {
+            warnings.push(
+              `${label}: named ${JSON.stringify(`${firstName} ${surname}`)} from "Name(s)". If that is wrong, ` +
+                `write the names in "Guests".`,
+            );
+          }
+          return { firstName, lastName: surname };
+        });
       } else {
         warnings.push(
           `${label}: cannot tell who the ${headCount} guest(s) are from "Name(s)". Fill in "Guests" to name ` +

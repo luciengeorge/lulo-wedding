@@ -368,6 +368,27 @@ describe("parseGuestCsv: naming seats", () => {
     ]);
   });
 
+  it("does not repeat a surname already written in Name(s)", () => {
+    const parsed = parseGuestCsv(sheet(row({ name: "Nayla Sahyoun & Paul" })));
+    expect(parsed.rows[0]?.guests).toEqual([
+      { firstName: "Nayla", lastName: "Sahyoun" },
+      { firstName: "Paul", lastName: "Sahyoun" },
+    ]);
+    expect(parsed.warnings).toEqual([]);
+  });
+
+  it("names a two-word name from Name(s) but asks the couple to check it", () => {
+    const parsed = parseGuestCsv(sheet(row({ name: "Karim Haddad & Nour" })));
+    expect(parsed.rows[0]?.guests?.[0]).toEqual({ firstName: "Karim Haddad", lastName: "Sahyoun" });
+    expect(parsed.warnings.join()).toMatch(/named "Karim Haddad Sahyoun" from "Name\(s\)"/);
+  });
+
+  it("names an optional column by its title when it appears twice", () => {
+    expect(() => parseGuestCsv([BANNER, `${HEADER},+1 Name,+1 name`, `${row()},,`].join("\n"))).toThrow(
+      /the column "\+1 Name" appears 2 times/,
+    );
+  });
+
   it("leaves a family unnamed and says to fill in Guests", () => {
     const parsed = parseGuestCsv(sheet(row({ name: "Rae & Cherif et famille", headCount: "4", totalHeadCount: "4" })));
     expect(parsed.rows[0]?.guests).toBeUndefined();
