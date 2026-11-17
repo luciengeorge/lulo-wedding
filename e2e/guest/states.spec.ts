@@ -25,19 +25,17 @@ test.describe("a party opening its link", () => {
     await visit(page, `/rsvp/${TOKEN}`);
 
     await expectReplyForm(page);
-    await expect(page.getByRole("button", { name: "WE'LL BE THERE" })).toBeVisible();
-    await expect(page.getByRole("button", { name: "WE CAN'T MAKE IT" })).toBeVisible();
+    await expect(page.getByRole("button", { name: "SEND OUR REPLY" })).toBeVisible();
     await expect(page.getByText("Thank you")).toHaveCount(0);
   });
 
   /** One seat speaks for one person. */
-  test("fresh, invited alone: the buttons say I, not we", async ({ page }) => {
+  test("fresh, invited alone: the button says my, not our", async ({ page }) => {
     await backend.seed([party({ token: TOKEN, displayName: "Lucy", surname: "", headCount: 1 })]);
     await visit(page, `/rsvp/${TOKEN}`);
 
-    await expect(page.getByRole("button", { name: "I'LL BE THERE" })).toBeVisible();
-    await page.getByRole("button", { name: "I CAN'T MAKE IT" }).click();
-    await expect(page.getByRole("button", { name: "Actually, I can come", exact: true })).toBeVisible();
+    await page.getByRole("button", { name: "SEND MY REPLY" }).click();
+    await expect(page.getByRole("alert")).toContainText("Send this as “I can't make it”?");
   });
 
   /**
@@ -126,9 +124,10 @@ test.describe("a party opening its link", () => {
     await expectStoredReply(page, "rae@example.com");
 
     await page.getByRole("button", { name: "CHANGE OUR REPLY" }).click();
-    await page.getByRole("button", { name: "WE CAN'T MAKE IT" }).click();
+    await card(page, "Rae").getByLabel("Rae can't make it").check();
+    await card(page, "Cherif").getByLabel("Cherif can't make it").check();
     await expect(emailField(page)).toHaveValue("rae@example.com");
-    await page.getByRole("button", { name: "SEND", exact: true }).click();
+    await page.getByRole("button", { name: "SEND OUR REPLY" }).click();
     await expect(page.getByRole("heading", { name: "We will miss you" })).toBeVisible();
     expect(await backend.replyFor(TOKEN)).toEqual(
       expect.objectContaining({

@@ -36,7 +36,7 @@ test("a guest finds their name, replies, and the couple see it", async ({ browse
   await passProtection(cold, baseURL!);
   const coldPage = await cold.newPage();
   await go(coldPage, `/rsvp/${party.token}`);
-  await expect(coldPage.getByRole("button", { name: /^(WE|I)'LL BE THERE$/ })).toBeVisible();
+  await expect(coldPage.getByRole("button", { name: /^SEND (OUR|MY) REPLY$/ })).toBeVisible();
   await cold.close();
 
   // Back on the first device, /rsvp opens the invitation it picked. Reply.
@@ -49,7 +49,7 @@ test("a guest finds their name, replies, and the couple see it", async ({ browse
     .getByRole("checkbox", { name: "Wedding", exact: true })
     .check({ force: true });
   await page.getByLabel("Email me a copy (optional)").fill(GUEST_EMAIL);
-  await page.getByRole("button", { name: /^(WE|I)'LL BE THERE$/ }).click();
+  await page.getByRole("button", { name: /^SEND (OUR|MY) REPLY$/ }).click();
   await expect(page.getByText("Thank you")).toBeVisible();
 
   // The receipt, captured rather than sent, linking back to this party.

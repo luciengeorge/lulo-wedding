@@ -1,7 +1,7 @@
 import type { APIRequestContext, Page } from "@playwright/test";
 
 import { backend, expect, party, test, visit } from "../fixtures";
-import { comingButton, emailField } from "../rsvp-form";
+import { sendButton, emailField } from "../rsvp-form";
 
 /**
  * Per-guest invites: the couple name two of a family of five and ask just those
@@ -67,7 +67,7 @@ test.describe("a family where the couple asked two people to the brunch", () => 
     await page.getByLabel("Last name, guest 3").fill("Haddad");
     await chip(page, "GUEST 3", "Wedding").check({ force: true });
     await emailField(page).fill("nadia@example.com");
-    await comingButton(page).click();
+    await sendButton(page).click();
 
     await expect(page.getByText("Thank you")).toBeVisible();
     expect((await backend.replyFor(TOKEN))?.guests).toEqual([
@@ -90,7 +90,7 @@ test.describe("a family where the couple asked two people to the brunch", () => 
     await expect(chip(page, "Nadia", "Wedding")).toHaveCount(0);
 
     await chip(page, "Omar", "Wedding").check({ force: true });
-    await comingButton(page).click();
+    await sendButton(page).click();
     await expect(page.getByText("Thank you")).toBeVisible();
 
     const nadia = (await backend.replyFor(TOKEN))?.guests.find((guest) => guest.firstName === "Nadia");

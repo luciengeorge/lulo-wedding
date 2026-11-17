@@ -32,7 +32,7 @@ test("a link that names no party opens nothing", async ({ page }) => {
   const status = response?.status();
   const gated = /\/enter\?redirect=/.test(page.url());
   expect(status === 404 || gated, `status ${status} at ${page.url()}`).toBe(true);
-  await expect(page.getByRole("button", { name: /^(WE|I)'LL BE THERE$/ })).toHaveCount(0);
+  await expect(page.getByRole("button", { name: /^SEND (OUR|MY) REPLY$/ })).toHaveCount(0);
 });
 
 test("the Resend webhook is routed and refuses an unsigned event", async ({ request }) => {

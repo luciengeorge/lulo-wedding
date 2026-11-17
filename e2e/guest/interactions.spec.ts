@@ -2,15 +2,13 @@ import type { Page, Request, Route } from "@playwright/test";
 
 import { backend, enterAsGuest, expect, party, test, visit, waitForEmail } from "../fixtures";
 import {
-  CAN_COME,
   card,
   chip,
-  comingButton,
+  sendButton,
   emailField,
   expectReplyForm,
   expectStoredReply,
   fillCard,
-  notComingButton,
   sendReply,
 } from "../rsvp-form";
 
@@ -70,7 +68,7 @@ test.describe("sending a reply", () => {
       await route.continue();
     });
 
-    await comingButton(page).dblclick();
+    await sendButton(page).dblclick();
     await expect(page.getByRole("button", { name: "SENDING" })).toBeDisabled();
     await expect(page.getByLabel("First name, guest 1")).toBeDisabled();
     release();
@@ -89,18 +87,18 @@ test.describe("sending a reply", () => {
     await page.route(SERVER_FNS, (route) =>
       isSubmit(route.request()) ? route.abort("internetdisconnected") : route.fallback(),
     );
-    await comingButton(page).click();
+    await sendButton(page).click();
 
     await expect(page.getByRole("alert")).toBeVisible();
     await expect(page.getByLabel("First name, guest 1")).toHaveValue("Rae");
     await expect(chip(page, "GUEST 1", "wedding")).toBeChecked();
     await expect(emailField(page)).toHaveValue(EMAIL);
-    await expect(comingButton(page)).toBeEnabled();
+    await expect(sendButton(page)).toBeEnabled();
     expect((await backend.replyFor(TOKEN))?.respondedAt).toBeUndefined();
 
     // Signal back: the same form goes through.
     await page.unrouteAll();
-    await comingButton(page).click();
+    await sendButton(page).click();
     await expect(page.getByText("Thank you")).toBeVisible();
     expect((await backend.replyFor(TOKEN))?.guests).toEqual([
       expect.objectContaining({ firstName: "Rae", wedding: "yes" }),
@@ -139,7 +137,7 @@ test.describe("sending a reply", () => {
       }).observe(document.body, { childList: true, subtree: true, characterData: true });
     });
 
-    await comingButton(page).click();
+    await sendButton(page).click();
     await expect(page.getByText("Rae, Cherif and Nour")).toBeVisible();
     expect(await page.evaluate(() => (window as unknown as { sawStale: boolean }).sawStale)).toBe(false);
   });
@@ -149,7 +147,7 @@ test.describe("sending a reply", () => {
     await fillRae(page);
     await backend.exhaustSubmit(TOKEN);
 
-    await comingButton(page).click();
+    await sendButton(page).click();
     await expect(page.getByRole("alert")).toContainText("That is a lot of changes at once.");
     expect((await backend.replyFor(TOKEN))?.respondedAt).toBeUndefined();
   });
@@ -163,7 +161,7 @@ test.describe("moving around", () => {
     await page.getByRole("link", { name: "RSVP", exact: true }).first().click();
     await expect(page).toHaveURL(`/rsvp/${TOKEN}?via=remembered`);
     await fillRae(page);
-    await comingButton(page).click();
+    await sendButton(page).click();
     await expect(page.getByText("Thank you")).toBeVisible();
 
     // /rsvp was replaced by the invitation, so Back leaves rather than landing
@@ -173,22 +171,8 @@ test.describe("moving around", () => {
     await page.goForward();
     await expect(page).toHaveURL(`/rsvp/${TOKEN}?via=remembered`);
     await expect(page.getByText("Thank you")).toBeVisible();
-    await expect(comingButton(page)).toHaveCount(0);
+    await expect(sendButton(page)).toHaveCount(0);
     expect((await backend.replyFor(TOKEN))?.guests).toHaveLength(1);
-  });
-
-  test("an email typed on one form is still there on the other", async ({ page }) => {
-    await openForm(page);
-    await emailField(page).fill(EMAIL);
-
-    await notComingButton(page).click();
-    await expect(page.getByRole("button", { name: "SEND", exact: true })).toBeVisible();
-    await expect(emailField(page)).toHaveValue(EMAIL);
-    await emailField(page).fill("cherif@example.com");
-
-    await page.getByRole("button", { name: CAN_COME }).click();
-    await expect(comingButton(page)).toBeVisible();
-    await expect(emailField(page)).toHaveValue("cherif@example.com");
   });
 
   test("a reload halfway through starts over and saves nothing", async ({ page }) => {
@@ -196,12 +180,12 @@ test.describe("moving around", () => {
     await fillRae(page);
 
     await page.reload();
-    await expect(comingButton(page)).toBeVisible();
+    await expect(sendButton(page)).toBeVisible();
     await expect(page.getByLabel("First name, guest 1")).toHaveValue("");
     expect((await backend.replyFor(TOKEN))?.respondedAt).toBeUndefined();
 
     await fillRae(page);
-    await comingButton(page).click();
+    await sendButton(page).click();
     await expect(page.getByText("Thank you")).toBeVisible();
   });
 });
@@ -214,7 +198,7 @@ test.describe("two devices on one invitation", () => {
     await openForm(second);
 
     await fillRae(page);
-    await comingButton(page).click();
+    await sendButton(page).click();
     await expect(page.getByText("Thank you")).toBeVisible();
 
     await fillCard(second, "GUEST 1", 0, { first: "Cherif", last: "Haddad", days: ["wedding"] });
@@ -241,7 +225,7 @@ test.describe("two devices on one invitation", () => {
     await openForm(page);
     await fillRae(page);
     await fillCard(page, "GUEST 2", 1, { first: "Cherif", last: "Haddad", days: ["wedding"] });
-    await comingButton(page).click();
+    await sendButton(page).click();
     await expect(page.getByText("Thank you")).toBeVisible();
     await expectStoredReply(page, EMAIL);
 
@@ -253,11 +237,11 @@ test.describe("two devices on one invitation", () => {
 
     // The second device says Cherif can't make it, which takes his row away.
     await card(second, "Cherif").getByLabel("Cherif can't make it").check();
-    await comingButton(second).click();
+    await sendButton(second).click();
     await expect(second.getByText(/told us about 1 of your 2 places/)).toBeVisible();
 
     // The first device, still showing Cherif, sends him again.
-    await comingButton(page).click();
+    await sendButton(page).click();
     await expect(page.getByRole("alert")).toContainText("That reply is out of date. Please reload the page");
     await expect(card(page, "Cherif")).toContainText("Cherif Haddad");
 

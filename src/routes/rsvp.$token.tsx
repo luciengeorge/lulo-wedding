@@ -8,7 +8,7 @@ import type { GuestDraft } from "@/components/rsvp/guest-card";
 import type { ReplyGuest, ReplyIssue, RsvpEventKey } from "@/lib/rsvp-rules";
 
 import { api } from "@/../convex/_generated/api";
-import { OutlineButton, PrimaryButton, QuietLink } from "@/components/rsvp/fields";
+import { OutlineButton, PrimaryButton } from "@/components/rsvp/fields";
 import { LabelledField } from "@/components/rsvp/fields";
 import { emptyGuest, GuestCard } from "@/components/rsvp/guest-card";
 import { CardLabel, RsvpCard, RsvpHeader, RsvpShell } from "@/components/rsvp/rsvp-shell";
@@ -72,11 +72,9 @@ export const Route = createFileRoute("/rsvp/$token")({
   pendingComponent: RsvpSkeleton,
 });
 
-type Mode = "reply" | "decline";
-
 type SubmitPayload = Parameters<typeof submitRsvp>[0]["data"];
 type Submit = (payload: SubmitPayload) => Promise<void>;
-/** Optional, and held above both forms, so an address typed on one is still there on the other. */
+/** Held above the form, so the thank-you screen can say where the copy went. */
 type ContactEmail = { value: string; set: (value: string) => void };
 
 /** Taken from the query itself, so the screens cannot drift from what it returns. */
@@ -109,7 +107,7 @@ function RsvpFlow({ token, data }: { token: string; data: RsvpData }) {
   const hasReplied = party.respondedAt !== undefined;
   // A party who already answered opens on what they said, not on the form again.
   // `earlyDecline` came from the spreadsheet, so treat it as an answer too.
-  const [mode, setMode] = useState<Mode | null>(hasReplied || party.earlyDecline ? null : "reply");
+  const [replying, setReplying] = useState(!(hasReplied || party.earlyDecline));
   // Starts empty: the address on file is never sent to the page (see guestFacingParty).
   const [email, setEmail] = useState("");
   const contactEmail = { value: email, set: setEmail };
@@ -119,27 +117,14 @@ function RsvpFlow({ token, data }: { token: string; data: RsvpData }) {
   if (deadlinePassed) return <ClosedSummary data={data} />;
   // Both ways out of the confirmation lead to the guest list: "change our reply"
   // and, for a party that declined, "actually, we can come".
-  if (mode === null) return <Confirmed data={data} emailedTo={email.trim()} onChange={() => setMode("reply")} />;
-  if (mode === "decline") {
-    return (
-      <DeclineForm
-        token={token}
-        data={data}
-        contactEmail={contactEmail}
-        submit={submit}
-        onBack={() => setMode("reply")}
-        onDone={() => setMode(null)}
-      />
-    );
-  }
+  if (!replying) return <Confirmed data={data} emailedTo={email.trim()} onChange={() => setReplying(true)} />;
   return (
-    <AcceptForm
+    <ReplyForm
       token={token}
       data={data}
       contactEmail={contactEmail}
       submit={submit}
-      onDecline={() => setMode("decline")}
-      onDone={() => setMode(null)}
+      onDone={() => setReplying(false)}
     />
   );
 }
@@ -204,19 +189,17 @@ function issuesByGuest(issues: ReplyIssue[]) {
   return { byGuest, general };
 }
 
-function AcceptForm({
+function ReplyForm({
   token,
   data,
   contactEmail: { value: contactEmail, set: setContactEmail },
   submit,
-  onDecline,
   onDone,
 }: {
   token: string;
   data: RsvpData;
   contactEmail: ContactEmail;
   submit: Submit;
-  onDecline: () => void;
   onDone: () => void;
 }) {
   const { party, guests: stored } = data;
@@ -237,6 +220,9 @@ function AcceptForm({
 
   const [drafts, setDrafts] = useState<GuestDraft[]>(initial);
   const [plusOne, setPlusOne] = useState<GuestDraft | null>(initialPlusOne);
+  const [note, setNote] = useState(party.guestNote ?? "");
+  // Set when a party sends cards with nobody on them, which asks before it is read as a no.
+  const [confirmingDecline, setConfirmingDecline] = useState(false);
   const [issues, setIssues] = useState<ReplyIssue[]>([]);
   const [formError, setFormError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
@@ -244,42 +230,66 @@ function AcceptForm({
   const all = plusOne ? [...drafts, plusOne] : drafts;
   const { byGuest, general } = issuesByGuest(issues);
 
-  async function onSubmit(formEvent: React.FormEvent) {
-    formEvent.preventDefault();
-    if (busy) return;
+  function editDrafts(next: GuestDraft[]) {
+    setDrafts(next);
+    setConfirmingDecline(false);
+  }
 
-    // The same rules the server enforces, run here first so a problem appears
-    // next to its field rather than as a rejected submit.
-    const found = validateReply(party, toReplyGuests(all), { existingPlusOne: Boolean(storedPlusOne) });
-    setIssues(found);
-    setFormError(null);
-    if (found.length > 0) return;
+  function editPlusOne(next: GuestDraft | null) {
+    setPlusOne(next);
+    setConfirmingDecline(false);
+  }
 
+  async function send(payload: Omit<SubmitPayload, "token" | "contactEmail" | "guestNote">) {
     setBusy(true);
     try {
-      await submit({
-        token,
-        declined: false,
-        contactEmail,
-        guests: all
-          .filter((guest) => !isBlankCard(toReplyGuests([guest])[0]))
-          .map((guest) => ({
-            guestId: guest.guestId,
-            firstName: guest.firstName,
-            lastName: guest.lastName,
-            isPlusOne: guest.isPlusOne,
-            dietaryNotes: guest.dietaryNotes || undefined,
-            preWedding: guest.attending.preWedding === true,
-            wedding: guest.attending.wedding === true,
-            brunch: guest.attending.brunch === true,
-          })),
-      });
+      await submit({ token, contactEmail, guestNote: note || undefined, ...payload });
       onDone();
     } catch (error) {
       setFormError(convexErrorMessage(error));
     } finally {
       setBusy(false);
     }
+  }
+
+  async function onSubmit(formEvent: React.FormEvent) {
+    formEvent.preventDefault();
+    if (busy) return;
+    setFormError(null);
+
+    // Nobody coming is a decline. Ticking "can't make it" says so plainly; an
+    // untouched form might be a slip, so that one asks first.
+    if (toReplyGuests(all).every(isBlankCard)) {
+      setIssues([]);
+      if (!all.some((guest) => guest.notComing) && !confirmingDecline) {
+        setConfirmingDecline(true);
+        return;
+      }
+      await send({ declined: true, guests: [] });
+      return;
+    }
+
+    // The same rules the server enforces, run here first so a problem appears
+    // next to its field rather than as a rejected submit.
+    const found = validateReply(party, toReplyGuests(all), { existingPlusOne: Boolean(storedPlusOne) });
+    setIssues(found);
+    if (found.length > 0) return;
+
+    await send({
+      declined: false,
+      guests: all
+        .filter((guest) => !isBlankCard(toReplyGuests([guest])[0]))
+        .map((guest) => ({
+          guestId: guest.guestId,
+          firstName: guest.firstName,
+          lastName: guest.lastName,
+          isPlusOne: guest.isPlusOne,
+          dietaryNotes: guest.dietaryNotes || undefined,
+          preWedding: guest.attending.preWedding === true,
+          wedding: guest.attending.wedding === true,
+          brunch: guest.attending.brunch === true,
+        })),
+    });
   }
 
   return (
@@ -295,7 +305,7 @@ function AcceptForm({
             label={guest.guestId && guest.firstName ? "" : `GUEST ${index + 1}`}
             disabled={busy}
             errors={byGuest.get(index) ?? {}}
-            onChange={(next) => setDrafts(drafts.map((current, i) => (i === index ? next : current)))}
+            onChange={(next) => editDrafts(drafts.map((current, i) => (i === index ? next : current)))}
           />
         ))}
 
@@ -320,14 +330,15 @@ function AcceptForm({
                 label="PLUS ONE"
                 disabled={busy}
                 errors={byGuest.get(drafts.length) ?? {}}
-                onChange={setPlusOne}
-                onRemove={() => setPlusOne(null)}
+                onChange={editPlusOne}
+                // Named by the couple: like any seat they named, it can be marked not coming but not removed.
+                onRemove={plusOne.addedByCouple ? undefined : () => editPlusOne(null)}
               />
             ) : (
               <button
                 type="button"
                 disabled={busy}
-                onClick={() => setPlusOne(emptyGuest(party.defaultInvitedTo, true))}
+                onClick={() => editPlusOne(emptyGuest(party.defaultInvitedTo, true))}
                 className="flex h-11 w-full items-center justify-center rounded-[3px] border border-[#E7D9C4] bg-[#FFFCF7] font-display text-[15px] text-ink"
               >
                 + Add a plus one
@@ -336,9 +347,26 @@ function AcceptForm({
           </RsvpCard>
         ) : null}
 
-        <div className="mt-6">
+        <div className="mt-6 flex flex-col gap-5">
+          <LabelledField label="A note for us (optional)" htmlFor="rsvp-note">
+            <textarea
+              id="rsvp-note"
+              rows={3}
+              value={note}
+              disabled={busy}
+              onChange={(event) => setNote(event.target.value)}
+              placeholder="Read by nobody but us."
+              className="w-full resize-y rounded-[3px] border border-[#E7D9C4] bg-[#FFFCF7] px-3.5 py-3 font-display text-[15px] text-bark outline-none placeholder:text-[#B0A091] focus-visible:border-ink/50 focus-visible:ring-2 focus-visible:ring-ink/15"
+            />
+          </LabelledField>
           <EmailField id="rsvp-contact-email" value={contactEmail} disabled={busy} onChange={setContactEmail} />
         </div>
+
+        {confirmingDecline ? (
+          <p role="alert" className="mt-4 font-display text-[15px] leading-[22px] text-ink">
+            Nobody is filled in. Send this as &ldquo;{voice(party).notComing}&rdquo;?
+          </p>
+        ) : null}
 
         {general.length > 0 || formError ? (
           <div role="alert" className="mt-4 flex flex-col gap-1">
@@ -351,13 +379,10 @@ function AcceptForm({
           </div>
         ) : null}
 
-        <div className="mt-6 flex flex-col gap-3">
+        <div className="mt-6">
           <PrimaryButton type="submit" disabled={busy}>
-            {busy ? "SENDING" : voice(party).coming}
+            {busy ? "SENDING" : confirmingDecline ? "YES, SEND" : voice(party).send}
           </PrimaryButton>
-          <OutlineButton disabled={busy} onClick={onDecline}>
-            {voice(party).notComing}
-          </OutlineButton>
         </div>
       </form>
 
@@ -368,88 +393,12 @@ function AcceptForm({
   );
 }
 
-/* ------------------------------------------------------------ the decline */
-
-function DeclineForm({
-  token,
-  data,
-  contactEmail: { value: contactEmail, set: setContactEmail },
-  submit,
-  onBack,
-  onDone,
-}: {
-  token: string;
-  data: RsvpData;
-  contactEmail: ContactEmail;
-  submit: Submit;
-  onBack: () => void;
-  onDone: () => void;
-}) {
-  const { party } = data;
-  const [note, setNote] = useState(party.guestNote ?? "");
-  const [error, setError] = useState<string | null>(null);
-  const [busy, setBusy] = useState(false);
-
-  async function onSubmit(formEvent: React.FormEvent) {
-    formEvent.preventDefault();
-    if (busy) return;
-    setBusy(true);
-    setError(null);
-    try {
-      await submit({ token, declined: true, contactEmail, guestNote: note || undefined, guests: [] });
-      onDone();
-    } catch (cause) {
-      setError(convexErrorMessage(cause));
-    } finally {
-      setBusy(false);
-    }
-  }
-
-  return (
-    <RsvpShell>
-      <RsvpHeader title={party.displayName} subtitle="We will miss you. Leave us a note if you like." script />
-
-      <form onSubmit={onSubmit} className="mt-7 flex flex-col gap-5">
-        <LabelledField label="A note for us" htmlFor="rsvp-note">
-          <textarea
-            id="rsvp-note"
-            rows={4}
-            value={note}
-            disabled={busy}
-            onChange={(event) => setNote(event.target.value)}
-            placeholder="Optional, and read by nobody but us."
-            className="w-full resize-y rounded-[3px] border border-[#E7D9C4] bg-[#FFFCF7] px-3.5 py-3 font-display text-[15px] text-bark outline-none placeholder:text-[#B0A091] focus-visible:border-ink/50 focus-visible:ring-2 focus-visible:ring-ink/15"
-          />
-        </LabelledField>
-
-        <EmailField id="rsvp-decline-email" value={contactEmail} disabled={busy} onChange={setContactEmail} />
-        {error ? (
-          <p role="alert" className="font-display text-[14px] leading-5 text-ink">
-            {error}
-          </p>
-        ) : null}
-
-        <PrimaryButton type="submit" disabled={busy}>
-          {busy ? "SENDING" : "SEND"}
-        </PrimaryButton>
-      </form>
-
-      <div className="mt-5 flex flex-col items-center gap-3.5 text-center">
-        <p className="font-display text-[14px] leading-5 text-faded">
-          If anything changes, come back to this link any time.
-        </p>
-        <QuietLink onClick={onBack}>{voice(party).canCome}</QuietLink>
-      </div>
-    </RsvpShell>
-  );
-}
-
 /** "I" for an invitation to one person, "we" for anything bigger. */
 function voice(party: { headCount: number }) {
   const one = party.headCount === 1;
   return {
-    coming: one ? "I'LL BE THERE" : "WE'LL BE THERE",
-    notComing: one ? "I CAN'T MAKE IT" : "WE CAN'T MAKE IT",
+    send: one ? "SEND MY REPLY" : "SEND OUR REPLY",
+    notComing: one ? "I can't make it" : "We can't make it",
     canCome: one ? "Actually, I can come" : "Actually, we can come",
   };
 }

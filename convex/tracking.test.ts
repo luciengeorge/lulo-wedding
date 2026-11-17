@@ -524,6 +524,41 @@ describe("per-guest invites", () => {
 });
 
 describe("named guests in /admin", () => {
+  it("names a plus one only for a party allowed one, once, without taking a seat", async () => {
+    const t = setup();
+    const refused = await insertParty(t, { token: "token-other", importKey: "other|haddad" });
+    await expect(
+      t.mutation(api.admin.addNamedGuest, { partyId: refused, firstName: "Sami", lastName: "Aoun", isPlusOne: true }),
+    ).rejects.toThrow("not allowed a plus one");
+
+    const partyId = await insertParty(t, { importKey: "lucy|", displayName: "Lucy", headCount: 1, plusOneAllowed: true });
+    await t.mutation(api.admin.addNamedGuest, { partyId, firstName: "Lucy", lastName: "Haddad" });
+    const plusOne = await t.mutation(api.admin.addNamedGuest, {
+      partyId,
+      firstName: "Sami",
+      lastName: "Aoun",
+      isPlusOne: true,
+    });
+    await expect(
+      t.mutation(api.admin.addNamedGuest, { partyId, firstName: "Maya", lastName: "Aoun", isPlusOne: true }),
+    ).rejects.toThrow("already has a plus one");
+
+    expect((await t.query(api.admin.namedGuests, { partyId })).map((guest) => guest.isPlusOne)).toEqual([false, true]);
+
+    // The party answers for the plus one the way it answers for any named seat.
+    const [lucy] = (await guestsOf(t, partyId)).filter((guest) => !guest.isPlusOne);
+    await t.mutation(api.rsvp.submit, {
+      token: PARTY.token,
+      declined: false,
+      guests: [
+        { guestId: lucy._id, firstName: "Lucy", lastName: "Haddad", isPlusOne: false, preWedding: false, wedding: true, brunch: false },
+        { guestId: plusOne, firstName: "Sami", lastName: "Aoun", isPlusOne: true, preWedding: false, wedding: true, brunch: false },
+      ],
+    });
+    const sami = (await guestsOf(t, partyId)).find((guest) => guest._id === plusOne);
+    expect(sami).toMatchObject({ isPlusOne: true, wedding: "yes", addedByCouple: true });
+  });
+
   it("removes someone the couple added only until they answer", async () => {
     const t = setup();
     const partyId = await insertParty(t);
