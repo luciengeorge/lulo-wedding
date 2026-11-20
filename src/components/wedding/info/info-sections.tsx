@@ -1,6 +1,7 @@
-import type { ReactNode } from "react";
+import { Fragment, type ReactNode } from "react";
 
 import type { ScheduleEvent, ShownFaq, ShownTravelNote } from "@/lib/functions/home-content";
+import type { FaqBlock } from "@/lib/wedding-info";
 
 import { cn } from "@/lib/utils";
 import {
@@ -314,8 +315,8 @@ function Travel({ events, notes }: { events: readonly ScheduleEvent[]; notes: re
   return (
     <InfoSection id="travel" eyebrow="Travel" title="Getting there">
       <p className="font-display text-lg leading-[27px] text-bark">
-        Faraya is about an hour to an hour and a half from Beirut by car. Summer weekends get busy on the mountain
-        roads, so leave a little extra time on the day.
+        Faraya is approximately a 1 to 1.5-hour drive from Beirut, depending on traffic. During summer weekends, the
+        roads can get busy, so we recommend allowing a little extra travel time, especially on the wedding day.
       </p>
 
       <div className="mt-[26px] flex flex-col border-b border-rule">
@@ -323,9 +324,10 @@ function Travel({ events, notes }: { events: readonly ScheduleEvent[]; notes: re
           <Item title="Shuttles">
             {onlyWedding && withShuttle[0]?.shuttle ? (
               <p className={body}>
-                We have arranged shuttles between {withShuttle[0].shuttle.from} and the wedding.{" "}
+                For your convenience, we have arranged shuttle services between {withShuttle[0].shuttle.from} and the
+                wedding venue.{" "}
                 {withShuttle[0].shuttle.time ? (
-                  `They leave at ${withShuttle[0].shuttle.time}.`
+                  `Shuttles will be heading to the ceremony location at ${withShuttle[0].shuttle.time}.`
                 ) : (
                   <Pending>Times to be confirmed.</Pending>
                 )}
@@ -364,19 +366,22 @@ function Travel({ events, notes }: { events: readonly ScheduleEvent[]; notes: re
           </p>
         </Item>
         <Item title="Taxi">
-          <p className={body}>{TAXI.name}, any of these numbers:</p>
-          <ul className="flex flex-col gap-1 pt-0.5">
-            {TAXI.numbers.map((number) => (
-              <li key={number}>
+          <p className={body}>
+            Alternatively, if you prefer to book a taxi, you can contact{" "}
+            <strong className="font-semibold">{TAXI.name}</strong> at{" "}
+            {TAXI.numbers.map((number, index) => (
+              <Fragment key={number}>
+                {index > 0 ? " / " : null}
                 <a
                   href={telHref(number)}
-                  className="font-display text-[17px] leading-[26px] text-ink underline decoration-amber underline-offset-4"
+                  className="whitespace-nowrap text-ink underline decoration-amber underline-offset-4"
                 >
                   {number}
                 </a>
-              </li>
+              </Fragment>
             ))}
-          </ul>
+            .
+          </p>
         </Item>
         {notes.map((note) => (
           <Item key={note.title} title={note.title} onlyFor={note.onlyFor}>
@@ -393,7 +398,10 @@ function Stay() {
     <InfoSection id="stay" eyebrow="Stay" title="Where to stay">
       <div className="flex flex-col gap-2.5">
         <h3 className="font-display text-[26px] leading-8 font-medium text-bark">{ROOM_BLOCK.hotel}</h3>
-        <p className={body}>We have arranged special rates for our guests. The wedding shuttles leave from here.</p>
+        <p className={body}>
+          To make your stay as comfortable and enjoyable as possible, we’ve arranged special room rates at the{" "}
+          {ROOM_BLOCK.hotel}, with the available room categories and rates listed below.
+        </p>
       </div>
 
       <ul className="mt-4 flex flex-col border-b border-rule">
@@ -422,7 +430,10 @@ function Stay() {
 
       <div className="mt-8 flex flex-col gap-3">
         <Subhead>Also nearby</Subhead>
-        <p className={body}>If you would rather look around, these are close by.</p>
+        <p className={body}>
+          For those who prefer to explore other options, we’ve also put together a selection of recommended hotels in
+          the surrounding area.
+        </p>
         <ul className="grid grid-cols-2 gap-x-3 gap-y-2.5 pt-1 lg:grid-cols-3">
           {NEARBY_HOTELS.map((hotel) => (
             <li key={hotel} className="font-display text-[17px] leading-6 text-bark">
@@ -435,6 +446,27 @@ function Stay() {
   );
 }
 
+function FaqAnswerBlock({ block }: { block: FaqBlock }) {
+  switch (block.type) {
+    case "paragraph":
+      return <p className={body}>{block.text}</p>;
+    case "list":
+      return (
+        <ul className="flex list-disc flex-col gap-1 pl-5">
+          {block.items.map((item) => (
+            <li key={item} className={body}>
+              {item}
+            </li>
+          ))}
+        </ul>
+      );
+    default: {
+      const exhaustive: never = block;
+      return exhaustive;
+    }
+  }
+}
+
 function Faq({ faqs }: { faqs: readonly ShownFaq[] }) {
   return (
     <InfoSection id="faq" eyebrow="FAQ" title="Good to know">
@@ -443,7 +475,9 @@ function Faq({ faqs }: { faqs: readonly ShownFaq[] }) {
           <div key={faq.question} className="flex flex-col gap-2">
             <OnlyFor label={faq.onlyFor} />
             <h3 className="font-display text-[19px] leading-[26px] font-semibold text-bark">{faq.question}</h3>
-            <p className={body}>{faq.answer}</p>
+            {faq.answer.map((block, index) => (
+              <FaqAnswerBlock key={`${faq.question}-${index}`} block={block} />
+            ))}
           </div>
         ))}
       </div>
@@ -481,8 +515,11 @@ function Discover() {
           </article>
         ))}
         <article className="flex flex-col gap-2 border-t border-rule py-[22px]">
-          <PlaceHeader name="Wineries" kind="The vineyards" />
-          <p className={body}>Good wine and long views. Don&apos;t miss:</p>
+          <PlaceHeader name="Wine Tours" kind="The vineyards" />
+          <p className={body}>
+            Lebanon is home to some incredible wineries where you can enjoy delicious wines amidst breathtaking views.
+            Don’t miss:
+          </p>
           <ul className="flex flex-col gap-1.5 pt-1">
             {WINERIES.map((winery) => (
               <li key={winery.name} className="flex items-baseline gap-3">

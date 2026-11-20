@@ -46,7 +46,9 @@ export function showTo<T extends Tagged>(items: readonly T[], invited: readonly 
     }));
 }
 
-export type Faq = Tagged & { question: string; answer: string };
+export type FaqBlock = { type: "paragraph"; text: string } | { type: "list"; items: readonly string[] };
+
+export type Faq = Tagged & { question: string; answer: readonly FaqBlock[] };
 
 /** A block in the Travel section. `pending` draws the text as not confirmed yet. */
 export type TravelNote = Tagged & { title: string; text: string; pending?: boolean };
@@ -78,9 +80,9 @@ export const TAXI = {
 export const ROOM_BLOCK = {
   hotel: "InterContinental Mzaar",
   rooms: [
-    { name: "Standard room", rate: null },
-    { name: "Deluxe room", rate: null },
-    { name: "Junior suite", rate: null },
+    { name: "Standard Room", rate: null },
+    { name: "Deluxe Room", rate: null },
+    { name: "Junior Suite", rate: null },
   ] as { name: string; rate: string | null }[],
   /** How guests book the rate: a link, a code, or who to email. */
   booking: null as { label: string; href: string } | null,
@@ -88,36 +90,36 @@ export const ROOM_BLOCK = {
 
 export const NEARBY_HOTELS = [
   "Eleven Hotel",
-  "Le Montagnou",
+  "Le Montagnou Hotel",
   "Urban Hotel",
   "Oakridge Hotel",
   "Terrebrune Hotel",
-  "L'Auberge de Faqra",
+  "L’Auberge de Faqra",
 ] as const;
 
 export const PLACES: readonly { name: string; kind: string; text: string }[] = [
   {
-    name: "Beirut",
+    name: "Tour of Beirut",
     kind: "The city",
-    text: "Walk the churches and mosques of downtown, from Saint George and its ruins to the Mohammad Al-Amin Mosque. Wander Gemmayzeh and Mar Mikhael, and leave time for the National Museum, the Sursock Museum and the MIM.",
+    text: "Explore the churches and mosques in downtown, including Saint George for its fascinating ruins and the exquisite Mohammad Al-Amin Mosque. Take a leisurely stroll through the charming districts of Gemmayzeh and Mar Mikhael. Don't miss the chance to visit the National Museum of Lebanon, Sursock Museum and the MIM Museum.",
   },
   {
     name: "Batroun",
     kind: "The coast",
-    text: "A coastal town in the north and one of the oldest continuously inhabited places in the world. Bolero, Almaza Bay, Lumi Beach House and the Phoenician Wall are all worth a visit.",
+    text: "Batroun is a coastal city in northern Lebanon and one of the oldest continuously inhabited cities in the world. Batroun is known for some of its popular attractions, which include: Ixsir · Bolero · Almaza Bay · Lumi Beach House · Phoenician Wall and more.",
   },
   {
     name: "Cedars of God",
     kind: "The mountain",
-    text: "In the Kadisha Valley above Bsharre, one of the last remnants of the cedar forests that once covered Mount Lebanon.",
+    text: "The Cedars of God, located in the Kadisha Valley of Bsharre, Lebanon, are one of the last vestiges of the extensive forests of the Lebanon cedar that thrived across Mount Lebanon in antiquity.",
   },
 ];
 
 export const WINERIES: readonly { name: string; town: string }[] = [
   { name: "Château Ksara", town: "Ksara" },
-  { name: "Ixsir", town: "Batroun" },
-  { name: "Sept", town: "Nahleh" },
-  { name: "Atibaia", town: "Smar Jbeil" },
+  { name: "Ixsir Winery", town: "Batroun" },
+  { name: "Sept Winery", town: "Nahleh" },
+  { name: "Atibaia Winery", town: "Smar Jbeil" },
 ];
 
 /**
