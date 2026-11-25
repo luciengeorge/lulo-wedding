@@ -236,7 +236,7 @@ export function splitNames(value: string): string[] | null {
  */
 export function withoutFamily(value: string): string {
   const parts = value.split(NAME_JOINER);
-  const last = parts.at(-1) ?? "";
+  const last = parts[parts.length - 1] ?? "";
   return parts.length > 1 && FAMILY_WORD.test(last) ? parts.slice(0, -1).join(" & ") : value;
 }
 
