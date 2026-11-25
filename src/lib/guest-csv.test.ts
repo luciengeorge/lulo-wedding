@@ -334,6 +334,22 @@ describe("withoutFamily", () => {
     expect(withoutFamily("Rima + enfants")).toBe("Rima");
     expect(withoutFamily("Nayla & Paul")).toBe("Nayla & Paul");
   });
+
+  it("drops possessives and counts with the family, so they are never read as names", () => {
+    for (const value of [
+      "Rae & Cherif et sa famille",
+      "Rae & Cherif & ses enfants",
+      "Rae & Cherif + 2 enfants",
+      "Rae & Cherif and their kids",
+      "Rae & Cherif et leurs enfants",
+    ]) {
+      expect(splitNames(withoutFamily(value))).toEqual(["Rae", "Cherif"]);
+    }
+  });
+
+  it("leaves a family word it cannot drop, so the names stay unknown", () => {
+    expect(splitNames(withoutFamily("Famille Khoury"))).toBeNull();
+  });
 });
 
 describe("personName", () => {
@@ -453,6 +469,22 @@ describe("parseGuestCsv: naming seats", () => {
     expect(parsed.rows[0]?.guests?.map((guest) => guest.firstName)).toEqual(["Lea", "Karim"]);
     expect(parsed.warnings.join()).toMatch(/"Name\(s\)" names "Rima" but "Guests" does not/);
     expect(parseGuestCsv(named(`"Rima, Lea"`, "", parent)).warnings).toEqual([]);
+  });
+
+  it("warns when an extra is already in Name(s)", () => {
+    const family = { name: "Rae & Cherif et famille", headCount: "4", totalHeadCount: "4" };
+    expect(parseGuestCsv(named(`"Rae, Lea"`, "", family)).warnings.join()).toMatch(
+      /"Rae" is in "Name\(s\)" and again in "Guests"/,
+    );
+  });
+
+  it("does not warn about Name(s) on a full Guests list that covers it", () => {
+    const parsed = parseGuestCsv(named(`"Jean Lou Sahyoun, Marie"`, "", { name: "Jean Lou & Marie" }));
+    expect(parsed.warnings).toEqual([]);
+  });
+
+  it("gives no extras hint when Name(s) already fills the head count", () => {
+    expect(() => parseGuestCsv(named(`"Nayla, Paul, Lea"`))).toThrow(/"Head Count" is 2$/m);
   });
 
   it("says how many extras it expects when Guests is short", () => {
