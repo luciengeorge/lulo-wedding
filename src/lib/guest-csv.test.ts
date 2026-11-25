@@ -8,6 +8,7 @@ import {
   parseGuestCsv,
   personName,
   splitNames,
+  withoutFamily,
 } from "./guest-csv";
 
 const BANNER = ",,,,,,,,,,,,,,,,,Lo,Lu,Zeina & Michel,Nayla & Paul,Mutual,Total";
@@ -326,6 +327,15 @@ describe("splitNames", () => {
   });
 });
 
+describe("withoutFamily", () => {
+  it("drops the family a Name(s) cell counts but does not name", () => {
+    expect(withoutFamily("Rae & Cherif et famille")).toBe("Rae & Cherif");
+    expect(withoutFamily("Nayla & Joe and the kids")).toBe("Nayla & Joe");
+    expect(withoutFamily("Rima + enfants")).toBe("Rima");
+    expect(withoutFamily("Nayla & Paul")).toBe("Nayla & Paul");
+  });
+});
+
 describe("personName", () => {
   const noGuess = () => {
     throw new Error("unexpected guess");
@@ -418,6 +428,43 @@ describe("parseGuestCsv: naming seats", () => {
 
   it("refuses a Guests list that does not match the head count", () => {
     expect(() => parseGuestCsv(named("Nayla; Paul; Lea"))).toThrow(/"Guests" names 3 people but "Head Count" is 2/);
+  });
+
+  it("splits Guests on commas too", () => {
+    expect(parseGuestCsv(named(`"Nayla, Paul"`)).rows[0]?.guests).toEqual([
+      { firstName: "Nayla", lastName: "Sahyoun" },
+      { firstName: "Paul", lastName: "Sahyoun" },
+    ]);
+  });
+
+  it("adds Guests to the people Name(s) already names", () => {
+    const family = { name: "Rae & Cherif et famille", headCount: "4", totalHeadCount: "4" };
+    expect(parseGuestCsv(named(`"Lea, Marc Khoury"`, "", family)).rows[0]?.guests).toEqual([
+      { firstName: "Rae", lastName: "Sahyoun" },
+      { firstName: "Cherif", lastName: "Sahyoun" },
+      { firstName: "Lea", lastName: "Sahyoun" },
+      { firstName: "Marc", lastName: "Khoury" },
+    ]);
+  });
+
+  it("warns when a full Guests list leaves out someone Name(s) names", () => {
+    const parent = { name: "Rima et enfants", headCount: "2", totalHeadCount: "2" };
+    const parsed = parseGuestCsv(named(`"Lea, Karim"`, "", parent));
+    expect(parsed.rows[0]?.guests?.map((guest) => guest.firstName)).toEqual(["Lea", "Karim"]);
+    expect(parsed.warnings.join()).toMatch(/"Name\(s\)" names "Rima" but "Guests" does not/);
+    expect(parseGuestCsv(named(`"Rima, Lea"`, "", parent)).warnings).toEqual([]);
+  });
+
+  it("says how many extras it expects when Guests is short", () => {
+    const family = { name: "Rae & Cherif et famille", headCount: "4", totalHeadCount: "4" };
+    expect(() => parseGuestCsv(named("Lea", "", family))).toThrow(/or only the 2 not already in "Name\(s\)"/);
+  });
+
+  it("does not add extras to Name(s) on a row with two surnames", () => {
+    const twoFamilies = { name: "Talia + Ghazi", surname: "Fatte / Bohsali", headCount: "3", totalHeadCount: "3" };
+    expect(() => parseGuestCsv(named("Lea Bohsali", "", twoFamilies))).toThrow(
+      /"Guests" names 1 people but "Head Count" is 3$/m,
+    );
   });
 
   it("leaves a couple with two surnames unnamed, and wants full names for them", () => {
