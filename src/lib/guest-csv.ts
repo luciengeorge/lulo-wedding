@@ -6,7 +6,7 @@
  * optional `Guests` column, or failing that from `Name(s)` when it plainly names
  * one person per seat ("Nayla & Paul", head count 2). A row like "Rae & Cherif et
  * famille" (head count 4) cannot be read that way, so its seats stay unnamed
- * until `Guests` is filled in.
+ * until `Guests` is filled in, with everyone or only the two children.
  *
  * Deliberately free of Convex imports so the admin UI can reuse it in the browser.
  */
@@ -219,12 +219,25 @@ function cell(record: readonly string[], index: number | undefined): string {
  * Null when the cell stands for people it does not name ("et famille"), or is
  * unsure of them ("? & Wasim", "Elias?"): a place card should never read "?".
  */
+const NAME_JOINER = /\s*(?:&|,|\+|\band\b|\bet\b)\s*/i;
+const FAMILY_WORD = /famil|\bkids\b|\benfants\b|\bchildren\b/i;
+
 export function splitNames(value: string): string[] | null {
-  if (/famil|\bkids\b|\benfants\b|\?/i.test(value)) return null;
+  if (FAMILY_WORD.test(value) || value.includes("?")) return null;
   return value
-    .split(/\s*(?:&|,|\+|\band\b|\bet\b)\s*/i)
+    .split(NAME_JOINER)
     .map((name) => name.replace(/\s+/g, " ").trim())
     .filter((name) => name !== "");
+}
+
+/**
+ * "Rae & Cherif et sa famille" → "Rae & Cherif": drops the last part when it is
+ * the people a `Name(s)` cell counts but does not name ("ses 2 enfants", "her kids").
+ */
+export function withoutFamily(value: string): string {
+  const parts = value.split(NAME_JOINER);
+  const last = parts[parts.length - 1] ?? "";
+  return parts.length > 1 && FAMILY_WORD.test(last) ? parts.slice(0, -1).join(" & ") : value;
 }
 
 /**
@@ -350,39 +363,70 @@ export function parseGuestCsv(text: string): ParseGuestCsvResult {
     // A place card needs a surname. "Fatte / Bohsali" is two families' names,
     // "??" and a blank are none, so no guest takes the row's: each needs a full name.
     const sharedSurname = /[/?]/.test(surname) ? "" : surname;
+    // "Nayla Sahyoun" already carries the surname; "Jean Lou" is a double
+    // first name or another surname, which only the couple can tell.
+    const firstNameIn = (name: string) =>
+      name.toLowerCase().endsWith(` ${surname.toLowerCase()}`)
+        ? name.slice(0, name.length - surname.length).trim()
+        : name;
+    const fromNameColumn = (name: string): GuestName => {
+      const firstName = firstNameIn(name);
+      if (firstName.includes(" ")) {
+        warnings.push(
+          `${label}: named ${JSON.stringify(`${firstName} ${surname}`)} from "Name(s)". If that is wrong, ` +
+            `write the names in "Guests".`,
+        );
+      }
+      return { firstName, lastName: surname };
+    };
     let guests: GuestName[] | undefined;
     const guestsCell = cell(record, COL.guests);
     if (headCount !== undefined && guestsCell !== "") {
       const entries = guestsCell
-        .split(";")
+        .split(/[;,]/)
         .map((entry) => entry.trim())
         .filter((entry) => entry !== "");
+      // "Guests" lists either everyone, or only the people "Name(s)" leaves out:
+      // "Lea, Karim" on "Rae & Cherif et famille" with a head count of 4.
+      const namedInNameColumn = sharedSurname === "" ? null : splitNames(withoutFamily(displayName));
       if (entries.some((entry) => entry.includes("?"))) {
         rowProblems.push(`"Guests" has a "?" in it. Write the name, or leave "Guests" blank for now`);
       } else if (sharedSurname === "" && entries.some((entry) => !entry.includes(" "))) {
         rowProblems.push(`"Surname" is not one family name, so write each guest's full name in "Guests"`);
       } else if (entries.length === headCount) {
         guests = entries.map((entry) => personName(entry, sharedSurname, guessed));
+        const firstNames = guests.map((guest) => guest.firstName.toLowerCase());
+        for (const name of namedInNameColumn ?? []) {
+          if (!firstNames.includes(firstNameIn(name).toLowerCase())) {
+            warnings.push(
+              `${label}: "Name(s)" names ${JSON.stringify(name)} but "Guests" does not. "Guests" fills every seat, ` +
+                `so ${JSON.stringify(name)} is not invited. List only the extra people if that is wrong.`,
+            );
+          }
+        }
+      } else if (namedInNameColumn && namedInNameColumn.length + entries.length === headCount) {
+        const extras = entries.map((entry) => personName(entry, sharedSurname, guessed));
+        const named = namedInNameColumn.map(fromNameColumn);
+        for (const extra of extras) {
+          if (named.some((guest) => guest.firstName.toLowerCase() === extra.firstName.toLowerCase())) {
+            warnings.push(
+              `${label}: ${JSON.stringify(extra.firstName)} is in "Name(s)" and again in "Guests", so they get two ` +
+                `seats. "Guests" here should hold only the people "Name(s)" leaves out.`,
+            );
+          }
+        }
+        guests = [...named, ...extras];
       } else {
-        rowProblems.push(`"Guests" names ${entries.length} people but "Head Count" is ${headCount}`);
+        const missing = namedInNameColumn ? headCount - namedInNameColumn.length : 0;
+        rowProblems.push(
+          `"Guests" names ${entries.length} people but "Head Count" is ${headCount}` +
+            (missing > 0 ? `. List everyone, or only the ${missing} not already in "Name(s)"` : ""),
+        );
       }
     } else if (headCount !== undefined) {
       const names = splitNames(displayName);
       if (names?.length === headCount && sharedSurname !== "") {
-        guests = names.map((name) => {
-          // "Nayla Sahyoun" already carries the surname; "Jean Lou" is a double
-          // first name or another surname, which only the couple can tell.
-          const firstName = name.toLowerCase().endsWith(` ${surname.toLowerCase()}`)
-            ? name.slice(0, name.length - surname.length).trim()
-            : name;
-          if (firstName.includes(" ")) {
-            warnings.push(
-              `${label}: named ${JSON.stringify(`${firstName} ${surname}`)} from "Name(s)". If that is wrong, ` +
-                `write the names in "Guests".`,
-            );
-          }
-          return { firstName, lastName: surname };
-        });
+        guests = names.map(fromNameColumn);
       } else {
         warnings.push(
           `${label}: cannot tell who the ${headCount} guest(s) are from "Name(s)". Fill in "Guests" to name ` +
