@@ -2,11 +2,12 @@
  * Runs the story: turns how far the guest has scrolled into a frame, and keeps
  * the page's own layers (the hero, the sky, the captions) in step with it.
  *
- * story.tsx decides whether there is a story at all. By the time this loads,
- * the page is already tall and the hero pinned; until this is ready, scrolling
- * simply holds the hero where it is.
+ * story.tsx decides whether there is a story at all. This gets it ready to
+ * play first, and only then makes the page tall enough to hold it: a tall page
+ * with nothing to play is screens of scrolling past a hero that does not move.
  */
 import { pairFlat, pairingOrder, sampleSketch } from "./flat";
+import { atTop, grow, isTall } from "./height";
 import { createScene } from "./scene";
 import { metresPerPixel, momentAt } from "./timeline";
 import { buildWorld } from "./world";
@@ -55,10 +56,13 @@ export async function mountStory(
   };
   scene.resize(width, height);
   await place();
+  // Growing the page under someone part way down it would move what they are reading.
+  if (!signal.aborted && !isTall(section)) await atTop(signal);
   if (signal.aborted) {
     scene.dispose();
     return;
   }
+  grow(section);
 
   const started = performance.now();
   let last = started;
