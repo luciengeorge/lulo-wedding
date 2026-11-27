@@ -1,7 +1,8 @@
 /**
  * Draws the cloud. One set of points, one draw call; the vertex shader places
- * each point between its line on the flat sketch and its place on the slope,
- * carries the chairs round their cables and keeps the guests dancing.
+ * each point between the two flat pictures the story is between, and then
+ * between the last of those and its place on the slope, carries the chairs
+ * round their cables and keeps the guests dancing.
  *
  * Loaded on its own, after the page: this is the only file that needs three.js.
  */
@@ -23,14 +24,19 @@ import { FLAT } from "./timeline";
 import { FX, MODE, type World } from "./world";
 
 const VERTEX = /* glsl */ `
-  attribute vec3 aFlat;
-  attribute vec4 aInk;
+  // A point's place in the picture the story is leaving and in the one it is
+  // making: x and y from the middle of the stage in pixels, and the size of
+  // its dot there (none: it waits unseen). With each, its colour there.
+  attribute vec3 aFrom;
+  attribute vec4 aFromInk;
+  attribute vec3 aTo;
+  attribute vec4 aToInk;
   attribute vec4 aDay;
   attribute vec4 aNight;
   attribute vec4 aLook;
   attribute vec4 aMove;
 
-  uniform float uTime, uMorph, uNight, uSwap, uRatio, uMetres, uLens;
+  uniform float uTime, uTurn, uMorph, uNight, uSwap, uRatio, uMetres, uLens;
   uniform vec3 uFlatAt;
   uniform vec3 uLiftA[2];
   uniform vec3 uLiftB[2];
@@ -113,10 +119,23 @@ const VERTEX = /* glsl */ `
     else if (mode > ${(MODE.dancer - 0.5).toFixed(1)}) world = dance(position, aMove);
     else if (mode > ${(MODE.rider - 0.5).toFixed(1)}) world = ride(position, aMove.x, aMove.y);
 
-    // Each point leaves the sketch in its own time, and drifts wide on the way.
     float own = hash(rand * 91.7);
+    // From one picture to the next each point crosses in its own time, in a loose arc.
+    float over = smoothstep(0.0, 1.0, clamp(uTurn * 1.5 - hash(rand * 57.3) * 0.5, 0.0, 1.0));
+    float aloft = over * (1.0 - over) * 4.0;
+    vec2 arc = vec2(sin(own * 40.0 + uTime * 0.5), cos(own * 23.0 + uTime * 0.4)) * aloft * 22.0;
+    float seenFrom = step(0.001, aFrom.z);
+    float seenTo = step(0.001, aTo.z);
+    vec4 ink = vec4(
+      mix(aFromInk.rgb, aToInk.rgb, seenFrom < 0.5 ? 1.0 : seenTo < 0.5 ? 0.0 : over),
+      mix(aFromInk.a * seenFrom, aToInk.a * seenTo, over)
+    );
+    // A dot in flight is a little bigger than one at rest, or the crossing would be too faint to see.
+    float dotSize = mix(aFrom.z, aTo.z, over) * (1.0 + aloft * 0.9);
+    vec3 flat_ = uFlatAt + vec3((mix(aFrom.xy, aTo.xy, over) + arc) * uMetres, sin(own * 61.0) * aloft * 3.0);
+
+    // Each point leaves the last picture for the place in its own time too, and drifts wide on the way.
     float m = smoothstep(0.0, 1.0, clamp(uMorph * 1.45 - own * 0.45, 0.0, 1.0));
-    vec3 flat_ = uFlatAt + vec3(aFlat.xy * uMetres, 0.0);
     vec3 p = mix(flat_, world, m);
     p += vec3(sin(own * 40.0 + uTime * 0.6), cos(own * 23.0 + uTime * 0.4) * 0.6, sin(own * 61.0)) * m * (1.0 - m) * 7.0;
 
@@ -132,11 +151,12 @@ const VERTEX = /* glsl */ `
     // The far slope sits back, as it would in haze.
     if (dist < 240.0) c.a *= mix(1.0, 0.55, smoothstep(70.0, 190.0, dist));
 
-    vColor = mix(vec4(aInk.rgb, aInk.a * aFlat.z * uSwap), c, m);
+    // In a picture a point is a dot the size of the pixel it stands for, or it is not there yet.
+    vColor = mix(vec4(ink.rgb, ink.a * uSwap), c, m);
 
     float lit = fx > ${(FX.bulb - 0.5).toFixed(1)} ? 1.0 : 0.0;
     float size = clamp(0.027 * aLook.x * uLens / dist, 1.0, 5.0 * aLook.x) * (1.0 + lit * n * 1.6);
-    size = mix(1.25, size, m);
+    size = mix(dotSize, size, m);
     vSoft = lit * n;
     gl_PointSize = size * uRatio;
     gl_Position = projectionMatrix * mv;
@@ -157,11 +177,15 @@ const FRAGMENT = /* glsl */ `
   }
 `;
 
+/** One of the story's flat pictures as the cloud draws it: each point's place and dot size, and its colour. */
+export type Picture = { flat: Float32Array; ink: Uint8Array };
+
 export type StoryScene = {
-  /** Where each point starts on the sketch and in what colour. Set again when the page changes size. */
-  setFlat(start: { flat: Float32Array; ink: Uint8Array }, metresPerPixel: number): void;
+  /** The film's pictures, in its order, the hero's sketch first. Set again when the page changes size. */
+  setPictures(pictures: readonly Picture[], metresPerPixel: number): void;
   resize(width: number, height: number): void;
-  render(moment: Moment, seconds: number): void;
+  /** `ink` is how much of the flat drawing shows, 0 to 1: the dots standing in for the hero's sketch. */
+  render(moment: Moment, seconds: number, ink: number): void;
   /** Draws fewer pixels, for a device that is not keeping up. False once there is nothing left to give. */
   ease(): boolean;
   dispose(): void;
@@ -175,11 +199,28 @@ export function createScene(canvas: HTMLCanvasElement, context: WebGL2RenderingC
   renderer.setClearColor(0x000000, 0);
 
   const geometry = new BufferGeometry();
-  const flat = new BufferAttribute(new Float32Array(world.count * 3), 3);
-  const ink = new BufferAttribute(new Uint8Array(world.count * 4), 4, true);
+  // One pair of buffers to a picture. Which two the shader reads from follows the film.
+  let pictures: { flat: BufferAttribute; ink: BufferAttribute }[] = [];
+  const blank = {
+    flat: new BufferAttribute(new Float32Array(world.count * 3), 3),
+    ink: new BufferAttribute(new Uint8Array(world.count * 4), 4, true),
+  };
+  let from = -1;
+  let to = -1;
+  const show = (nextFrom: number, nextTo: number) => {
+    if (nextFrom !== from) {
+      const picture = pictures[(from = nextFrom)] ?? blank;
+      geometry.setAttribute("aFrom", picture.flat);
+      geometry.setAttribute("aFromInk", picture.ink);
+    }
+    if (nextTo !== to) {
+      const picture = pictures[(to = nextTo)] ?? blank;
+      geometry.setAttribute("aTo", picture.flat);
+      geometry.setAttribute("aToInk", picture.ink);
+    }
+  };
   geometry.setAttribute("position", new BufferAttribute(world.position, 3));
-  geometry.setAttribute("aFlat", flat);
-  geometry.setAttribute("aInk", ink);
+  show(0, 0);
   geometry.setAttribute("aDay", new BufferAttribute(world.day, 4, true));
   geometry.setAttribute("aNight", new BufferAttribute(world.night, 4, true));
   geometry.setAttribute("aLook", new BufferAttribute(world.look, 4));
@@ -187,6 +228,7 @@ export function createScene(canvas: HTMLCanvasElement, context: WebGL2RenderingC
 
   const uniforms = {
     uTime: { value: 0 },
+    uTurn: { value: 0 },
     uMorph: { value: 0 },
     uNight: { value: 0 },
     uSwap: { value: 0 },
@@ -217,11 +259,19 @@ export function createScene(canvas: HTMLCanvasElement, context: WebGL2RenderingC
   let height = 1;
 
   return {
-    setFlat(start, metresPerPixel) {
-      (flat.array as Float32Array).set(start.flat);
-      (ink.array as Uint8Array).set(start.ink);
-      flat.needsUpdate = true;
-      ink.needsUpdate = true;
+    setPictures(next, metresPerPixel) {
+      pictures = next.map((picture, i) => {
+        const had = pictures[i];
+        if (!had) return { flat: new BufferAttribute(picture.flat, 3), ink: new BufferAttribute(picture.ink, 4, true) };
+        (had.flat.array as Float32Array).set(picture.flat);
+        (had.ink.array as Uint8Array).set(picture.ink);
+        had.flat.needsUpdate = true;
+        had.ink.needsUpdate = true;
+        return had;
+      });
+      const [wasFrom, wasTo] = [from, to];
+      from = to = -1;
+      show(Math.max(0, wasFrom), Math.max(0, wasTo));
       uniforms.uMetres.value = metresPerPixel;
     },
     resize(nextWidth, nextHeight) {
@@ -230,16 +280,18 @@ export function createScene(canvas: HTMLCanvasElement, context: WebGL2RenderingC
       renderer.setSize(width, height, false);
       camera.aspect = width / height;
     },
-    render(moment, seconds) {
+    render(moment, seconds, ink) {
       const { position, target, fov } = moment.camera;
       camera.fov = fov;
       camera.setViewOffset(width, height, 0, moment.lift * height, width, height);
       camera.position.set(...position);
       camera.lookAt(...target);
+      show(moment.from, moment.to);
       uniforms.uTime.value = seconds;
+      uniforms.uTurn.value = moment.turn;
       uniforms.uMorph.value = moment.morph;
       uniforms.uNight.value = moment.night;
-      uniforms.uSwap.value = moment.swap;
+      uniforms.uSwap.value = ink;
       // Pixels per metre at one metre away, so a dot keeps its size on the ground.
       uniforms.uLens.value = height / (2 * Math.tan((fov * Math.PI) / 360));
       renderer.render(scene, camera);

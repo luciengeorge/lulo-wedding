@@ -2,6 +2,7 @@ import * as Sentry from "@sentry/tanstackstart-react";
 import { createServerFn } from "@tanstack/react-start";
 import z from "zod";
 
+import type { Act } from "@/components/wedding/story/acts";
 import type { Faq, Shown, TravelNote, WeddingEvent } from "@/lib/wedding-info";
 
 import { api } from "@/../convex/_generated/api";
@@ -62,12 +63,17 @@ export const getHomeContent = createServerFn({ method: "GET" })
           ? keys.map((key) => scheduleEvent(key, invitation ? invitedNames(invitation, invitation.guests, key) : []))
           : [scheduleEvent("wedding", [])];
 
+      // The hero's story follows the guest's own weekend. Friday is the day between the pre-wedding
+      // and the wedding, so it is for those who are there for both; everyone else's starts on Saturday.
+      const film: Act[] = keys.includes("preWedding") ? ["friday", "mountain"] : ["mountain"];
+
       return {
         guest: preview || admin ? null : (invitation?.displayName ?? null),
         preview: preview?.displayName ?? null,
         events,
         faqs: showTo(FAQS, keys),
         travelNotes: showTo(TRAVEL_NOTES, keys),
+        film,
       };
     });
   });

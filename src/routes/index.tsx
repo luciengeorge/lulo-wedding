@@ -41,7 +41,7 @@ export const Route = createFileRoute("/")({
 });
 
 function Home() {
-  const { preview, guest, ...content } = Route.useLoaderData();
+  const { preview, guest, film, ...content } = Route.useLoaderData();
 
   return (
     <div
@@ -49,7 +49,7 @@ function Home() {
       className="flex min-h-svh w-full flex-col bg-paper [background-image:url('/art/paper-tile.webp')] bg-[length:560px_428px] bg-repeat"
     >
       {preview ? <PreviewBar name={preview} /> : null}
-      <Story>
+      <Story acts={film}>
         <Hero guest={guest} />
       </Story>
       <JumpBar />

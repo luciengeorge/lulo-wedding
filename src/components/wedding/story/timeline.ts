@@ -1,8 +1,14 @@
 /**
- * The story as a function of how far the guest has scrolled, 0 to 1: where the
- * camera is, how far the sketch has become the place, how late in the day it is
- * and which line of text is up. No drawing here, so it can be tested as numbers.
+ * The story as a function of how far through it the guest is, 0 to 1: where
+ * the camera is, which picture the dots are making, how far they have become
+ * the place, how late in the day it is and which line of text is up. No drawing
+ * here, so it can be tested as numbers.
+ *
+ * A story is put together from acts, and not every guest gets the same ones:
+ * `film` below. The mountain is the act every story ends on, and the only one
+ * that is a place rather than a run of pictures.
  */
+import { type Act, FRIDAY, HOLD, MOUNTAIN_SECONDS, TURN, captionsOf, filmSeconds, fridaySeconds } from "./acts";
 import { LIFTS, type Vec3 } from "./world";
 
 const clamp = (v: number, a = 0, b = 1) => Math.min(b, Math.max(a, v));
@@ -58,7 +64,7 @@ const KEYS: Key[] = [
   { at: 1, target: [0, 15.5, -46], radius: 81, elevation: -8.5, azimuth: 360, fit: 1 },
 ];
 
-/** Lines of text, and the stretch of the scroll each is up for. */
+/** The mountain's lines of text, and the stretch of that act each is up for. */
 export const CAPTIONS = [
   { from: 0.2, to: 0.32 },
   { from: 0.38, to: 0.56 },
@@ -68,19 +74,26 @@ export const CAPTIONS = [
 
 export type Moment = {
   camera: { position: Vec3; target: Vec3; fov: number };
-  /** 0: the dots have not taken over from the pencil sketch. 1: they have. */
+  /** 0: the hero's names are still up. 1: they have gone, and the story has the stage. */
   swap: number;
-  /** 0: the flat sketch. 1: the place. */
+  /** The two pictures the dots are between, by their place in the film's list, and how far from one to the other. */
+  from: number;
+  to: number;
+  turn: number;
+  /** 0: the flat picture. 1: the place. */
   morph: number;
   /** 0: day. 1: night. */
   night: number;
   /** Which caption is up, or -1. */
   caption: number;
+  /** Which picture's name is up with it, or -1. */
+  place: number;
   /** How far the picture is raised to clear the captions, as a share of the stage's height. */
   lift: number;
 };
 
-export function momentAt(p: number, aspect: number): Moment {
+/** The mountain on its own clock, which starts with the hero still up: 0 to 1 over `MOUNTAIN_SECONDS`. */
+function mountainAt(p: number, aspect: number): Omit<Moment, "from" | "to" | "turn" | "place"> {
   let i = 0;
   while (i < KEYS.length - 2 && p > (KEYS[i + 1] as Key).at) i++;
   const a = KEYS[i] as Key;
@@ -109,6 +122,64 @@ export function momentAt(p: number, aspect: number): Moment {
     caption: CAPTIONS.findIndex((caption) => p >= caption.from && p < caption.to),
     // Less on a phone held upright: the picture is small there, and the captions sit on open ground.
     lift: (aspect < 0.8 ? 0.12 : 0.2) * morph,
+  };
+}
+
+/** How much of the mountain's clock runs before the dots leave the hero's picture: the names going. */
+const OPENING = 0.035;
+
+export type Film = {
+  /** How long it runs when it plays itself. */
+  seconds: number;
+  /** The pictures the dots make in turn before they become the place. The hero's own sketch is first, and has no name. */
+  pictures: readonly (string | null)[];
+  /** The lines of text, in order, by the act each belongs to and its place in that act's own. */
+  captions: readonly { act: Act; line: number }[];
+  at(p: number, aspect: number): Moment;
+};
+
+/**
+ * The story for one guest: the hero, whichever acts are theirs, and the
+ * mountain. With the mountain alone it is that act and nothing else.
+ */
+export function film(acts: readonly Act[]): Film {
+  const friday = acts.includes("friday");
+  const pictures: (string | null)[] = [null, ...(friday ? FRIDAY : [])];
+  const last = pictures.length - 1;
+  const opening = OPENING * MOUNTAIN_SECONDS;
+  const each = TURN + HOLD;
+  const fridayLasts = fridaySeconds(acts);
+  const seconds = filmSeconds(acts);
+  const captions = captionsOf(acts);
+  const before = friday ? 1 : 0;
+
+  return {
+    seconds,
+    pictures,
+    captions,
+    at(p, aspect) {
+      const t = clamp(p) * seconds;
+      // The names go, then the pictures have their turn, then the mountain's clock picks up where it stopped.
+      const since = t - opening;
+      const inFriday = friday && since >= 0 && since < fridayLasts;
+      const clock = since < 0 ? t : inFriday ? opening : t - fridayLasts;
+      const mountain = mountainAt(clock / MOUNTAIN_SECONDS, aspect);
+      if (!inFriday) {
+        const caption = mountain.caption < 0 ? -1 : mountain.caption + before;
+        return { ...mountain, caption, from: since < 0 ? 0 : last, to: since < 0 ? 0 : last, turn: 0, place: -1 };
+      }
+      const picture = Math.min(FRIDAY.length - 1, Math.floor(since / each));
+      const turn = inOut(clamp((since - picture * each) / TURN));
+      return {
+        ...mountain,
+        from: picture,
+        to: picture + 1,
+        turn,
+        // The line comes up as the first picture forms and goes as the last one leaves.
+        caption: since > TURN * 0.5 ? 0 : -1,
+        place: turn > 0.5 ? picture + 1 : picture === 0 ? -1 : picture,
+      };
+    },
   };
 }
 
