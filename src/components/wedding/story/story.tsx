@@ -36,11 +36,11 @@ const SCREENS_A_SECOND = 0.165;
 /**
  * The hero, and the story it opens into.
  *
- * At rest this is the hero, and looks like nothing else: but once the story is
- * ready, the pencil sketch behind the names is drawn in dots, one to a pixel.
- * When the story starts those dots come apart and become the place itself, and
- * the page pins while the camera goes up the slope past the two lifts and down
- * to the dance floor at night. Then the page carries on.
+ * At rest this is the hero and nothing else. As the story starts, the pencil
+ * sketch behind the names is taken over by dots, one to a pixel; the dots come
+ * apart, make whatever pictures this guest's story has, and become the place
+ * itself, and the page pins while the camera goes up the slope past the two
+ * lifts and down to the dance floor at night. Then the page carries on.
  *
  * It is an extra, and the page is whole without it: it stays the plain hero for
  * anyone who asked for less motion or whose device has no graphics card to draw
@@ -99,10 +99,8 @@ export function Story({ acts, children }: { acts: readonly Act[]; children: Reac
               failIfMajorPerformanceCaveat: true,
             });
         if (!context) return shrink(section);
-        // For the couple to compare the two, until they choose: the page's address ending in #living keeps the sketch.
-        const rest = window.location.hash === "#living" ? "sketch" : "dots";
         return import("./controller").then(({ mountStory }) =>
-          mountStory(section, context, signal, since, story.current, rest),
+          mountStory(section, context, signal, since, story.current),
         );
       })
       // A chunk that fails to load leaves the hero as it was, which is a whole page.

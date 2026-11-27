@@ -17,10 +17,11 @@ function seeded() {
 }
 
 describe("the cloud", () => {
-  const world = buildWorld(20_000);
+  // As many points as a phone gets, the fewer of the two counts in use. With far fewer the party alone would fill it.
+  const world = buildWorld(160_000);
 
   it("uses every point it was given, the same way each time", () => {
-    const again = buildWorld(20_000);
+    const again = buildWorld(160_000);
     expect(world.position.every(Number.isFinite)).toBe(true);
     expect(world.group.every((group) => group <= GROUP.sky)).toBe(true);
     expect(Array.from(again.position)).toEqual(Array.from(world.position));

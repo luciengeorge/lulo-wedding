@@ -92,6 +92,9 @@ const paint = (c: RGB, a = 0.9, size = 1): Mat => {
   return { day: pale ? darken(c, 0.22) : c, dayA: a, night: lighten(c, 0.3), nightA: a, size, fx: FX.none };
 };
 
+/** A person's dots are a little bigger than a line's, so that up close a guest reads as a body and not a haze. */
+const FIGURE = 1.22;
+
 const TAU = Math.PI * 2;
 const lerp = (a: number, b: number, t: number) => a + (b - a) * t;
 const smooth = (a: number, b: number, v: number) => {
@@ -342,11 +345,11 @@ export function buildWorld(count: number, seed = 17_072_027): World {
       }
     };
 
-    const skin = paint(p.skin);
-    const hair = paint(p.hair);
-    const top = paint(p.top);
-    const bottom = paint(p.bottom);
-    const shoe = paint(BLACK);
+    const skin = paint(p.skin, 0.9, FIGURE);
+    const hair = paint(p.hair, 0.9, FIGURE);
+    const top = paint(p.top, 0.9, FIGURE);
+    const bottom = paint(p.bottom, 0.9, FIGURE);
+    const shoe = paint(BLACK, 0.9, FIGURE);
 
     const hipY = p.seat ?? 0.53 * H;
     const shoulderY = hipY + 0.285 * H;
@@ -502,7 +505,7 @@ export function buildWorld(count: number, seed = 17_072_027): World {
     skin: SKIN[1] as RGB,
     hair: HAIR[1] as RGB,
     arms: [REACH, BENT],
-    n: share(0.02),
+    n: share(0.024),
     gown: true,
     y: FLOOR_Y,
     mode: MODE.couple,
@@ -518,7 +521,7 @@ export function buildWorld(count: number, seed = 17_072_027): World {
     skin: SKIN[1] as RGB,
     hair: HAIR[0] as RGB,
     arms: [BENT, REACH],
-    n: share(0.015),
+    n: share(0.018),
     y: FLOOR_Y,
     mode: MODE.couple,
     phase: 1.6,
@@ -532,7 +535,7 @@ export function buildWorld(count: number, seed = 17_072_027): World {
     const r = 2.55 + (rnd() - 0.5) * 0.35;
     const x = centre[0] + Math.sin(ang) * r * 1.25;
     const z = centre[1] + Math.cos(ang) * r * 0.86;
-    guest(x, z, Math.atan2(centre[0] - x, centre[1] - z), share(0.0098), {
+    guest(x, z, Math.atan2(centre[0] - x, centre[1] - z), share(0.0125), {
       y: FLOOR_Y,
       mode: MODE.dancer,
       phase: rnd() * TAU,
@@ -547,7 +550,7 @@ export function buildWorld(count: number, seed = 17_072_027): World {
     [-2.2, 2.75],
     [2.5, 2.7],
   ] as const) {
-    guest(x, z, Math.atan2(centre[0] - x, centre[1] - z) + (rnd() - 0.5), share(0.0085), {
+    guest(x, z, Math.atan2(centre[0] - x, centre[1] - z) + (rnd() - 0.5), share(0.011), {
       y: FLOOR_Y,
       mode: MODE.dancer,
       phase: rnd() * TAU,
@@ -555,8 +558,8 @@ export function buildWorld(count: number, seed = 17_072_027): World {
   }
 
   // The dance floor: boards running across, a firm edge, a short skirt down to the ground.
-  const board: Mat = { ...paint(WOOD, 0.8), nightA: 0.42 };
-  const floorN = share(0.055);
+  const board: Mat = { ...paint(WOOD, 0.8, 1.15), nightA: 0.42 };
+  const floorN = share(0.07);
   for (let i = 0; i < floorN; i++) {
     const z = FLOOR.back + (Math.floor(rnd() * 30) / 30) * (FLOOR.front - FLOOR.back) + (rnd() - 0.5) * 0.02;
     still((rnd() * 2 - 1) * FLOOR.x, FLOOR_Y, z, board, GROUP.party);
@@ -583,7 +586,7 @@ export function buildWorld(count: number, seed = 17_072_027): World {
     0.94,
     0.8,
     share(0.004),
-    share(0.008),
+    share(0.014),
     edge,
     paint([154, 149, 144], 0.8),
     GROUP.party,
@@ -609,7 +612,7 @@ export function buildWorld(count: number, seed = 17_072_027): World {
       1.4,
       0.6,
       share(0.0025),
-      share(0.003),
+      share(0.006),
       edge,
       paint(TAUPE, 0.7),
       GROUP.party,
@@ -635,7 +638,7 @@ export function buildWorld(count: number, seed = 17_072_027): World {
     skin: SKIN[2] as RGB,
     hair: HAIR[0] as RGB,
     arms: [UP, [40, 80, 0.9]],
-    n: share(0.0095),
+    n: share(0.012),
     y: FLOOR_Y,
     mode: MODE.dancer,
     phase: 0.4,
@@ -704,7 +707,7 @@ export function buildWorld(count: number, seed = 17_072_027): World {
           still(cx + Math.sin(a) * 0.17, rnd() * 0.46, cz + Math.cos(a) * 0.17, pencil(0.5), GROUP.party);
         }
         if (k % 3 !== 2) {
-          guest(cx, cz, facing, share(0.0031), {
+          guest(cx, cz, facing, share(0.004), {
             seat: 0.47,
             arms:
               rnd() < 0.3
@@ -898,7 +901,7 @@ export function buildWorld(count: number, seed = 17_072_027): World {
   // Contour lines: each sample slides along the fall line to the nearest level.
   const STEP = 1.6;
   const contour = pencil(0.42, 0.26, 0.9);
-  const terrainN = share(0.2);
+  const terrainN = share(0.12);
   let placed = 0;
   for (let tries = 0; placed < terrainN && tries < terrainN * 6; tries++) {
     let x = (rnd() * 2 - 1) * 80;

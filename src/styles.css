@@ -475,16 +475,15 @@
   height: var(--story-length, 760svh);
 }
 
-/* Once the dots have taken the drawing over (controller.ts), the drawing itself
- * goes, in the time the dots take to come. It comes back quickly whenever they
- * hand it back. */
+/* As the story starts the dots take the drawing over (controller.ts), and the
+ * drawing itself goes, in the time they take to come. It comes back the same
+ * way when the guest is at the top again. */
 .lulo-story-stage .lulo-scene img {
   transition: opacity 280ms ease;
 }
 
 .lulo-story-stage[data-drawn] .lulo-scene img {
   opacity: 0;
-  transition-duration: var(--story-takeover, 700ms);
 }
 
 .lulo-story canvas,
