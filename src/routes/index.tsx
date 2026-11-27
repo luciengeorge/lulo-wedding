@@ -192,10 +192,10 @@ function OliveBranch() {
   );
 }
 
-/** The end of the page: one last way to reply, then the painted border. */
+/** The end of the page: one last way to reply. */
 function Closing() {
   return (
-    <div className="relative flex flex-col items-center gap-5 px-6 pt-16 pb-[118px] lg:pt-24 lg:pb-[136px]">
+    <div className="flex flex-col items-center gap-5 px-6 py-16 lg:py-24">
       <span aria-hidden className="block h-px w-[52px] bg-amber" />
       <p className="text-center font-script text-[34px] leading-10 text-ink lg:text-[44px] lg:leading-[52px]">
         We cannot wait to see you
@@ -208,12 +208,6 @@ function Closing() {
           RSVP
         </Link>
       ) : null}
-      <img
-        aria-hidden
-        alt=""
-        src="/art/border-bottom.webp"
-        className="pointer-events-none absolute inset-x-0 bottom-0 h-11 w-full object-cover object-[50%_60%]"
-      />
     </div>
   );
 }

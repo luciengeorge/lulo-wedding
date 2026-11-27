@@ -43,6 +43,8 @@ export async function sampleSketch(stage: HTMLElement): Promise<Pool[]> {
     DRAWINGS.map(async ({ name, group }) => {
       const img = stage.querySelector<HTMLImageElement>(`.lulo-scene-${name}`);
       if (!img) return;
+      // A drawing takes its width from its own file, so it has no place on the page until that has arrived.
+      await img.decode().catch(() => {});
       const box = img.getBoundingClientRect();
       if (box.width < 1 || box.height < 1) return;
       const image = await load(img.currentSrc || img.src).catch(() => null);
