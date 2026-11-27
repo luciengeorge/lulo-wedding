@@ -458,3 +458,121 @@
     animation: none;
   }
 }
+
+/* The story the hero opens into (src/components/wedding/story). Until its
+ * script has switched it on, with `data-active`, none of this shows and the
+ * hero is the whole of it. Switched on, the block is several screens tall and
+ * its stage pins to the top, so scrolling plays the story instead of moving
+ * the page. The jump bar holds to the foot of the screen meanwhile. */
+.lulo-story-stage {
+  position: sticky;
+  top: 0;
+  overflow: hidden;
+}
+
+.lulo-story[data-active] {
+  height: 760svh;
+}
+
+.lulo-story canvas,
+.lulo-story-sky {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  opacity: 0;
+  pointer-events: none;
+}
+
+/* The light going, then gone: laid over the paper, under the dots. */
+.lulo-story-dusk {
+  background: linear-gradient(to bottom, #4f4a6c 0%, #a87590 38%, #dd9a78 70%, #f2c890 100%);
+}
+
+.lulo-story-night {
+  background: linear-gradient(to bottom, #0d101d 0%, #151528 52%, #2a1e2b 100%);
+}
+
+.lulo-story-captions {
+  display: none;
+}
+
+.lulo-story[data-active] .lulo-story-captions {
+  position: absolute;
+  inset: 0;
+  display: block;
+  pointer-events: none;
+}
+
+/* A soft ground under the words, in whatever the sky is: paper by day, night by night. */
+.lulo-story-captions::before,
+.lulo-story-captions::after {
+  position: absolute;
+  inset: auto 0 0;
+  height: 46%;
+  content: "";
+  opacity: 0;
+  transition: opacity 700ms ease;
+}
+
+.lulo-story-captions::before {
+  background: linear-gradient(
+    to top,
+    rgb(249 241 229 / 0.94) 0%,
+    rgb(249 241 229 / 0.8) 42%,
+    rgb(249 241 229 / 0) 100%
+  );
+}
+
+.lulo-story-captions::after {
+  background: linear-gradient(to top, rgb(20 15 26 / 0.9) 0%, rgb(20 15 26 / 0.66) 42%, rgb(20 15 26 / 0) 100%);
+}
+
+.lulo-story-stage:not([data-night]) .lulo-story-captions:has([data-on])::before,
+.lulo-story-stage[data-night] .lulo-story-captions:has([data-on])::after {
+  opacity: 1;
+}
+
+.lulo-story-caption {
+  position: absolute;
+  inset-inline: 24px;
+  bottom: clamp(28px, 7svh, 76px);
+  z-index: 1;
+  max-width: 640px;
+  margin-inline: auto;
+  color: var(--color-bark);
+  text-align: center;
+  opacity: 0;
+  translate: 0 10px;
+  transition:
+    opacity 700ms ease,
+    translate 900ms cubic-bezier(0.22, 1, 0.36, 1),
+    color 600ms ease;
+}
+
+.lulo-story-caption[data-on] {
+  opacity: 1;
+  translate: 0 0;
+}
+
+.lulo-story-eyebrow {
+  color: var(--color-faded);
+  transition: color 600ms ease;
+}
+
+.lulo-story-turn {
+  color: var(--color-ink);
+  transition: color 600ms ease;
+}
+
+.lulo-story-stage[data-night] .lulo-story-caption {
+  color: var(--color-paper);
+}
+
+.lulo-story-stage[data-night] .lulo-story-eyebrow {
+  color: rgb(249 241 229 / 0.7);
+}
+
+.lulo-story-stage[data-night] .lulo-story-turn {
+  color: #f6c98a;
+}

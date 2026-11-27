@@ -5,6 +5,7 @@ import { AdminBar } from "@/components/wedding/admin-bar";
 import { InfoSections } from "@/components/wedding/info/info-sections";
 import { JumpBar } from "@/components/wedding/info/jump-bar";
 import { Monogram } from "@/components/wedding/monogram";
+import { Story } from "@/components/wedding/story/story";
 import { VenueSketch } from "@/components/wedding/venue-sketch";
 import { FEATURES } from "@/lib/flags";
 import { getAdminSession } from "@/lib/functions/admin-session";
@@ -48,7 +49,9 @@ function Home() {
       className="flex min-h-svh w-full flex-col bg-paper [background-image:url('/art/paper-tile.webp')] bg-[length:560px_428px] bg-repeat"
     >
       {preview ? <PreviewBar name={preview} /> : null}
-      <Hero guest={guest} />
+      <Story>
+        <Hero guest={guest} />
+      </Story>
       <JumpBar />
       <InfoSections {...content} />
       <Closing />
