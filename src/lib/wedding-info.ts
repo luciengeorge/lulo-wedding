@@ -113,6 +113,21 @@ export const PLACES: readonly { name: string; kind: string; text: string }[] = [
     kind: "The mountain",
     text: "The Cedars of God, located in the Kadisha Valley of Bsharre, Lebanon, are one of the last vestiges of the extensive forests of the Lebanon cedar that thrived across Mount Lebanon in antiquity.",
   },
+  {
+    name: "Byblos",
+    kind: "The old port",
+    text: "Byblos, known locally as Jbeil, is a UNESCO World Heritage Site with thousands of years of history. Wander through the old souk, visit the Crusader castle and end the day by the old fishing harbour.",
+  },
+  {
+    name: "Jeita Grotto",
+    kind: "The caves",
+    text: "About 20 km north of Beirut, the Jeita Grotto is a pair of limestone caves on two levels. The upper gallery is visited on foot and the lower one by boat, along an underground river.",
+  },
+  {
+    name: "Harissa",
+    kind: "The cable car",
+    text: "Take the Téléphérique cable car from the seafront in Jounieh up to Harissa, a ride of about nine minutes over the bay. At the top stands the statue of Our Lady of Lebanon, with views along the coast.",
+  },
 ];
 
 export const WINERIES: readonly { name: string; town: string }[] = [
