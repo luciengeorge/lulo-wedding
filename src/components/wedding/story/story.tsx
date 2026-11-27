@@ -99,8 +99,10 @@ export function Story({ acts, children }: { acts: readonly Act[]; children: Reac
               failIfMajorPerformanceCaveat: true,
             });
         if (!context) return shrink(section);
+        // For the couple to compare the two, until they choose: the page's address ending in #living keeps the sketch.
+        const rest = window.location.hash === "#living" ? "sketch" : "dots";
         return import("./controller").then(({ mountStory }) =>
-          mountStory(section, context, signal, since, story.current),
+          mountStory(section, context, signal, since, story.current, rest),
         );
       })
       // A chunk that fails to load leaves the hero as it was, which is a whole page.

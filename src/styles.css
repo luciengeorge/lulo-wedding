@@ -476,10 +476,15 @@
 }
 
 /* Once the dots have taken the drawing over (controller.ts), the drawing itself
- * goes. It comes straight back, with no fade, whenever they hand it back. */
+ * goes, in the time the dots take to come. It comes back quickly whenever they
+ * hand it back. */
+.lulo-story-stage .lulo-scene img {
+  transition: opacity 280ms ease;
+}
+
 .lulo-story-stage[data-drawn] .lulo-scene img {
   opacity: 0;
-  transition: opacity 700ms ease;
+  transition-duration: var(--story-takeover, 700ms);
 }
 
 .lulo-story canvas,

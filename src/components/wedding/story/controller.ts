@@ -28,8 +28,17 @@ const SLOW_FRAMES = 40;
 /** When the hero's own sketch starts to show, and how long it takes: `.lulo-scene` in styles.css. */
 const SKETCH_AT = 1700;
 const SKETCH_IN = 1400;
-/** How long the dots take to replace a sketch that is already showing. Matches `[data-drawn]` in styles.css. */
+/** How long the dots take to replace a sketch that is already showing. */
 const TAKEOVER = 700;
+/** The same, when it happens under the guest's eye as the story starts, and back again when they return. */
+const HANDOVER = 280;
+
+/**
+ * What the hero's picture is while the story waits: the dots, laid on the
+ * sketch and as still as a print; or the sketch itself, which moves, with the
+ * dots taking it over only as the story starts.
+ */
+export type Rest = "dots" | "sketch";
 
 const idle = () =>
   new Promise<void>((resolve) => {
@@ -52,6 +61,7 @@ export async function mountStory(
   signal: AbortSignal,
   since: number,
   acts: readonly Act[],
+  rest: Rest,
 ): Promise<void> {
   const stage = part(section, "stage");
   const canvas = part<HTMLCanvasElement>(section, "canvas");
@@ -111,23 +121,31 @@ export async function mountStory(
   const captions = stage.querySelectorAll('[data-story="caption"]');
   const places = stage.querySelectorAll('[data-story="place"]');
 
-  // The dots take the drawing over from the sketch: in its place if it has not shown yet, across it if it has.
-  let inkFrom = Infinity;
-  let inkOver = TAKEOVER;
-  const takeOver = () => {
-    const now = performance.now();
-    const sketch = since + SKETCH_AT;
-    inkFrom = Math.max(now, sketch);
-    inkOver = now < sketch ? SKETCH_IN : TAKEOVER;
+  // How much of the drawing is the dots' (the rest is the sketch's own): it moves towards `goal`, after `from`.
+  const inked = { value: 0, goal: 0, from: 0, rate: 0 };
+  /** The dots take the drawing over from the sketch, starting `wait` ms from now and taking `over` ms. */
+  const takeOver = (wait: number, over: number) => {
+    inked.goal = 1;
+    inked.from = performance.now() + wait;
+    inked.rate = 1000 / over;
+    stage.style.setProperty("--story-takeover", `${over}ms`);
     stage.dataset.drawn = "";
   };
-  /** Back to the sketch, which follows the page as it changes size. The dots do not until they are read again. */
-  const handBack = () => {
-    inkFrom = Infinity;
+  /** Back to the sketch: at once, as when the page changes size under the dots, or over `over` ms. */
+  const handBack = (over = 0) => {
+    inked.goal = 0;
+    inked.from = 0;
+    inked.rate = over ? 1000 / over : Infinity;
     still = false;
     delete stage.dataset.drawn;
   };
-  takeOver();
+  /** As the page settles: in the sketch's place if it has not shown yet, across it if it has. */
+  const arrive = () => {
+    if (rest === "sketch") return;
+    const early = since + SKETCH_AT - performance.now();
+    takeOver(Math.max(0, early), early > 0 ? SKETCH_IN : TAKEOVER);
+  };
+  arrive();
   canvas.style.opacity = "1";
 
   const draw = (now: number) => {
@@ -142,10 +160,24 @@ export async function mountStory(
     if (Math.abs(raw - p) < 0.0002) p = raw;
 
     const moment = story.at(p, width / height);
-    const taken = Math.min(1, Math.max(0, (now - inkFrom) / inkOver));
-    const ink = Math.max(taken * taken * (3 - 2 * taken), moment.swap);
+    const moving = raw > 0 || p > 0;
+    // Left to the sketch at rest, the picture is the dots' only while the story is under way.
+    if (rest === "sketch" && moving !== (inked.goal === 1)) {
+      if (moving) takeOver(0, HANDOVER);
+      else handBack(HANDOVER);
+    }
+    // Set off before the dots were due on the hero: they come now, and quickly.
+    if (moving && inked.goal === 1 && now < inked.from) {
+      inked.from = now;
+      inked.rate = 1000 / HANDOVER;
+    }
+    if (now >= inked.from) {
+      const step = inked.rate * dt;
+      inked.value += Math.min(step, Math.max(-step, inked.goal - inked.value));
+    }
+    const ink = inked.value * inked.value * (3 - 2 * inked.value);
     // At rest on the hero the picture does not change: it is drawn the once, and left.
-    const resting = raw === 0 && p === 0 && taken === 1;
+    const resting = !moving && inked.value === inked.goal;
     if (!resting || !still) {
       still = resting;
       scene.render(moment, (now - started) / 1000, ink);
@@ -206,7 +238,7 @@ export async function mountStory(
     clearTimeout(settle);
     settle = window.setTimeout(async () => {
       await place();
-      if (!signal.aborted) takeOver();
+      if (!signal.aborted && rest === "dots") takeOver(0, TAKEOVER);
     }, 250);
   });
   sized.observe(stage);
