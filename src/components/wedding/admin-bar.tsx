@@ -31,7 +31,7 @@ export function AdminBar() {
   };
 
   return (
-    <div className="absolute top-4 right-4 z-20 flex items-center gap-2 lg:top-6 lg:right-8">
+    <div data-admin-bar className="absolute top-4 right-4 z-20 flex items-center gap-2 lg:top-6 lg:right-8">
       <Link
         to="/admin"
         className="flex h-9 items-center rounded-[3px] bg-ink px-3.5 font-display text-[13px] font-semibold tracking-caps text-paper shadow-sm transition-opacity hover:opacity-90"

@@ -18,7 +18,8 @@ export const INFO_SECTIONS = [
  *
  * It sits at the foot of the first screen, under the hero, so a guest on a
  * phone can see there is more below, then sticks to the top once scrolled to.
- * RSVP stays in reach the whole way down.
+ * While the hero's story plays it holds to the foot of the screen, so the
+ * sections and RSVP stay in reach the whole way down.
  */
 export function JumpBar() {
   const active = useActiveSection();
@@ -40,7 +41,7 @@ export function JumpBar() {
   return (
     <nav
       aria-label="On this page"
-      className="sticky top-0 z-30 flex h-(--jump-h) items-center border-b border-rule bg-paper lg:px-12"
+      className="sticky top-0 bottom-0 z-30 flex h-(--jump-h) items-center border-b border-rule bg-paper lg:px-12"
     >
       {/* Name from xl up: at 1024px the side columns must narrow for the links to fit. */}
       <a

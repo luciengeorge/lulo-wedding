@@ -69,6 +69,26 @@ test.describe("any guest", () => {
     await expect(page.getByRole("heading", { name: "InterContinental Mzaar" })).toBeVisible();
   });
 
+  /**
+   * The hero opens into a scroll-through of the venue, where the device can draw
+   * it. That is not tested here: whether a test machine has a graphics card is
+   * not something a test should turn on. What must hold everywhere is that
+   * asking for less motion leaves the plain page, one screen of hero and no more.
+   */
+  test("who asked for less motion gets the plain hero, with the sections straight under it", async ({ page }) => {
+    await page.emulateMedia({ reducedMotion: "reduce" });
+    await asWeddingGuest(page);
+
+    const story = page.locator(".lulo-story");
+    await expect(story).not.toHaveAttribute("data-active");
+    const { height, screen } = await story.evaluate((element) => ({
+      height: element.getBoundingClientRect().height,
+      screen: window.innerHeight,
+    }));
+    expect(height).toBeLessThanOrEqual(screen);
+    await expect(page.getByRole("navigation", { name: "On this page" })).toBeInViewport();
+  });
+
   test("shows what is not confirmed yet as such", async ({ page }) => {
     await asWeddingGuest(page);
 

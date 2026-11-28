@@ -5,6 +5,7 @@ import { AdminBar } from "@/components/wedding/admin-bar";
 import { InfoSections } from "@/components/wedding/info/info-sections";
 import { JumpBar } from "@/components/wedding/info/jump-bar";
 import { Monogram } from "@/components/wedding/monogram";
+import { Story } from "@/components/wedding/story/story";
 import { VenueSketch } from "@/components/wedding/venue-sketch";
 import { FEATURES } from "@/lib/flags";
 import { getAdminSession } from "@/lib/functions/admin-session";
@@ -48,7 +49,9 @@ function Home() {
       className="flex min-h-svh w-full flex-col bg-paper [background-image:url('/art/paper-tile.webp')] bg-[length:560px_428px] bg-repeat"
     >
       {preview ? <PreviewBar name={preview} /> : null}
-      <Hero guest={guest} />
+      <Story>
+        <Hero guest={guest} />
+      </Story>
       <JumpBar />
       <InfoSections {...content} />
       <Closing />
@@ -189,10 +192,10 @@ function OliveBranch() {
   );
 }
 
-/** The end of the page: one last way to reply, then the painted border. */
+/** The end of the page: one last way to reply. */
 function Closing() {
   return (
-    <div className="relative flex flex-col items-center gap-5 px-6 pt-16 pb-[118px] lg:pt-24 lg:pb-[136px]">
+    <div className="flex flex-col items-center gap-5 px-6 py-16 lg:py-24">
       <span aria-hidden className="block h-px w-[52px] bg-amber" />
       <p className="text-center font-script text-[34px] leading-10 text-ink lg:text-[44px] lg:leading-[52px]">
         We cannot wait to see you
@@ -205,12 +208,6 @@ function Closing() {
           RSVP
         </Link>
       ) : null}
-      <img
-        aria-hidden
-        alt=""
-        src="/art/border-bottom.webp"
-        className="pointer-events-none absolute inset-x-0 bottom-0 h-11 w-full object-cover object-[50%_60%]"
-      />
     </div>
   );
 }
