@@ -470,9 +470,8 @@
   overflow: hidden;
 }
 
-/* As long as this guest's story is: set by story.tsx. */
 .lulo-story[data-active] {
-  height: var(--story-length, 760svh);
+  height: 760svh;
 }
 
 /* As the story starts the dots take the drawing over (controller.ts), and the
@@ -570,24 +569,6 @@
 .lulo-story-eyebrow {
   color: var(--color-faded);
   transition: color 600ms ease;
-}
-
-/* The names of Friday's places share the one line, and take turns on it. */
-.lulo-story-eyebrow:has(.lulo-story-place) {
-  display: grid;
-  min-height: 1lh;
-  justify-items: center;
-}
-
-.lulo-story-place {
-  grid-area: 1 / 1;
-  opacity: 0;
-  transition: opacity 260ms ease;
-}
-
-.lulo-story-place[data-on] {
-  opacity: 1;
-  transition-delay: 160ms;
 }
 
 .lulo-story-turn {

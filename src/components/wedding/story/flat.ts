@@ -1,6 +1,5 @@
 /**
- * The story's flat pictures as dots: the pencil sketch behind the hero, which
- * every story starts on, and the drawings some acts turn it into on the way.
+ * The pencil sketch behind the hero as dots, which is what the story starts on.
  *
  * A drawing is read back as pixels, in the place and at the size it has on the
  * stage, and each pixel is given one dot of its own colour. Laid out like that
@@ -171,27 +170,6 @@ export async function sampleSketch(stage: HTMLElement, budget: readonly number[]
   return pools;
 }
 
-/** The shape of the paper the story's pictures are drawn on (tools/story-sketch): three wide to two high. */
-const PAPER = 1.5;
-
-/**
- * Where a picture goes on a stage this size: as big as fits above the lines of
- * text, and no bigger than it was drawn to be looked at.
- */
-export function pictureBox(width: number, height: number): Box {
-  const w = Math.min(width * 0.94, 900, height * 0.68 * PAPER);
-  const h = w / PAPER;
-  return { left: (width - w) / 2, top: Math.max(56, height * 0.4 - h / 2), width: w, height: h };
-}
-
-/** Reads one of the story's pictures, by name, as the dots that would draw it on this stage. Empty if it cannot be had. */
-export async function samplePicture(stage: HTMLElement, name: string, points: number): Promise<Pool> {
-  const frame = stage.getBoundingClientRect();
-  const image = await load(`/art/story/${name}.svg`).catch(() => null);
-  if (!image) return EMPTY();
-  return dotsOf(image, pictureBox(frame.width, frame.height), frame, { min: 0, max: frame.width }, points);
-}
-
 /** The order to hand out a group's pixels in, so a point starts near where it will end up. */
 export function pairingOrder(world: World): Uint32Array[] {
   return [GROUP.left, GROUP.right, GROUP.party].map((group) => {
@@ -260,42 +238,6 @@ export function pairFlat(
       ink.set(inks.subarray(pick * 4, pick * 4 + 4), i * 4);
     }
   });
-  return { flat, ink };
-}
-
-/**
- * The order the whole cloud takes a picture's dots in: left to right by where
- * each point ends up on the mountain. A point then keeps to its own side from
- * one picture to the next, and on into the place.
- */
-export function pictureOrder(world: World): Uint32Array {
-  const order = new Uint32Array(world.count);
-  for (let i = 0; i < world.count; i++) order[i] = i;
-  const x = world.position;
-  return order.sort((a, b) => (x[a * 3] as number) - (x[b * 3] as number));
-}
-
-/**
- * A place in one of the story's pictures for every point. As on the hero's
- * sketch, a place gets one dot, and the points left over wait on it unseen.
- */
-export function pairPicture(world: World, order: Uint32Array, pool: Pool): { flat: Float32Array; ink: Uint8Array } {
-  const flat = new Float32Array(world.count * 3);
-  const ink = new Uint8Array(world.count * 4);
-  const dots = pool.sizes.length;
-  if (dots === 0) return { flat, ink };
-  const ranked = rankPool(pool.points, true);
-  let last = -1;
-  for (let rank = 0; rank < order.length; rank++) {
-    const i = order[rank] as number;
-    const slot = Math.min(dots - 1, Math.floor((rank * dots) / order.length));
-    const pick = ranked[slot] as number;
-    flat[i * 3] = pool.points[pick * 2] as number;
-    flat[i * 3 + 1] = pool.points[pick * 2 + 1] as number;
-    flat[i * 3 + 2] = slot === last ? 0 : (pool.sizes[pick] as number) * OVERLAP;
-    last = slot;
-    ink.set(pool.inks.subarray(pick * 4, pick * 4 + 4), i * 4);
-  }
   return { flat, ink };
 }
 

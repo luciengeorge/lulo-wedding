@@ -1,8 +1,7 @@
 import { describe, expect, it } from "vitest";
 
-import { FRIDAY, HOLD, TURN, filmSeconds } from "./acts";
-import { pairFlat, pairPicture, pairingOrder, pictureBox, pictureOrder, type Pool } from "./flat";
-import { CAPTIONS, FLAT, film } from "./timeline";
+import { pairFlat, pairingOrder, type Pool } from "./flat";
+import { CAPTIONS, FLAT, momentAt } from "./timeline";
 import { buildWorld, FX, GROUP, ground, LIFTS, MODE } from "./world";
 
 const WIDE = 1440 / 836;
@@ -56,9 +55,6 @@ describe("the cloud", () => {
   });
 });
 
-/** The story of a guest who is at the wedding only: the mountain, and nothing before it. */
-const momentAt = film(["mountain"]).at;
-
 describe("the story by scroll position", () => {
   it("starts square on to the sketch, with nothing changed", () => {
     const start = momentAt(0, WIDE);
@@ -105,78 +101,6 @@ describe("the story by scroll position", () => {
       return Math.hypot(position[0] - target[0], position[1] - target[1], position[2] - target[2]);
     };
     expect(distance(TALL)).toBeGreaterThan(distance(WIDE));
-  });
-});
-
-describe("a story with Friday in it", () => {
-  const weekend = film(["friday", "mountain"]);
-  const at = (seconds: number) => weekend.at(seconds / weekend.seconds, WIDE);
-  /** When the names have gone and the first picture starts to form. */
-  const opening = 1.4;
-
-  it("runs as long as its acts, and the mountain alone as long as it always did", () => {
-    expect(film(["mountain"]).seconds).toBe(40);
-    expect(weekend.seconds).toBeCloseTo(40 + FRIDAY.length * (TURN + HOLD));
-    expect(weekend.seconds).toBe(filmSeconds(["friday", "mountain"]));
-  });
-
-  it("lists the hero's sketch and then Friday's places as its pictures", () => {
-    expect(weekend.pictures).toEqual([null, ...FRIDAY]);
-    expect(film(["mountain"]).pictures).toEqual([null]);
-  });
-
-  it("opens as every story does: the hero, and the names going", () => {
-    expect(at(0)).toMatchObject({ from: 0, to: 0, turn: 0, swap: 0, morph: 0, caption: -1, place: -1 });
-    expect(at(opening - 0.01)).toMatchObject({ from: 0, to: 0, swap: 1, morph: 0 });
-  });
-
-  it("turns each picture into the next, in order, and holds it", () => {
-    FRIDAY.forEach((_, i) => {
-      const start = opening + i * (TURN + HOLD);
-      expect(at(start + 0.001)).toMatchObject({ from: i, to: i + 1, morph: 0 });
-      expect(at(start + 0.001).turn).toBeLessThan(0.01);
-      expect(at(start + TURN + HOLD / 2)).toMatchObject({ from: i, to: i + 1, turn: 1, place: i + 1 });
-    });
-  });
-
-  it("never moves the camera or lifts the picture while the pictures are up", () => {
-    for (let t = 0; t < opening + FRIDAY.length * (TURN + HOLD); t += 0.25) {
-      const moment = at(t);
-      expect(moment.camera.position).toEqual([FLAT.target[0], FLAT.target[1], FLAT.target[2] + FLAT.radius]);
-      expect(moment).toMatchObject({ morph: 0, night: 0, lift: 0 });
-    }
-  });
-
-  it("keeps Friday's line up through all seven, then gives way to the mountain's", () => {
-    const fridays = FRIDAY.length * (TURN + HOLD);
-    expect(at(opening + 1).caption).toBe(0);
-    expect(at(opening + fridays - 0.1).caption).toBe(0);
-    const seen = new Set<number>();
-    for (let t = opening + fridays; t <= weekend.seconds; t += 0.1) seen.add(at(t).caption);
-    seen.delete(-1);
-    expect([...seen]).toEqual(CAPTIONS.map((_, index) => index + 1));
-    expect(weekend.captions.map((caption) => caption.act)).toEqual([
-      "friday",
-      "mountain",
-      "mountain",
-      "mountain",
-      "mountain",
-    ]);
-  });
-
-  it("leaves the last picture for the mountain exactly as the mountain's own story leaves the hero", () => {
-    const fridays = FRIDAY.length * (TURN + HOLD);
-    const alone = film(["mountain"]);
-    for (const seconds of [1.5, 5, 12, 25, 39.9]) {
-      const { from, to, turn, place, caption, ...withFriday } = at(seconds + fridays);
-      const mountain = alone.at(seconds / alone.seconds, WIDE);
-      expect(from).toBe(FRIDAY.length);
-      expect(to).toBe(FRIDAY.length);
-      expect(withFriday.morph).toBeCloseTo(mountain.morph, 6);
-      expect(withFriday.night).toBeCloseTo(mountain.night, 6);
-      expect(withFriday.camera.position[2]).toBeCloseTo(mountain.camera.position[2], 4);
-      expect(caption).toBe(mountain.caption < 0 ? -1 : mountain.caption + 1);
-    }
   });
 });
 
@@ -247,68 +171,5 @@ describe("where each point starts on the sketch", () => {
     const empty: Pool = { points: new Float32Array(0), inks: new Uint8Array(0), sizes: new Float32Array(0) };
     const blank = pairFlat(world, order, [empty, empty, empty], 800, 600, seeded());
     expect(blank.flat.filter((_, index) => index % 3 === 2).every((value) => value === 0)).toBe(true);
-  });
-});
-
-describe("one of the story's pictures", () => {
-  const world = buildWorld(6_000);
-  const order = pictureOrder(world);
-  /** A picture that is one row of pixels, each its own shade, left to right. */
-  const row = (pixels: number): Pool => {
-    const points = new Float32Array(pixels * 2);
-    const inks = new Uint8Array(pixels * 4);
-    for (let i = 0; i < pixels; i++) {
-      points.set([i - pixels / 2, 0], i * 2);
-      inks.set([i % 256, 0, 0, 255], i * 4);
-    }
-    return { points, inks, sizes: new Float32Array(pixels).fill(0.5) };
-  };
-
-  it("sits above the lines of text, in the middle, three wide to two high", () => {
-    for (const [width, height] of [
-      [1440, 836],
-      [393, 800],
-      [1024, 600],
-    ] as const) {
-      const box = pictureBox(width, height);
-      expect(box.width / box.height).toBeCloseTo(1.5);
-      expect(box.left).toBeCloseTo((width - box.width) / 2);
-      expect(box.left).toBeGreaterThanOrEqual(0);
-      expect(box.top).toBeGreaterThanOrEqual(56);
-      expect(box.top + box.height).toBeLessThan(height * 0.78);
-    }
-  });
-
-  it("is drawn by the whole cloud: one dot to a place, the rest of the points waiting on it unseen", () => {
-    const { flat } = pairPicture(world, order, row(200));
-    const dots = new Map<number, number>();
-    for (let i = 0; i < world.count; i++) {
-      if (flat[i * 3 + 2] === 0) continue;
-      dots.set(flat[i * 3] as number, (dots.get(flat[i * 3] as number) ?? 0) + 1);
-    }
-    expect(dots.size).toBe(200);
-    expect([...dots.values()].every((count) => count === 1)).toBe(true);
-  });
-
-  it("keeps a point on its own side: left of the mountain, left of the picture", () => {
-    const { flat } = pairPicture(world, order, row(200));
-    const left: number[] = [];
-    const right: number[] = [];
-    for (let i = 0; i < world.count; i++) {
-      const side =
-        (world.position[i * 3] as number) < -15 ? left : (world.position[i * 3] as number) > 15 ? right : null;
-      side?.push(flat[i * 3] as number);
-    }
-    const mean = (values: number[]) => values.reduce((sum, value) => sum + value, 0) / values.length;
-    expect(mean(left)).toBeLessThan(mean(right) - 20);
-  });
-
-  it("shows nothing when it could not be read", () => {
-    const { flat } = pairPicture(world, order, {
-      points: new Float32Array(0),
-      inks: new Uint8Array(0),
-      sizes: new Float32Array(0),
-    });
-    expect(flat.every((value) => value === 0)).toBe(true);
   });
 });

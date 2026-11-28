@@ -1,46 +1,24 @@
 import { ScriptOnce, useRouterState } from "@tanstack/react-router";
 import { type ReactNode, useEffect, useLayoutEffect, useRef } from "react";
 
-import { type Act, FRIDAY, captionsOf, filmSeconds } from "./acts";
 import { atTop, isTall, keep, REGROW_SCRIPT, regrow, shrink } from "./height";
 
-type Line = { eyebrow: string | readonly string[]; text: string; turn: string };
-
-/** What Friday's pictures are called. One name is up at a time, with its picture. */
-const PLACES: Record<(typeof FRIDAY)[number], string> = {
-  beirut: "Beirut",
-  jeita: "Jeita Grotto",
-  harissa: "Harissa",
-  byblos: "Byblos",
-  batroun: "Batroun",
-  vineyards: "The vineyards",
-  cedars: "The Cedars of God",
-};
-
-/** The lines that come up as the story runs, by act. Their timing is in timeline.ts, in the same order. */
-const LINES: Record<Act, readonly Line[]> = {
-  friday: [
-    { eyebrow: FRIDAY.map((name) => PLACES[name]), text: "Friday is yours.", turn: "A few places worth the drive." },
-  ],
-  mountain: [
-    { eyebrow: "Saturday 17 July 2027", text: "In winter, a ski slope.", turn: "In July, a dance floor." },
-    { eyebrow: "The mountain", text: "Warm days, cooler evenings.", turn: "Bring a jacket or a shawl." },
-    { eyebrow: "The night", text: "And your dancing shoes.", turn: "We expect you on the dance floor all night long." },
-    { eyebrow: "17 · 07 · 27", text: "The moon will be all but full.", turn: "Come and dance under it." },
-  ],
-};
-
-/** Screens of scrolling to a second of story, on top of the one screen the hero is. */
-const SCREENS_A_SECOND = 0.165;
+/** The lines that come up as the story runs. Their timing is CAPTIONS in timeline.ts, in the same order. */
+const LINES = [
+  { eyebrow: "Saturday 17 July 2027", text: "In winter, a ski slope.", turn: "In July, a dance floor." },
+  { eyebrow: "The mountain", text: "Warm days, cooler evenings.", turn: "Bring a jacket or a shawl." },
+  { eyebrow: "The night", text: "And your dancing shoes.", turn: "We expect you on the dance floor all night long." },
+  { eyebrow: "17 · 07 · 27", text: "The moon will be all but full.", turn: "Come and dance under it." },
+] as const;
 
 /**
  * The hero, and the story it opens into.
  *
  * At rest this is the hero and nothing else. As the story starts, the pencil
  * sketch behind the names is taken over by dots, one to a pixel; the dots come
- * apart, make whatever pictures this guest's story has, and become the place
- * itself, and the page pins while the camera goes up the slope past the two
- * lifts and down to the dance floor at night. Then the page carries on.
+ * apart and become the place itself, and the page pins while the camera goes
+ * up the slope past the two lifts and down to the dance floor at night. Then
+ * the page carries on.
  *
  * It is an extra, and the page is whole without it: it stays the plain hero for
  * anyone who asked for less motion or whose device has no graphics card to draw
@@ -51,15 +29,8 @@ const SCREENS_A_SECOND = 0.165;
  *
  * Scrolling plays it by hand. It also plays itself, the first time by itself:
  * player.ts, which the buttons here belong to.
- *
- * `acts` are the parts of the story this guest gets (acts.ts), which sets how
- * long it is and which lines it has.
  */
-export function Story({ acts, children }: { acts: readonly Act[]; children: ReactNode }) {
-  const lines = captionsOf(acts).map(({ act, line }) => LINES[act][line] as Line);
-  const length = `${Math.round((1 + filmSeconds(acts) * SCREENS_A_SECOND) * 100)}svh`;
-  // The story is set up once, for the acts the page arrived with.
-  const story = useRef(acts);
+export function Story({ children }: { children: ReactNode }) {
   const ref = useRef<HTMLDivElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
 
@@ -99,9 +70,7 @@ export function Story({ acts, children }: { acts: readonly Act[]; children: Reac
               failIfMajorPerformanceCaveat: true,
             });
         if (!context) return shrink(section);
-        return import("./controller").then(({ mountStory }) =>
-          mountStory(section, context, signal, since, story.current),
-        );
+        return import("./controller").then(({ mountStory }) => mountStory(section, context, signal, since));
       })
       // A chunk that fails to load leaves the hero as it was, which is a whole page.
       .catch(() => {
@@ -111,7 +80,7 @@ export function Story({ acts, children }: { acts: readonly Act[]; children: Reac
   }, []);
 
   return (
-    <div ref={ref} className="lulo-story" style={{ "--story-length": length } as React.CSSProperties}>
+    <div ref={ref} className="lulo-story">
       <ScriptOnce>{REGROW_SCRIPT}</ScriptOnce>
       <div data-story="stage" className="lulo-story-stage">
         <div data-story="dusk" aria-hidden className="lulo-story-sky lulo-story-dusk" />
@@ -121,21 +90,14 @@ export function Story({ acts, children }: { acts: readonly Act[]; children: Reac
         </div>
         <canvas ref={canvasRef} data-story="canvas" aria-hidden />
         <div className="lulo-story-captions">
-          {lines.map((line) => (
+          {LINES.map((line) => (
             <p
               key={line.text}
               data-story="caption"
               className="lulo-story-caption flex flex-col items-center gap-2 lg:gap-3"
             >
               <span className="lulo-story-eyebrow font-display text-xs leading-4 font-semibold tracking-caps uppercase lg:text-[13px]">
-                {typeof line.eyebrow === "string"
-                  ? line.eyebrow
-                  : // One name to a picture, all in the one place; controller.ts shows the one that is up.
-                    line.eyebrow.map((name) => (
-                      <span key={name} data-story="place" className="lulo-story-place">
-                        {name}
-                      </span>
-                    ))}
+                {line.eyebrow}
               </span>
               <span className="font-display text-[26px] leading-[32px] text-balance lg:text-[40px] lg:leading-[48px]">
                 {line.text} <em className="lulo-story-turn block">{line.turn}</em>

@@ -10,13 +10,11 @@
  * dances, the chairs ride. As the story starts the dots take the drawing over,
  * laid on it pixel for pixel, and give it back when the guest returns to the top.
  */
-import type { Act } from "./acts";
-
-import { pairFlat, pairPicture, pairingOrder, pictureOrder, samplePicture, sampleSketch } from "./flat";
+import { pairFlat, pairingOrder, sampleSketch } from "./flat";
 import { atTop, grow, isTall } from "./height";
 import { createPlayer } from "./player";
 import { createScene } from "./scene";
-import { film, metresPerPixel } from "./timeline";
+import { FILM_SECONDS, metresPerPixel, momentAt } from "./timeline";
 import { buildWorld } from "./world";
 
 /** Fewer points on a phone: a smaller screen needs fewer, and has less to draw them with. */
@@ -40,14 +38,13 @@ function part<T extends HTMLElement>(root: HTMLElement, name: string) {
 /**
  * Starts the story in `section`. Aborting `signal` stops it and leaves the hero
  * as it was. `since` is when the page showed the hero, for the film's first
- * showing, and `acts` are the ones this guest's story has.
+ * showing.
  */
 export async function mountStory(
   section: HTMLElement,
   context: WebGL2RenderingContext,
   signal: AbortSignal,
   since: number,
-  acts: readonly Act[],
 ): Promise<void> {
   const stage = part(section, "stage");
   const canvas = part<HTMLCanvasElement>(section, "canvas");
@@ -58,11 +55,9 @@ export async function mountStory(
 
   await idle();
   if (signal.aborted) return;
-  const story = film(acts);
   const world = buildWorld(pointCount());
   const scene = createScene(canvas, context, world);
   const order = pairingOrder(world);
-  const across = pictureOrder(world);
 
   let width = stage.clientWidth;
   let height = stage.clientHeight;
@@ -71,15 +66,8 @@ export async function mountStory(
       stage,
       order.map((members) => members.length),
     );
-    const pictures = [pairFlat(world, order, sketch, width, height)];
-    // One at a time, with a breath between: read all at once they would hold the page up.
-    for (const name of story.pictures.slice(1)) {
-      await new Promise((resolve) => setTimeout(resolve));
-      if (signal.aborted) return;
-      pictures.push(pairPicture(world, across, await samplePicture(stage, name as string, world.count)));
-    }
     if (signal.aborted) return;
-    scene.setPictures(pictures, metresPerPixel(height, width / height));
+    scene.setFlat(pairFlat(world, order, sketch, width, height), metresPerPixel(height, width / height));
   };
   scene.resize(width, height);
   await place();
@@ -91,7 +79,7 @@ export async function mountStory(
     return;
   }
   grow(section);
-  const player = createPlayer(section, stage, since, story.seconds);
+  const player = createPlayer(section, stage, since, FILM_SECONDS);
   // Only for a guest who has not moved since the page opened. One who has is finding their own way.
   if (untouched) player.premiere();
 
@@ -103,9 +91,8 @@ export async function mountStory(
   let slow = 0;
   let canEase = true;
   let still = false;
-  const shown = { night: false, caption: -1, place: -1, hero: -1, dusk: -1, dark: -1 };
+  const shown = { night: false, caption: -1, hero: -1, dusk: -1, dark: -1 };
   const captions = stage.querySelectorAll('[data-story="caption"]');
-  const places = stage.querySelectorAll('[data-story="place"]');
 
   // How much of the drawing is the dots' (the rest is the sketch's own), on its way to `goal`.
   const inked = { value: 0, goal: 0, rate: 0 };
@@ -135,7 +122,7 @@ export async function mountStory(
     p += (raw - p) * (1 - Math.exp(-dt * 5.5));
     if (Math.abs(raw - p) < 0.0002) p = raw;
 
-    const moment = story.at(p, width / height);
+    const moment = momentAt(p, width / height);
     const moving = raw > 0 || p > 0;
     // The picture is the dots' only while the story is under way.
     if (moving !== (inked.goal === 1)) {
@@ -174,11 +161,6 @@ export async function mountStory(
     if (moment.caption !== shown.caption) {
       shown.caption = moment.caption;
       captions.forEach((caption, index) => caption.toggleAttribute("data-on", index === moment.caption));
-    }
-    if (moment.place !== shown.place) {
-      shown.place = moment.place;
-      // The hero's sketch is the first picture and has no name, so the names start one on.
-      places.forEach((name, index) => name.toggleAttribute("data-on", index + 1 === moment.place));
     }
   };
 
