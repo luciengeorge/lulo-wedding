@@ -14,7 +14,7 @@ import { pairFlat, pairingOrder, sampleSketch } from "./flat";
 import { atTop, grow, isTall } from "./height";
 import { createPlayer } from "./player";
 import { createScene } from "./scene";
-import { FILM_SECONDS, metresPerPixel, momentAt } from "./timeline";
+import { FILM_SECONDS, metresPerPixel, momentAt, towards } from "./timeline";
 import { buildWorld } from "./world";
 
 /** Fewer points on a phone: a smaller screen needs fewer, and has less to draw them with. */
@@ -113,7 +113,8 @@ export async function mountStory(
 
   const draw = (now: number) => {
     frame = requestAnimationFrame(draw);
-    const dt = Math.min(0.1, (now - last) / 1000);
+    // A frame can be stamped earlier than the clock run() read: then no time has passed, not less than none.
+    const dt = Math.min(0.1, Math.max(0, (now - last) / 1000));
     last = now;
     player.tick(dt);
     const travel = section.offsetHeight - height;
@@ -129,8 +130,7 @@ export async function mountStory(
       if (moving) takeOver();
       else handBack(HANDOVER);
     }
-    const step = inked.rate * dt;
-    inked.value += Math.min(step, Math.max(-step, inked.goal - inked.value));
+    inked.value = towards(inked.value, inked.goal, inked.rate, dt);
     const ink = inked.value * inked.value * (3 - 2 * inked.value);
     // At rest on the hero the picture does not change: it is drawn the once, and left.
     const resting = !moving && inked.value === inked.goal;

@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 
 import { pairFlat, pairingOrder, type Pool } from "./flat";
-import { CAPTIONS, FLAT, momentAt } from "./timeline";
+import { CAPTIONS, FLAT, momentAt, towards } from "./timeline";
 import { buildWorld, FX, GROUP, ground, LIFTS, MODE } from "./world";
 
 const WIDE = 1440 / 836;
@@ -101,6 +101,24 @@ describe("the story by scroll position", () => {
       return Math.hypot(position[0] - target[0], position[1] - target[1], position[2] - target[2]);
     };
     expect(distance(TALL)).toBeGreaterThan(distance(WIDE));
+  });
+});
+
+describe("the hand-over between the sketch and the dots", () => {
+  it("moves at the rate given, and stops on the goal", () => {
+    expect(towards(0, 1, 2, 0.25)).toBe(0.5);
+    expect(towards(0.9, 1, 2, 0.25)).toBe(1);
+    expect(towards(0.3, 0, 2, 0.25)).toBe(0);
+  });
+
+  it("is there at once when the rate has no limit", () => {
+    expect(towards(0.7, 0, Infinity, 0.016)).toBe(0);
+  });
+
+  // After a resize the rate is infinite, and a frame can come stamped no later than the last.
+  it.each([0, -0.004])("stays where it is on a frame with no time in it (%f s)", (dt) => {
+    expect(towards(1, 0, Infinity, dt)).toBe(1);
+    expect(towards(0, 0, 1000 / 280, dt)).toBe(0);
   });
 });
 

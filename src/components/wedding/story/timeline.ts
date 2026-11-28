@@ -11,6 +11,16 @@ const lerp = (a: number, b: number, t: number) => a + (b - a) * t;
 /** How far `p` is through the stretch from `a` to `b`. */
 export const span = (p: number, a: number, b: number) => clamp((p - a) / (b - a));
 const inOut = (t: number) => (t < 0.5 ? 4 * t * t * t : 1 - (-2 * t + 2) ** 3 / 2);
+/**
+ * `value` moved towards `goal` at `rate` a second, over a frame `dt` seconds
+ * long. The rate may be infinite: there at once. A frame with no time in it
+ * moves nothing, whatever the rate.
+ */
+export function towards(value: number, goal: number, rate: number, dt: number) {
+  if (!(dt > 0)) return value;
+  const gap = goal - value;
+  return Math.abs(gap) <= rate * dt ? goal : value + Math.sign(gap) * rate * dt;
+}
 
 /** A phone held upright sees a narrow slice, so it gets a wider lens. */
 export const fieldOfView = (aspect: number) => (aspect < 0.8 ? 54 : 36);
